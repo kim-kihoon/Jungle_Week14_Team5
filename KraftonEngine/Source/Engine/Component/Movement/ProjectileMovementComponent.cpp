@@ -117,6 +117,7 @@ namespace
 void UProjectileMovementComponent::BeginPlay()
 {
 	UMovementComponent::BeginPlay();
+	InitializeVelocityIfNeeded();
 }
 
 void UProjectileMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction& ThisTickFunction)
@@ -129,14 +130,23 @@ void UProjectileMovementComponent::TickComponent(float DeltaTime, ELevelTick Tic
 		return;
 	}
 
-	FVector EffectiveVelocity = ComputeEffectiveVelocity();
-	const float CurrentSpeed = EffectiveVelocity.Length();
-	if (MaxSpeed > 0.0f && CurrentSpeed > MaxSpeed)
+	InitializeVelocityIfNeeded();
+
+	if (ProjectileGravityScale != 0.0f)
 	{
-		EffectiveVelocity = EffectiveVelocity.Normalized() * MaxSpeed;
+		AActor* OwnerActor = GetOwner();
+		UWorld* World = OwnerActor ? OwnerActor->GetWorld() : nullptr;
+		const FVector Gravity = World ? World->GetWorldSettings().Gravity : FVector(0.0f, 0.0f, -9.81f);
+		Velocity += Gravity * ProjectileGravityScale * DeltaTime;
 	}
 
-	const FVector MoveDelta = EffectiveVelocity * DeltaTime;
+	const float CurrentSpeed = Velocity.Length();
+	if (MaxSpeed > 0.0f && CurrentSpeed > MaxSpeed)
+	{
+		Velocity = Velocity.Normalized() * MaxSpeed;
+	}
+
+	const FVector MoveDelta = Velocity * DeltaTime;
 	if (MoveDelta.Length() <= FMath::Epsilon)
 	{
 		return;
@@ -212,9 +222,16 @@ void UProjectileMovementComponent::ContributeSelectedVisuals(FScene& Scene) cons
 	AddProjectileVelocityArrow(Scene, SourceComponent->GetWorldLocation(), PreviewVelocity);
 }
 
+void UProjectileMovementComponent::SetVelocity(const FVector& InVelocity)
+{
+	Velocity = InVelocity;
+	bVelocityInitialized = false;
+}
+
 void UProjectileMovementComponent::StopSimulating()
 {
 	Velocity = FVector(0.0f, 0.0f, 0.0f);
+	bVelocityInitialized = true;
 }
 
 FVector UProjectileMovementComponent::GetPreviewVelocity() const
@@ -229,6 +246,11 @@ EProjectileHitBehavior UProjectileMovementComponent::GetHitBehavior() const
 
 FVector UProjectileMovementComponent::ComputeEffectiveVelocity() const
 {
+	if (bVelocityInitialized)
+	{
+		return Velocity;
+	}
+
 	FVector EffectiveVelocity = Velocity;
 
 	if (EffectiveVelocity.Length() <= FMath::Epsilon)
@@ -252,6 +274,17 @@ FVector UProjectileMovementComponent::ComputeEffectiveVelocity() const
 	}
 
 	return EffectiveVelocity;
+}
+
+void UProjectileMovementComponent::InitializeVelocityIfNeeded()
+{
+	if (bVelocityInitialized)
+	{
+		return;
+	}
+
+	Velocity = ComputeEffectiveVelocity();
+	bVelocityInitialized = true;
 }
 
 bool UProjectileMovementComponent::HandleBlockingHit(USceneComponent* UpdatedSceneComponent, const FVector& CurrentLocation, const FVector& MoveDelta, const FHitResult& HitResult)

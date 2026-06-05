@@ -26,7 +26,7 @@ public:
 	void ContributeSelectedVisuals(FScene& Scene) const override;
 
 	UFUNCTION(Callable, Category="Movement|Projectile")
-	void SetVelocity(const FVector& InVelocity) { Velocity = InVelocity; }
+	void SetVelocity(const FVector& InVelocity);
 	UFUNCTION(Pure, Category="Movement|Projectile")
 	FVector GetVelocity() const { return Velocity; }
 	UFUNCTION(Callable, Category="Movement|Projectile")
@@ -35,6 +35,10 @@ public:
 	float GetInitialSpeed() const { return InitialSpeed; }
 	UFUNCTION(Pure, Category="Movement|Projectile")
 	float GetMaxSpeed() const { return MaxSpeed; }
+	UFUNCTION(Callable, Category="Movement|Projectile")
+	void SetProjectileGravityScale(float InGravityScale) { ProjectileGravityScale = InGravityScale; }
+	UFUNCTION(Pure, Category="Movement|Projectile")
+	float GetProjectileGravityScale() const { return ProjectileGravityScale; }
 	UFUNCTION(Pure, Category="Movement|Projectile")
 	FVector GetPreviewVelocity() const;
 	UFUNCTION(Callable, Category="Movement|Projectile")
@@ -47,6 +51,7 @@ public:
 
 protected:
 	FVector ComputeEffectiveVelocity() const;
+	void InitializeVelocityIfNeeded();
 	virtual EProjectileHitBehavior GetHitBehavior() const;
 	virtual bool HandleBlockingHit(USceneComponent* UpdatedSceneComponent, const FVector& CurrentLocation, const FVector& MoveDelta, const FHitResult& HitResult);
 
@@ -56,6 +61,9 @@ protected:
 	float InitialSpeed = 10.0f;
 	UPROPERTY(Edit, Save, Category="Movement", DisplayName="Max Speed", Min=0.0f, Max=0.0f, Speed=10.0f)
 	float MaxSpeed = 100.0f;
+	UPROPERTY(Edit, Save, Category="Movement", DisplayName="Projectile Gravity Scale", Min=0.0f, Max=10.0f, Speed=0.1f)
+	float ProjectileGravityScale = 1.0f;
+	bool bVelocityInitialized = false;
 
     // true면 UpdatedComponent의 shape를 Start→End로 sweep한 뒤 이동한다.
     // CCD가 잡지 못하는 SetWorldLocation 기반 projectile 관통 방지용이다.
