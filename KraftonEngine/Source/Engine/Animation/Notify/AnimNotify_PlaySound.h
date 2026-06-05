@@ -11,6 +11,21 @@
 
 #include "Source/Engine/Animation/Notify/AnimNotify_PlaySound.generated.h"
 
+USTRUCT()
+struct FAnimNotifySoundEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Edit, Save, Category="PlaySound", DisplayName="Sound Path")
+	FString SoundPath;
+
+	UPROPERTY(Edit, Save, Category="PlaySound", DisplayName="Volume")
+	float Volume = 1.0f;
+
+	UPROPERTY(Edit, Save, Category="PlaySound", DisplayName="Pitch")
+	float Pitch = 1.0f;
+};
+
 UCLASS()
 class UAnimNotify_PlaySound : public UAnimNotify
 {
@@ -19,11 +34,17 @@ public:
 	UAnimNotify_PlaySound() = default;
 	~UAnimNotify_PlaySound() override = default;
 
-	UPROPERTY(Edit, Save, Category="PlaySound", DisplayName="Sound Path")
+	UPROPERTY(Save, Category="PlaySound", DisplayName="Legacy Sound Path")
 	FString SoundPath;
 
-	UPROPERTY(Edit, Save, Category="PlaySound", DisplayName="Volume")
+	UPROPERTY(Save, Category="PlaySound", DisplayName="Legacy Volume")
 	float Volume = 1.0f;
+
+	UPROPERTY(Save, Category="PlaySound", DisplayName="Legacy Sound Paths")
+	TArray<FString> SoundPaths;
+
+	UPROPERTY(Edit, Save, Category="PlaySound", DisplayName="Sounds", Type=Array, Struct=FAnimNotifySoundEntry)
+	TArray<FAnimNotifySoundEntry> Sounds;
 
 	void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim) override;
 };

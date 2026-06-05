@@ -2,6 +2,11 @@
 
 #include "Serialization/Archive.h"
 
+namespace
+{
+	constexpr uint32 MaxSerializedArrayElements = 100000;
+}
+
 bool FArrayProperty::ContainsObjectReference() const
 {
 	return InnerProperty && InnerProperty->ContainsObjectReference();
@@ -34,6 +39,12 @@ void FArrayProperty::SerializeValue(void* ValuePtr, FArchive& Ar, const FPropert
 	{
 		if (Ar.IsLoading())
 		{
+			if (Num > MaxSerializedArrayElements)
+			{
+				ArrayOps->Resize(ValuePtr, 0);
+				Ar.EndArray();
+				return;
+			}
 			ArrayOps->Resize(ValuePtr, Num);
 		}
 
@@ -50,6 +61,11 @@ void FArrayProperty::SerializeValue(void* ValuePtr, FArchive& Ar, const FPropert
 	Ar << Num;
 	if (Ar.IsLoading())
 	{
+		if (Num > MaxSerializedArrayElements)
+		{
+			ArrayOps->Resize(ValuePtr, 0);
+			return;
+		}
 		ArrayOps->Resize(ValuePtr, Num);
 	}
 
@@ -71,6 +87,12 @@ void FArrayProperty::SerializeValue(void* ValuePtr, FArchive& Ar) const
 	{
 		if (Ar.IsLoading())
 		{
+			if (Num > MaxSerializedArrayElements)
+			{
+				ArrayOps->Resize(ValuePtr, 0);
+				Ar.EndArray();
+				return;
+			}
 			ArrayOps->Resize(ValuePtr, Num);
 		}
 
@@ -87,6 +109,11 @@ void FArrayProperty::SerializeValue(void* ValuePtr, FArchive& Ar) const
 	Ar << Num;
 	if (Ar.IsLoading())
 	{
+		if (Num > MaxSerializedArrayElements)
+		{
+			ArrayOps->Resize(ValuePtr, 0);
+			return;
+		}
 		ArrayOps->Resize(ValuePtr, Num);
 	}
 

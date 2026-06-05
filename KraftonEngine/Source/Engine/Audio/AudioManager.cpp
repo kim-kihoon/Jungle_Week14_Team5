@@ -94,7 +94,7 @@ bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoo
 	return true;
 }
 
-void FAudioManager::PlayAudio(const FString& Key, float Volume)
+void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch)
 {
 	if (!System || !Audios.contains(Key))
 	{
@@ -106,7 +106,8 @@ void FAudioManager::PlayAudio(const FString& Key, float Volume)
 
 	if (Channel)
 	{
-		Channel->setVolume(Volume);
+		Channel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
+		Channel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
 	}
 }
 

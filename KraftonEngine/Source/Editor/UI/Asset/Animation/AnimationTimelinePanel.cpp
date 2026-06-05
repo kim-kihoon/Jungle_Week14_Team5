@@ -13,6 +13,7 @@
 #include "Object/GarbageCollection.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Object/Reflection/UClass.h"
+#include "Object/Reflection/UStruct.h"
 #include "Core/Property/ArrayProperty.h"
 #include "Core/Types/PropertyTypes.h"
 #include "Editor/UI/Asset/Animation/MorphCurveEditObject.h"
@@ -279,6 +280,147 @@ namespace
 		return bChanged;
 	}
 
+	bool IsSoundEntryArrayProperty(const FArrayProperty* ArrayProp)
+	{
+		const FProperty* InnerProperty = ArrayProp ? ArrayProp->GetInnerProperty() : nullptr;
+		UStruct* StructType = InnerProperty ? InnerProperty->GetStructType() : nullptr;
+		return ArrayProp &&
+			ArrayProp->GetElementType() == EPropertyType::Struct &&
+			StructType &&
+			StructType->GetName() &&
+			std::strcmp(StructType->GetName(), "FAnimNotifySoundEntry") == 0;
+	}
+
+	bool RenderSoundEntryArrayPropertyInline(FPropertyValue& Prop)
+	{
+		const FArrayProperty* ArrayProp = Prop.Property ? Prop.Property->AsArrayProperty() : nullptr;
+		const FArrayProperty::FArrayOps* ArrayOps = ArrayProp ? ArrayProp->GetArrayOps() : nullptr;
+		const FProperty* InnerProperty = ArrayProp ? ArrayProp->GetInnerProperty() : nullptr;
+		UStruct* StructType = InnerProperty ? InnerProperty->GetStructType() : nullptr;
+		void* ArrayPtr = Prop.GetValuePtr();
+		if (!ArrayProp || ArrayProp->GetElementType() != EPropertyType::Struct || !ArrayOps ||
+			!ArrayOps->GetNum || !ArrayOps->InsertDefault || !ArrayOps->RemoveAt || !ArrayOps->GetElementPtr ||
+			!StructType || !IsSoundEntryArrayProperty(ArrayProp) || !ArrayPtr)
+		{
+			return false;
+		}
+
+		bool bChanged = false;
+		if (ImGui::SmallButton("+"))
+		{
+			ArrayOps->InsertDefault(ArrayPtr, ArrayOps->GetNum(ArrayPtr));
+			bChanged = true;
+		}
+
+		const size_t Num = ArrayOps->GetNum(ArrayPtr);
+		if (Num == 0)
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("(empty)");
+			return bChanged;
+		}
+
+		TArray<const FProperty*> ChildProperties;
+		StructType->GetPropertyRefs(ChildProperties, false);
+
+		for (size_t Index = 0; Index < Num; ++Index)
+		{
+			void* ElementPtr = ArrayOps->GetElementPtr(ArrayPtr, Index);
+			if (!ElementPtr)
+			{
+				continue;
+			}
+
+			FString* SoundPath = nullptr;
+			float* Volume = nullptr;
+			float* Pitch = nullptr;
+			for (const FProperty* ChildProperty : ChildProperties)
+			{
+				if (!ChildProperty || !ChildProperty->Name)
+				{
+					continue;
+				}
+
+				FPropertyValue ChildValue = ChildProperty->ToValue(ElementPtr, Prop.Object);
+				if (std::strcmp(ChildProperty->Name, "SoundPath") == 0)
+				{
+					SoundPath = static_cast<FString*>(ChildValue.GetValuePtr());
+				}
+				else if (std::strcmp(ChildProperty->Name, "Volume") == 0)
+				{
+					Volume = static_cast<float*>(ChildValue.GetValuePtr());
+				}
+				else if (std::strcmp(ChildProperty->Name, "Pitch") == 0)
+				{
+					Pitch = static_cast<float*>(ChildValue.GetValuePtr());
+				}
+			}
+
+			ImGui::PushID(static_cast<int>(Index));
+			ImGui::Separator();
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("Sound %zu", Index);
+			ImGui::SameLine();
+			if (ImGui::SmallButton("-"))
+			{
+				ArrayOps->RemoveAt(ArrayPtr, Index);
+				bChanged = true;
+				ImGui::PopID();
+				break;
+			}
+
+			if (SoundPath)
+			{
+				char Buf[256];
+				strncpy_s(Buf, sizeof(Buf), SoundPath->c_str(), _TRUNCATE);
+				ImGui::SetNextItemWidth(-FLT_MIN);
+				if (ImGui::InputText("Sound Path", Buf, sizeof(Buf)))
+				{
+					*SoundPath = Buf;
+					bChanged = true;
+				}
+			}
+
+			const float HalfWidth = (std::max)(80.0f, (ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f);
+			if (Volume)
+			{
+				ImGui::SetNextItemWidth(HalfWidth);
+				if (ImGui::DragFloat("Volume", Volume, 0.01f, 0.0f, 1.0f))
+				{
+					bChanged = true;
+				}
+			}
+			if (Pitch)
+			{
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(HalfWidth);
+				if (ImGui::DragFloat("Pitch", Pitch, 0.01f, 0.1f, 3.0f))
+				{
+					bChanged = true;
+				}
+			}
+			ImGui::PopID();
+		}
+
+		return bChanged;
+	}
+
+	bool RenderArrayPropertyInline(FPropertyValue& Prop)
+	{
+		const FArrayProperty* ArrayProp = Prop.Property ? Prop.Property->AsArrayProperty() : nullptr;
+		if (ArrayProp && ArrayProp->GetElementType() == EPropertyType::Struct)
+		{
+			if (IsSoundEntryArrayProperty(ArrayProp))
+			{
+				return RenderSoundEntryArrayPropertyInline(Prop);
+			}
+			ImGui::TextDisabled("(unsupported array)");
+			return false;
+		}
+
+		return RenderStringArrayPropertyInline(Prop);
+	}
+
 	bool RenderObjectPropertiesInline(UObject* Object)
 	{
 		if (!Object)
@@ -432,7 +574,7 @@ namespace
 				}
 				case EPropertyType::Array:
 				{
-					bChanged = RenderStringArrayPropertyInline(Prop);
+					bChanged = RenderArrayPropertyInline(Prop);
 					break;
 				}
 				default:
