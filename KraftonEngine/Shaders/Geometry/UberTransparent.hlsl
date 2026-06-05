@@ -79,15 +79,15 @@ UberTransparentVS_Output BuildVS(float3 position, float3 normal, float4 color, f
     output.normal = normalize(mul(normal, (float3x3)NormalMatrix));
     output.color = color * SectionColor;
     output.texcoord = texcoord;
-    output.tangent = tangent;
+    float3 T = BuildOrthonormalTangent(output.normal, mul(tangent.xyz, (float3x3)Model));
+    output.tangent = float4(T, tangent.w);
 
 #if defined(LIGHTING_MODEL_GOURAUD) && LIGHTING_MODEL_GOURAUD
     float3 N = output.normal;
     if (HasNormalMap >= 0.5)
     {
-        float3 T = BuildOrthonormalTangent(N, mul(tangent.xyz, (float3x3)Model));
         float3 tangentNormal = SampleTangentSpaceNormalLevel(NormalTexture, LinearWrapSampler, texcoord, 0);
-        N = ApplyTangentSpaceNormal(N, T, tangent.w, tangentNormal);
+        N = ApplyTangentSpaceNormal(N, output.tangent.xyz, output.tangent.w, tangentNormal);
     }
 
     float3 V = normalize(CameraWorldPos - output.worldPos);

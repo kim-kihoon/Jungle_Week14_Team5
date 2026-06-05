@@ -550,16 +550,16 @@ namespace
 			return;
 		}
 
-		if (IsLikelyNormalTexturePath(TexturePath))
-		{
-			MaterialInfo.NormalTexturePath = TexturePath;
-			return;
-		}
-
 		if (IsLikelyColorTexturePath(TexturePath) && MaterialInfo.DiffuseTexturePath.empty())
 		{
 			MaterialInfo.DiffuseTexturePath = TexturePath;
+			return;
 		}
+
+		// Direct NormalMap/Bump FBX links are authoritative. Embedded Blender images often
+		// arrive as generic names like Image_2_002.png, so filename tokens are only a guard
+		// against obvious color maps, not a requirement.
+		MaterialInfo.NormalTexturePath = TexturePath;
 	}
 
 	bool TextureNameMatchesMaterial(const FString& TextureStem, const FString& MaterialName)

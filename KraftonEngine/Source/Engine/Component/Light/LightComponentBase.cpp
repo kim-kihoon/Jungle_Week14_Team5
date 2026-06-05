@@ -44,6 +44,7 @@ UBillboardComponent* ULightComponentBase::EnsureEditorBillboard()
 		{
 			// 에디터 아이콘 빌보드는 부모 스케일과 컴포넌트 트리 기본 표시에서 분리한다.
 			Billboard->SetAbsoluteScale(true);
+			Billboard->SetCastShadow(false);
 			Billboard->SetHiddenInComponentTree(true);
 			return Billboard;
 		}
@@ -56,6 +57,7 @@ UBillboardComponent* ULightComponentBase::EnsureEditorBillboard()
 		// 에디터 아이콘 빌보드는 부모 스케일과 컴포넌트 트리 기본 표시에서 분리한다.
 		Billboard->SetAbsoluteScale(true);
 		Billboard->SetEditorOnlyComponent(true);
+		Billboard->SetCastShadow(false);
 		Billboard->SetHiddenInComponentTree(true);
 		auto Material = FMaterialManager::Get().GetOrCreateMaterial(IconMaterialPath);
 		Billboard->SetMaterial(Material);

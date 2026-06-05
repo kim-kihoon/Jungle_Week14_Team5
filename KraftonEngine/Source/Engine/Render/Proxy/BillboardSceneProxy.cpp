@@ -16,7 +16,11 @@ FBillboardSceneProxy::FBillboardSceneProxy(UBillboardComponent* InComponent)
 	ProxyFlags &= ~EPrimitiveProxyFlags::ShowAABB;
 
 	if (InComponent->IsEditorOnly())
+	{
 		ProxyFlags |= EPrimitiveProxyFlags::EditorOnly;
+		bCastShadow = false;
+		bCastShadowAsTwoSided = false;
+	}
 }
 
 UBillboardComponent* FBillboardSceneProxy::GetBillboardComponent() const

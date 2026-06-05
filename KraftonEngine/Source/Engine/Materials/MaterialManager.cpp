@@ -23,33 +23,6 @@ namespace
 {
     constexpr const char* MaterialGraphGeneratorVersion = "MaterialGraph";
 
-	static bool ContainsToken(const FString& Stem, const char* Token)
-	{
-		return Stem.find(Token) != FString::npos;
-	}
-
-	static bool EndsWithToken(const FString& Text, const char* Token)
-	{
-		const size_t TokenLength = std::strlen(Token);
-		return Text.size() >= TokenLength
-			&& Text.compare(Text.size() - TokenLength, TokenLength, Token) == 0;
-	}
-
-	static bool PathLooksLikeNormalMap(const FString& TexturePath)
-	{
-		if (TexturePath.empty())
-		{
-			return false;
-		}
-
-		const std::filesystem::path Path(FPaths::ToWide(TexturePath));
-		FString Stem = FPaths::ToUtf8(Path.stem().wstring());
-		std::transform(Stem.begin(), Stem.end(), Stem.begin(), [](unsigned char Ch) { return static_cast<char>(std::tolower(Ch)); });
-		return ContainsToken(Stem, "_normal") || ContainsToken(Stem, "-normal") || ContainsToken(Stem, "normal")
-			|| ContainsToken(Stem, "_norm") || ContainsToken(Stem, "_bump") || ContainsToken(Stem, "-bump")
-			|| EndsWithToken(Stem, "_n") || EndsWithToken(Stem, "-n");
-	}
-
 	// hospital-map 등 legacy Auto 머티리얼: 잘못된 노멀/알베도 보정 후 디스크에 반영.
 	static void SanitizeLoadedImportMaterial(UMaterial* Material, FMaterialManager& Manager)
 	{
@@ -74,8 +47,7 @@ namespace
 
 		UTexture2D* NormalTex = Material->GetTextureParameterValue("NormalTexture");
 		const FString NormalPath = NormalTex ? NormalTex->GetSourcePath() : FString();
-		if (Material->GetScalarParameterValue("HasNormalMap") >= 0.5f
-			&& (NormalPath.empty() || !PathLooksLikeNormalMap(NormalPath)))
+		if (Material->GetScalarParameterValue("HasNormalMap") >= 0.5f && NormalPath.empty())
 		{
 			Material->SetScalarParameter("HasNormalMap", 0.0f);
 			if (NormalTex)
@@ -371,7 +343,7 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	Material->Create(UassetPath, Template, EMaterialDomain::Surface, BlendMode, std::move(Buffers));
 	Material->SetShaderPathForSerialize(DefaultShaderPath);
 	Material->SetVector4Parameter("SectionColor", SectionColor);
-	const bool bUseNormalMap = !NormalTexturePath.empty() && PathLooksLikeNormalMap(NormalTexturePath);
+	const bool bUseNormalMap = !NormalTexturePath.empty();
 	Material->SetScalarParameter("HasNormalMap", bUseNormalMap ? 1.0f : 0.0f);
 	Material->SetScalarParameter("Opacity", std::clamp(Opacity, 0.0f, 1.0f)); // CB zero-init=0(투명) 방지
 	Material->SetScalarParameter("bEmissive", bEmissive ? 1.0f : 0.0f);
