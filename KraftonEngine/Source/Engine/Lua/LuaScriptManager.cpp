@@ -5611,6 +5611,58 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             return Result;
         }
     );
+    World.set_function(
+        "LineTraceObjects",
+        [](const FVector& Start, const FVector& End, sol::optional<AActor*> IgnoreActor, sol::optional<uint32> ObjectTypeMask) -> sol::table
+        {
+            sol::table Result   = FLuaScriptManager::GetState().create_table();
+            Result["Hit"]       = false;
+            Result["Actor"]     = static_cast<AActor*>(nullptr);
+            Result["Component"] = static_cast<UPrimitiveComponent*>(nullptr);
+            Result["Location"]  = FVector(0, 0, 0);
+            Result["Normal"]    = FVector(0, 0, 0);
+            Result["Distance"]  = 0.0f;
+
+            UWorld* CurrentWorld = GEngine ? GEngine->GetWorld() : nullptr;
+            if (!CurrentWorld)
+            {
+                return Result;
+            }
+
+            FVector     Delta       = End - Start;
+            const float MaxDistance = Delta.Length();
+            if (MaxDistance <= 0.0001f)
+            {
+                return Result;
+            }
+
+            const uint32 DefaultMask =
+                ObjectTypeBit(ECollisionChannel::WorldStatic) |
+                ObjectTypeBit(ECollisionChannel::WorldDynamic) |
+                ObjectTypeBit(ECollisionChannel::Pawn) |
+                ObjectTypeBit(ECollisionChannel::Projectile) |
+                ObjectTypeBit(ECollisionChannel::Trigger);
+
+            const FVector Direction = Delta / MaxDistance;
+            FHitResult    Hit;
+            if (CurrentWorld->PhysicsRaycastByObjectTypes(
+                    Start,
+                    Direction,
+                    MaxDistance,
+                    Hit,
+                    ObjectTypeMask.value_or(DefaultMask),
+                    IgnoreActor.value_or(nullptr)))
+            {
+                Result["Hit"]       = true;
+                Result["Actor"]     = Hit.HitActor;
+                Result["Component"] = Hit.HitComponent;
+                Result["Location"]  = Hit.WorldHitLocation;
+                Result["Normal"]    = Hit.WorldNormal;
+                Result["Distance"]  = Hit.Distance;
+            }
+            return Result;
+        }
+    );
 
     // 게임 특화 usertype/enum/global(GetGameState 등) 은 Game 모듈의
     // RegisterGameLuaBindings 가 등록한다. 호출 순서는 GameEngine/EditorEngine::Init

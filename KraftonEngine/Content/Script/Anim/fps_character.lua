@@ -15,6 +15,8 @@ local PISTOL_SOCKET = "PistolSocket"
 local MUZZLE_SOCKET = "Muzzle"
 local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemplate"
 local PROJECTILE_SPAWN_OFFSET = 0.0
+local CAMERA_TRACE_DISTANCE = 1000.0
+local FAKE_TARGET_TAG = "Fake"
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
@@ -135,6 +137,31 @@ local function spawn_projectile_from_muzzle()
     end
 
     return projectile
+end
+
+local function is_aiming_at_fake_target()
+    if World == nil or World.LineTraceObjects == nil then
+        return false
+    end
+
+    local owner = Anim.get_owner_actor()
+    if owner == nil then
+        return false
+    end
+
+    local camera = owner:GetCamera()
+    if camera == nil then
+        return false
+    end
+
+    local start = camera:GetLocation()
+    local direction = camera.Forward
+    local hit = World.LineTraceObjects(start, start + direction * CAMERA_TRACE_DISTANCE, owner)
+    if hit == nil or not hit.Hit or hit.Actor == nil then
+        return false
+    end
+
+    return hit.Actor:HasTag(FAKE_TARGET_TAG)
 end
 
 local function show_pistol()
@@ -278,9 +305,12 @@ function update(self, dt)
                 update_switch_to_pistol(self, 0.0)
             end
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
-            spawn_projectile_from_muzzle()
-            self.ActionTime = 0.0
-            self.ActionPhase = ACTION_PISTOL_FIRE
+            if is_aiming_at_fake_target() then
+                self.ActionTime = 0.0
+                self.ActionPhase = ACTION_PISTOL_FIRE
+            else
+                spawn_projectile_from_muzzle()
+            end
         elseif self.CurrentTool == TOOL_CAMERA then
             update_camera_hold_motion(self, dt)
         end
