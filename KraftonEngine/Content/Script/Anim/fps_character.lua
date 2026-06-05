@@ -2,8 +2,8 @@ local PISTOL_IDLE_PATH = "Content/Data/human/Pistol Idle_Armature_Pistol_Idle.ua
 local PISTOL_WALK_PATH = "Content/Data/human/Pistol Walk_Armature_Pistol_Walk.uasset"
 
 -- TODO: replace these with camera-specific hold animations after import.
-local CAMERA_IDLE_PATH = PISTOL_IDLE_PATH
-local CAMERA_WALK_PATH = PISTOL_WALK_PATH
+local CAMERA_IDLE_PATH = "Content/Data/human/Camera Idle_Armature_Camera_Idle.uasset"
+local CAMERA_WALK_PATH = "Content/Data/human/Camera Walk_Armature_Camera_Walk.uasset"
 
 -- TODO: replace these with equip/switch animations after import.
 local PISTOL_TO_CAMERA_PATH = CAMERA_IDLE_PATH
