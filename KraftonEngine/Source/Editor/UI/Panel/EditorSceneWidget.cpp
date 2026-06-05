@@ -115,6 +115,13 @@ void FEditorSceneWidget::RenderActorOutliner()
 					Selection.Select(Actor);
 				}
 			}
+			if (ImGui::BeginDragDropSource())
+			{
+				AActor* PayloadActor = Actor;
+				ImGui::SetDragDropPayload("OutlinerActorTemplateSource", &PayloadActor, sizeof(PayloadActor));
+				ImGui::Text("Actor Template: %s", DisplayName);
+				ImGui::EndDragDropSource();
+			}
 			ImGui::PopID();
 		}
 	}
