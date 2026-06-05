@@ -13,6 +13,13 @@ struct FFbxImportedMaterialInfo
 	FVector DiffuseColor = FVector(1.0f, 1.0f, 1.0f);
 	FString DiffuseTexturePath;
 	FString NormalTexturePath;
+	bool bEmissive = false;
+	bool bTwoSided = false;
+	bool bTransparent = false;
+	float Opacity = 1.0f;
+	float SpecularIntensity = 1.0f;
+	float Shininess = 32.0f;
+	float Metallic = 0.0f;
 };
 
 struct FFbxStaticMeshImportResult

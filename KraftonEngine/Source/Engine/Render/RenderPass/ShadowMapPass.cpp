@@ -754,29 +754,16 @@ void FShadowMapPass::DrawShadowCasters(ID3D11DeviceContext* DC, FScene& Scene, F
 			BoundSkinMatrixSRV = SkinMatrixSRV;
 		}
 
-			bool bAnySectionCastsShadow = false;
-			bool bAnyMaterialTwoSided   = false;
-			for (const FMeshSectionDraw& Section : Proxy->GetSectionDraws())
-			{
-				if (!ShouldDrawShadowSection(Section)) continue;
-				bAnySectionCastsShadow = true;
-				if (Section.Material && Section.Material->IsTwoSided())
-				{
-					bAnyMaterialTwoSided = true;
-				}
-			}
-			if (!bAnySectionCastsShadow) continue;
+		bool bAnySectionCastsShadow = false;
+		for (const FMeshSectionDraw& Section : Proxy->GetSectionDraws())
+		{
+			if (!ShouldDrawShadowSection(Section)) continue;
+			bAnySectionCastsShadow = true;
+			break;
+		}
+		if (!bAnySectionCastsShadow) continue;
 
-			// Two-sided shadow: front-cull ↔ no-cull 전환
-			bool bTwoSided = Proxy->CastsShadowAsTwoSided() || bAnyMaterialTwoSided;
-			if (bTwoSided != bCurrentTwoSided)
-			{
-				bCurrentTwoSided = bTwoSided;
-				Resources.RasterizerStateManager.Set(DC,
-					bTwoSided ? ERasterizerState::SolidNoCull : ERasterizerState::SolidFrontCull);
-			}
-
-			++LastDrawCasterCount;
+		++LastDrawCasterCount;
 		ShadowPerObjectCB.Update(DC, &Proxy->GetPerObjectConstants(), sizeof(FPerObjectConstants));
 		ID3D11Buffer* b1 = ShadowPerObjectCB.GetBuffer();
 		DC->VSSetConstantBuffers(ECBSlot::PerObject, 1, &b1);
@@ -788,12 +775,23 @@ void FShadowMapPass::DrawShadowCasters(ID3D11DeviceContext* DC, FScene& Scene, F
 
 		DC->IASetIndexBuffer(ProxyBuffer.IB, DXGI_FORMAT_R32_UINT, 0);
 
-			for (const FMeshSectionDraw& Section : Proxy->GetSectionDraws())
+		for (const FMeshSectionDraw& Section : Proxy->GetSectionDraws())
+		{
+			if (!ShouldDrawShadowSection(Section)) continue;
+
+			const bool bSectionTwoSided =
+				Proxy->CastsShadowAsTwoSided() ||
+				(Section.Material && Section.Material->IsTwoSided());
+			if (bSectionTwoSided != bCurrentTwoSided)
 			{
-				if (!ShouldDrawShadowSection(Section)) continue;
-				DC->DrawIndexed(Section.IndexCount, Section.FirstIndex, 0);
-				SHADOW_STATS_ADD_DRAW_CALL();
+				bCurrentTwoSided = bSectionTwoSided;
+				Resources.RasterizerStateManager.Set(DC,
+					bSectionTwoSided ? ERasterizerState::SolidNoCull : ERasterizerState::SolidFrontCull);
 			}
+
+			DC->DrawIndexed(Section.IndexCount, Section.FirstIndex, 0);
+			SHADOW_STATS_ADD_DRAW_CALL();
+		}
 	}
 	// Front-cull로 복원
 	if (bCurrentTwoSided)

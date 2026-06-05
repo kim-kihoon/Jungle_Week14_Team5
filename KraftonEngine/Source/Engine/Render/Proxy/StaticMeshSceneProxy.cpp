@@ -25,6 +25,45 @@ namespace
 			std::sort(Draws.begin(), Draws.end(), SectionMaterialLess);
 		}
 	}
+
+	bool ComputeSectionSortWorldPos(const FStaticMesh* MeshAsset, const FStaticMeshSection& Section,
+		const FMatrix& WorldMatrix, FVector& OutWorldPos)
+	{
+		if (!MeshAsset || Section.NumTriangles == 0)
+		{
+			return false;
+		}
+
+		const uint32 IndexStart = Section.FirstIndex;
+		const uint32 IndexEnd = Section.FirstIndex + Section.NumTriangles * 3;
+		if (IndexStart >= MeshAsset->Indices.size() || IndexEnd > MeshAsset->Indices.size())
+		{
+			return false;
+		}
+
+		FVector Sum(0.0f, 0.0f, 0.0f);
+		uint32 Count = 0;
+		for (uint32 IndexOffset = IndexStart; IndexOffset < IndexEnd; ++IndexOffset)
+		{
+			const uint32 VertexIndex = MeshAsset->Indices[IndexOffset];
+			if (VertexIndex >= MeshAsset->Vertices.size())
+			{
+				continue;
+			}
+
+			Sum += MeshAsset->Vertices[VertexIndex].pos;
+			++Count;
+		}
+
+		if (Count == 0)
+		{
+			return false;
+		}
+
+		const FVector LocalCenter = Sum * (1.0f / static_cast<float>(Count));
+		OutWorldPos = WorldMatrix.TransformPositionWithW(LocalCenter);
+		return true;
+	}
 }
 
 // ============================================================
@@ -110,6 +149,8 @@ void FStaticMeshSceneProxy::RebuildSectionDraws()
 
 	const auto& Slots = Mesh->GetStaticMaterials();
 	const auto& Overrides = SMC->GetOverrideMaterials();
+	const FStaticMesh* MeshAsset = Mesh->GetStaticMeshAsset();
+	const FMatrix& WorldMatrix = SMC->GetWorldMatrix();
 	LODCount = Mesh->GetLODCount();
 
 	// 각 LOD별 SectionDraws + MeshBuffer 구축
@@ -133,6 +174,16 @@ void FStaticMeshSceneProxy::RebuildSectionDraws()
 					Draw.Material = Overrides[i];
 				else if (IsValid(Slots[i].MaterialInterface))
 					Draw.Material = Slots[i].MaterialInterface;
+			}
+
+			if (Draw.Material && Draw.Material->GetRenderPass() == ERenderPass::Transparent)
+			{
+				FVector SortWorldPos;
+				if (ComputeSectionSortWorldPos(MeshAsset, Section, WorldMatrix, SortWorldPos))
+				{
+					Draw.bHasSortPos = true;
+					Draw.SortWorldPos = SortWorldPos;
+				}
 			}
 
 			LODData[lod].SectionDraws.push_back(Draw);
