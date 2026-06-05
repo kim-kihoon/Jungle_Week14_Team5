@@ -63,6 +63,16 @@ public:
 	void OnDoubleLeftClicked(ContentBrowserContext& Context) override;
 };
 
+class ActorTemplateElement final : public ContentBrowserElement
+{
+public:
+	const char* GetDragItemType() override { return "ActorTemplateContentItem"; }
+
+protected:
+	const char* GetTypeLabel() const override { return "Actor Template"; }
+	uint32 GetAccentColor() const override { return IM_COL32(120, 185, 240, 255); }
+};
+
 class ObjectElement final : public ContentBrowserElement
 {
 public:

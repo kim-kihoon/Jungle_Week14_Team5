@@ -18,6 +18,8 @@
 #include "Editor/UI/Asset/Mesh/MeshEditorWidget.h"
 #include "EditorEngine.h"
 #include "Editor/UI/Dialog/FbxImportOptionsDialog.h"
+#include "GameFramework/AActor.h"
+#include "Serialization/SceneSaveManager.h"
 
 #include <algorithm>
 #include <chrono>
@@ -114,7 +116,8 @@ void FEditorContentBrowserWidget::Initialize(UEditorEngine* InEditor, ID3D11Devi
 	FEditorWidget::Initialize(InEditor);
 	if (!InDevice) return;
 
-	IconFileMap[".Scene"] = L"World_64x.png";
+	IconFileMap[".scene"] = L"World_64x.png";
+	IconFileMap[".actortemplate"] = L"World_64x.png";
 	IconFileMap[".obj"] = L"icon_MatEd_Mesh_40x.png";
 	IconFileMap[".mat"] = L"Sphere_64x.png";
 	IconFileMap[".shake"] = L"StartMerge_42x.png";
@@ -428,6 +431,10 @@ void FEditorContentBrowserWidget::RefreshContent()
 		{
 			Element = std::make_shared<SceneElement>();
 		}
+		else if (Extension == ".actortemplate")
+		{
+			Element = std::make_shared<ActorTemplateElement>();
+		}
 		else if (Extension == ".obj")
 		{
 			Element = std::make_shared<ObjectElement>();
@@ -539,6 +546,36 @@ void FEditorContentBrowserWidget::RefreshContent()
 	}
 }
 
+bool FEditorContentBrowserWidget::HandleActorTemplateDropToDirectory(const std::wstring& TargetDirectory)
+{
+	bool bHandled = false;
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload("OutlinerActorTemplateSource"))
+		{
+			AActor* Actor = nullptr;
+			if (Payload->Data && Payload->DataSize == sizeof(AActor*))
+			{
+				Actor = *reinterpret_cast<AActor* const*>(Payload->Data);
+			}
+
+			FString CreatedPath;
+			if (Actor && FSceneSaveManager::SaveActorTemplateAsJSON(Actor, FPaths::ToUtf8(TargetDirectory), CreatedPath))
+			{
+				BrowserContext.bPendingContentRefresh = true;
+				bHandled = true;
+			}
+			else
+			{
+				UE_LOG("[ActorTemplate] Failed to create actor template in directory: %s",
+					FPaths::ToUtf8(TargetDirectory).c_str());
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
+	return bHandled;
+}
+
 void FEditorContentBrowserWidget::DrawDirNode(const FDirNode& InNode)
 {
 	ImGuiTreeNodeFlags Flag =
@@ -562,6 +599,7 @@ void FEditorContentBrowserWidget::DrawDirNode(const FDirNode& InNode)
 			RefreshContent();
 		}
 	}
+	HandleActorTemplateDropToDirectory(InNode.Self.Path);
 
 	if (!bIsOpen)
 	{
@@ -579,6 +617,16 @@ void FEditorContentBrowserWidget::DrawDirNode(const FDirNode& InNode)
 
 void FEditorContentBrowserWidget::DrawContents()
 {
+	const ImVec2 DropTargetScreenPos = ImGui::GetCursorScreenPos();
+	const ImVec2 DropTargetSize = ImGui::GetContentRegionAvail();
+	if (ImGui::GetDragDropPayload() && DropTargetSize.x > 0.0f && DropTargetSize.y > 0.0f)
+	{
+		ImGui::SetCursorScreenPos(DropTargetScreenPos);
+		ImGui::InvisibleButton("##ContentAreaActorTemplateDropTarget", DropTargetSize);
+		HandleActorTemplateDropToDirectory(BrowserContext.CurrentPath);
+		ImGui::SetCursorScreenPos(DropTargetScreenPos);
+	}
+
 	int ElementCount = static_cast<int>(CachedBrowserElements.size());
 
 	const float ContentWidth = ImGui::GetContentRegionAvail().x;

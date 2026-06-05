@@ -30,6 +30,7 @@ private:
 	void DrawDirNode(const FDirNode& InNode);
 	void DrawContents();
 	void RenderFbxImportOptionsPopup();
+	bool HandleActorTemplateDropToDirectory(const std::wstring& TargetDirectory);
 
 	TArray<FContentItem> ReadDirectory(std::wstring Path);
 	FDirNode BuildDirectoryTree(const std::filesystem::path& DirPath);
