@@ -293,7 +293,7 @@
           "ClassName" : "ULuaScriptComponent",
           "ObjectId" : 19,
           "Properties" : {
-            "ScriptFile" : "Anim/fps_character.lua",
+            "ScriptFile" : "template.lua",
             "bAutoActivate" : true,
             "bEditorOnly" : false,
             "bHiddenInComponentTree" : false,
@@ -308,6 +308,7 @@
         "PendingActorScale" : [1.000000, 1.000000, 1.000000],
         "PendingActorVisible" : true,
         "PendingTagsString" : "",
+        "bAutoInputJump" : false,
         "bAutoPossessPlayer" : true,
         "bNeedsTick" : true,
         "bUseControllerRotationPitch" : true,

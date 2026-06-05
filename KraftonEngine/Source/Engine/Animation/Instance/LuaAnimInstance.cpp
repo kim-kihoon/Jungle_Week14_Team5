@@ -12,6 +12,7 @@
 #include "Animation/Nodes/AnimNode_StateMachine.h"
 #include "Animation/Nodes/AnimNode_SequencePlayer.h"
 #include "Component/Movement/CharacterMovementComponent.h"
+#include "Component/PrimitiveComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
 #include "Core/Logging/Log.h"
 #include "Core/Types/PropertyTypes.h"
@@ -519,6 +520,67 @@ void ULuaAnimInstance::InstallBindings()
 		[]() -> bool { return FLuaScriptManager::GetLuaInputSnapshot().WasPressed(VK_RBUTTON); });
 	Anim.set_function("is_key_pressed",
 		[](int VK) -> bool { return FLuaScriptManager::GetLuaInputSnapshot().WasPressed(VK); });
+
+	Anim.set_function("set_socket_child_visibility",
+		[this](std::string SocketName, bool bVisible) -> bool
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FName TargetSocket(SocketName);
+			for (USceneComponent* Child : OwningComponent->GetChildren())
+			{
+				if (!Child || Child->GetAttachSocketName() != TargetSocket)
+				{
+					continue;
+				}
+
+				if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Child))
+				{
+					Primitive->SetVisibility(bVisible);
+					bChangedAny = true;
+				}
+			}
+			return bChangedAny;
+		});
+
+	Anim.set_function("toggle_socket_children",
+		[this](std::string EnabledSocketName, std::string DisabledSocketName) -> bool
+		{
+			if (!OwningComponent || EnabledSocketName.empty() || DisabledSocketName.empty())
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FName EnabledSocket(EnabledSocketName);
+			const FName DisabledSocket(DisabledSocketName);
+			for (USceneComponent* Child : OwningComponent->GetChildren())
+			{
+				if (!Child)
+				{
+					continue;
+				}
+
+				const FName AttachSocket = Child->GetAttachSocketName();
+				const bool bEnable = AttachSocket == EnabledSocket;
+				const bool bDisable = AttachSocket == DisabledSocket;
+				if (!bEnable && !bDisable)
+				{
+					continue;
+				}
+
+				if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Child))
+				{
+					Primitive->SetVisibility(bEnable);
+					bChangedAny = true;
+				}
+			}
+			return bChangedAny;
+		});
 
 	// ── AnimGraph build API (Phase 1.6b) — sub-state-machine / 임의 트리 표현 ──
 	// 노드는 UAnimInstance::MakeNode 가 OwnedNodes 에 push 후 raw 반환 — lifetime 은 C++ 가 관리.
