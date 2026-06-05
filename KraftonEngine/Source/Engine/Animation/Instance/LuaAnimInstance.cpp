@@ -612,6 +612,18 @@ void ULuaAnimInstance::InstallBindings()
 			return P;
 		});
 
+	Anim.set_function("get_sequence_length",
+		[](std::string Path) -> float
+		{
+			if (Path.empty() || Path == "None")
+			{
+				return 0.0f;
+			}
+
+			UAnimSequenceBase* Sequence = FAnimationManager::Get().LoadAnimation(Path);
+			return Sequence ? Sequence->GetPlayLength() : 0.0f;
+		});
+
 	// SM 에 state 추가 — SubGraphOverride 로 임의 노드를 state 의 sub-graph 로 박음.
 	Anim.set_function("sm_add_state",
 		[this](FAnimNode_StateMachine* SM, std::string Name, FAnimNode_Base* SubGraph)
