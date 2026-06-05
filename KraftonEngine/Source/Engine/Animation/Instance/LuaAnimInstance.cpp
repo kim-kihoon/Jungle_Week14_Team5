@@ -11,9 +11,11 @@
 #include "Animation/Nodes/AnimNode_Slot.h"
 #include "Animation/Nodes/AnimNode_StateMachine.h"
 #include "Animation/Nodes/AnimNode_SequencePlayer.h"
+#include "Component/Camera/CameraComponent.h"
 #include "Component/Movement/CharacterMovementComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 #include "Core/Logging/Log.h"
 #include "Core/Types/PropertyTypes.h"
 #include "GameFramework/AActor.h"
@@ -543,6 +545,47 @@ void ULuaAnimInstance::InstallBindings()
 					Primitive->SetVisibility(bVisible);
 					bChangedAny = true;
 				}
+			}
+			return bChangedAny;
+		});
+
+	Anim.set_function("set_owner_mesh_visibility",
+		[this](bool bVisible) -> bool
+		{
+			if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(OwningComponent))
+			{
+				Primitive->SetVisibility(bVisible);
+				return true;
+			}
+			return false;
+		});
+
+	Anim.set_function("set_static_mesh_visibility_by_path",
+		[this](std::string MeshPath, bool bVisible) -> bool
+		{
+			if (!OwningComponent || MeshPath.empty())
+			{
+				return false;
+			}
+
+			AActor* Owner = OwningComponent->GetOwner();
+			if (!Owner)
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FString TargetPath(MeshPath);
+			for (UActorComponent* Component : Owner->GetComponents())
+			{
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
+				if (!StaticMeshComponent || StaticMeshComponent->GetStaticMeshPath() != TargetPath)
+				{
+					continue;
+				}
+
+				StaticMeshComponent->SetVisibility(bVisible);
+				bChangedAny = true;
 			}
 			return bChangedAny;
 		});

@@ -1,10 +1,8 @@
-local PISTOL_IDLE_PATH = "Content/Data/human/Pistol Idle_Armature_Pistol_Idle.uasset"
-local PISTOL_WALK_PATH = "Content/Data/human/Pistol Walk_Armature_Pistol_Walk.uasset"
+local PISTOL_IDLE_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Idle.uasset"
+local PISTOL_WALK_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Walk.uasset"
 local PISTOL_OUT_PATH = "Content/Data/human/Pistol Out_Armature_Pistol_Out.uasset"
-
-local CAMERA_IDLE_PATH = "Content/Data/human/Camera Idle_Armature_Camera_Idle.uasset"
-local CAMERA_WALK_PATH = "Content/Data/human/Camera Walk_Armature_Camera_Walk.uasset"
-local CAMERA_OUT_PATH = "Content/Data/human/Camera Out_Armature_Camera_Out.uasset"
+local PISTOL_FIRE_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Fire.uasset"
+local CAMERA_MESH_PATH = "Content/Data/camera/camera_StaticMesh.uasset"
 
 local FPS_SPEED_THRESHOLD = 0.5
 local FPS_IDLE_TO_WALK_BLEND = 0.15
@@ -12,25 +10,23 @@ local FPS_WALK_TO_IDLE_BLEND = 0.15
 local FPS_TOOL_SWITCH_ENTER_BLEND = 0.15
 local FPS_TOOL_SWITCH_CHAIN_BLEND = 0.0
 local FPS_TOOL_SWITCH_EXIT_BLEND = 0.15
+local FPS_FIRE_ENTER_BLEND = 0.05
+local FPS_FIRE_EXIT_BLEND = 0.1
 local KEY_SPACE = 0x20
 local PISTOL_SOCKET = "PistolSocket"
-local CAMERA_SOCKET = "CameraSocket"
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
 
 local SWITCH_NONE = 0
 local SWITCH_PISTOL_OUT = 1
-local SWITCH_CAMERA_IN = 2
-local SWITCH_CAMERA_OUT = 3
-local SWITCH_PISTOL_IN = 4
+local SWITCH_PISTOL_IN = 2
+
+local ACTION_NONE = 0
+local ACTION_PISTOL_FIRE = 1
 
 local function is_pistol(self)
     return self.CurrentTool == TOOL_PISTOL
-end
-
-local function is_camera(self)
-    return self.CurrentTool == TOOL_CAMERA
 end
 
 local function is_idle(self)
@@ -45,14 +41,28 @@ local function is_switching(self)
     return self.SwitchPhase ~= SWITCH_NONE
 end
 
+local function show_pistol()
+    Anim.set_owner_mesh_visibility(true)
+    Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
+    Anim.set_static_mesh_visibility_by_path(CAMERA_MESH_PATH, false)
+end
+
+local function show_camera()
+    Anim.set_owner_mesh_visibility(false)
+    Anim.set_socket_child_visibility(PISTOL_SOCKET, false)
+    Anim.set_static_mesh_visibility_by_path(CAMERA_MESH_PATH, true)
+end
+
 function init(self)
     self.Speed = 0.0
     self.SpeedThreshold = FPS_SPEED_THRESHOLD
     self.CurrentTool = TOOL_PISTOL
     self.SwitchPhase = SWITCH_NONE
     self.SwitchTime = 0.0
+    self.ActionPhase = ACTION_NONE
+    self.ActionTime = 0.0
     self.PistolOutDuration = Anim.get_sequence_length(PISTOL_OUT_PATH)
-    self.CameraOutDuration = Anim.get_sequence_length(CAMERA_OUT_PATH)
+    self.PistolFireDuration = Anim.get_sequence_length(PISTOL_FIRE_PATH)
 
     local fps = Anim.create_state_machine("FPS")
 
@@ -60,35 +70,44 @@ function init(self)
     Anim.sm_add_state(fps, "PistolWalk", Anim.create_sequence_player(PISTOL_WALK_PATH, 1.0, true))
     Anim.sm_add_state(fps, "PistolOut", Anim.create_sequence_player(PISTOL_OUT_PATH, 1.0, false))
     Anim.sm_add_state(fps, "PistolIn", Anim.create_sequence_player(PISTOL_OUT_PATH, -1.0, false))
-
-    Anim.sm_add_state(fps, "CameraIdle", Anim.create_sequence_player(CAMERA_IDLE_PATH, 1.0, true))
-    Anim.sm_add_state(fps, "CameraWalk", Anim.create_sequence_player(CAMERA_WALK_PATH, 1.0, true))
-    Anim.sm_add_state(fps, "CameraOut", Anim.create_sequence_player(CAMERA_OUT_PATH, 1.0, false))
-    Anim.sm_add_state(fps, "CameraIn", Anim.create_sequence_player(CAMERA_OUT_PATH, -1.0, false))
+    Anim.sm_add_state(fps, "PistolFire", Anim.create_sequence_player(PISTOL_FIRE_PATH, 1.0, false))
+    Anim.sm_add_state(fps, "CameraHold", Anim.create_ref_pose())
 
     Anim.sm_add_transition(fps, "PistolIdle", "PistolWalk",
         function()
-            return not is_switching(self) and is_pistol(self) and is_walk(self)
+            return not is_switching(self) and self.ActionPhase == ACTION_NONE and is_pistol(self) and is_walk(self)
         end,
         FPS_IDLE_TO_WALK_BLEND)
 
     Anim.sm_add_transition(fps, "PistolWalk", "PistolIdle",
         function()
-            return not is_switching(self) and is_pistol(self) and is_idle(self)
+            return not is_switching(self) and self.ActionPhase == ACTION_NONE and is_pistol(self) and is_idle(self)
         end,
         FPS_WALK_TO_IDLE_BLEND)
 
-    Anim.sm_add_transition(fps, "CameraIdle", "CameraWalk",
+    Anim.sm_add_transition(fps, "PistolIdle", "PistolFire",
         function()
-            return not is_switching(self) and is_camera(self) and is_walk(self)
+            return self.ActionPhase == ACTION_PISTOL_FIRE
         end,
-        FPS_IDLE_TO_WALK_BLEND)
+        FPS_FIRE_ENTER_BLEND)
 
-    Anim.sm_add_transition(fps, "CameraWalk", "CameraIdle",
+    Anim.sm_add_transition(fps, "PistolWalk", "PistolFire",
         function()
-            return not is_switching(self) and is_camera(self) and is_idle(self)
+            return self.ActionPhase == ACTION_PISTOL_FIRE
         end,
-        FPS_WALK_TO_IDLE_BLEND)
+        FPS_FIRE_ENTER_BLEND)
+
+    Anim.sm_add_transition(fps, "PistolFire", "PistolIdle",
+        function()
+            return self.ActionPhase == ACTION_NONE and is_pistol(self) and is_idle(self)
+        end,
+        FPS_FIRE_EXIT_BLEND)
+
+    Anim.sm_add_transition(fps, "PistolFire", "PistolWalk",
+        function()
+            return self.ActionPhase == ACTION_NONE and is_pistol(self) and is_walk(self)
+        end,
+        FPS_FIRE_EXIT_BLEND)
 
     Anim.sm_add_transition(fps, "PistolIdle", "PistolOut",
         function()
@@ -102,37 +121,13 @@ function init(self)
         end,
         FPS_TOOL_SWITCH_ENTER_BLEND)
 
-    Anim.sm_add_transition(fps, "PistolOut", "CameraIn",
+    Anim.sm_add_transition(fps, "PistolOut", "CameraHold",
         function()
-            return self.SwitchPhase == SWITCH_CAMERA_IN
+            return self.SwitchPhase == SWITCH_NONE and self.CurrentTool == TOOL_CAMERA
         end,
         FPS_TOOL_SWITCH_CHAIN_BLEND)
 
-    Anim.sm_add_transition(fps, "CameraIn", "CameraIdle",
-        function()
-            return self.SwitchPhase == SWITCH_NONE and is_camera(self) and is_idle(self)
-        end,
-        FPS_TOOL_SWITCH_EXIT_BLEND)
-
-    Anim.sm_add_transition(fps, "CameraIn", "CameraWalk",
-        function()
-            return self.SwitchPhase == SWITCH_NONE and is_camera(self) and is_walk(self)
-        end,
-        FPS_TOOL_SWITCH_EXIT_BLEND)
-
-    Anim.sm_add_transition(fps, "CameraIdle", "CameraOut",
-        function()
-            return self.SwitchPhase == SWITCH_CAMERA_OUT
-        end,
-        FPS_TOOL_SWITCH_ENTER_BLEND)
-
-    Anim.sm_add_transition(fps, "CameraWalk", "CameraOut",
-        function()
-            return self.SwitchPhase == SWITCH_CAMERA_OUT
-        end,
-        FPS_TOOL_SWITCH_ENTER_BLEND)
-
-    Anim.sm_add_transition(fps, "CameraOut", "PistolIn",
+    Anim.sm_add_transition(fps, "CameraHold", "PistolIn",
         function()
             return self.SwitchPhase == SWITCH_PISTOL_IN
         end,
@@ -152,11 +147,20 @@ function init(self)
 
     Anim.sm_set_initial_state(fps, "PistolIdle")
     Anim.set_root_node(fps)
-    Anim.toggle_socket_children(PISTOL_SOCKET, CAMERA_SOCKET)
+    show_pistol()
 end
 
 function update(self, dt)
     self.Speed = Anim.get_owner_speed()
+
+    if self.ActionPhase == ACTION_PISTOL_FIRE then
+        self.ActionTime = self.ActionTime + dt
+        if self.ActionTime >= self.PistolFireDuration then
+            self.ActionTime = 0.0
+            self.ActionPhase = ACTION_NONE
+        end
+        return
+    end
 
     if self.SwitchPhase == SWITCH_NONE then
         if Anim.is_key_pressed(KEY_SPACE) then
@@ -164,8 +168,13 @@ function update(self, dt)
             if self.CurrentTool == TOOL_PISTOL then
                 self.SwitchPhase = SWITCH_PISTOL_OUT
             else
-                self.SwitchPhase = SWITCH_CAMERA_OUT
+                self.CurrentTool = TOOL_PISTOL
+                self.SwitchPhase = SWITCH_PISTOL_IN
+                show_pistol()
             end
+        elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
+            self.ActionTime = 0.0
+            self.ActionPhase = ACTION_PISTOL_FIRE
         end
         return
     end
@@ -175,16 +184,8 @@ function update(self, dt)
     if self.SwitchPhase == SWITCH_PISTOL_OUT and self.SwitchTime >= self.PistolOutDuration then
         self.SwitchTime = 0.0
         self.CurrentTool = TOOL_CAMERA
-        self.SwitchPhase = SWITCH_CAMERA_IN
-        Anim.toggle_socket_children(CAMERA_SOCKET, PISTOL_SOCKET)
-    elseif self.SwitchPhase == SWITCH_CAMERA_IN and self.SwitchTime >= self.CameraOutDuration then
-        self.SwitchTime = 0.0
         self.SwitchPhase = SWITCH_NONE
-    elseif self.SwitchPhase == SWITCH_CAMERA_OUT and self.SwitchTime >= self.CameraOutDuration then
-        self.SwitchTime = 0.0
-        self.CurrentTool = TOOL_PISTOL
-        self.SwitchPhase = SWITCH_PISTOL_IN
-        Anim.toggle_socket_children(PISTOL_SOCKET, CAMERA_SOCKET)
+        show_camera()
     elseif self.SwitchPhase == SWITCH_PISTOL_IN and self.SwitchTime >= self.PistolOutDuration then
         self.SwitchTime = 0.0
         self.SwitchPhase = SWITCH_NONE
