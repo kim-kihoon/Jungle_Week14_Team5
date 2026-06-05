@@ -31,6 +31,8 @@ public:
     TArray<FBoneAnimationTrack> BoneAnimationTracks;
     TArray<FMorphTargetCurve>   MorphTargetCurves;
     TArray<FAnimNotifyEvent>    Notifies;
+    int32                       NotifyTrackCount = 1;
+    TArray<float>               NotifyTrackVolumes;
 
     const TArray<FBoneAnimationTrack>& GetBoneAnimationTracks() const
     {

@@ -199,7 +199,9 @@ void FEditorMainPanel::Create(FWindowsWindow* InWindow, FRenderer& InRenderer, U
 	ConsoleWidget.Initialize(InEditorEngine);
 	ControlWidget.Initialize(InEditorEngine);
 	PropertyWidget.Initialize(InEditorEngine);
+	ReflectionPropertyWidget.Initialize(InEditorEngine);
 	SceneWidget.Initialize(InEditorEngine);
+	SceneManagerWidget.Initialize(InEditorEngine);
 	StatWidget.Initialize(InEditorEngine);
 	ContentBrowserWidget.Initialize(InEditorEngine, InRenderer.GetFD3DDevice().GetDevice());
 	ShadowMapDebugWidget.Initialize(InEditorEngine);
@@ -279,10 +281,22 @@ void FEditorMainPanel::Render(float DeltaTime)
 		PropertyWidget.Render(DeltaTime);
 	}
 
+	if (!bHideEditorWindows && bLevelDocumentActive && Settings.UI.bReflectionProperty)
+	{
+		SCOPE_STAT_CAT("ReflectionPropertyWidget.Render", "5_UI");
+		ReflectionPropertyWidget.Render(DeltaTime);
+	}
+
 	if (!bHideEditorWindows && bLevelDocumentActive && Settings.UI.bScene)
 	{
 		SCOPE_STAT_CAT("SceneWidget.Render", "5_UI");
 		SceneWidget.Render(DeltaTime);
+	}
+
+	if (!bHideEditorWindows && bLevelDocumentActive && Settings.UI.bSceneManager)
+	{
+		SCOPE_STAT_CAT("SceneManagerWidget.Render", "5_UI");
+		SceneManagerWidget.Render(DeltaTime);
 	}
 
 	if (!bHideEditorWindows && bLevelDocumentActive && Settings.UI.bStat)
@@ -382,7 +396,9 @@ void FEditorMainPanel::RenderMainMenuBar()
 	{
 		ImGui::Checkbox("Camera", &Settings.UI.bControl);
 		ImGui::Checkbox("Detial", &Settings.UI.bProperty);
+		ImGui::Checkbox("Reflection Property", &Settings.UI.bReflectionProperty);
 		ImGui::Checkbox("Outliner", &Settings.UI.bScene);
+		ImGui::Checkbox("Scene Manager", &Settings.UI.bSceneManager);
 		ImGui::Checkbox("Stat Profiler", &Settings.UI.bStat);
 		if (ImGui::Checkbox("Content Browser (Ctrl+Space)", &Settings.UI.bContentBrowser) && Settings.UI.bContentBrowser)
 		{
@@ -1331,7 +1347,9 @@ void FEditorMainPanel::HideEditorWindows()
 	Settings.UI.bConsole = false;
 	Settings.UI.bControl = false;
 	Settings.UI.bProperty = false;
+	Settings.UI.bReflectionProperty = false;
 	Settings.UI.bScene = false;
+	Settings.UI.bSceneManager = false;
 	Settings.UI.bStat = false;
 	Settings.UI.bContentBrowser = false;
 	Settings.UI.bImGUISettings = false;

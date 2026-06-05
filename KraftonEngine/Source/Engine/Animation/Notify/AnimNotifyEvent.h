@@ -24,6 +24,7 @@ struct FAnimNotifyEvent
 	FName NotifyName;
 	float TriggerTime = 0.0f;   // 시퀀스 내 절대 시간 (sec)
 	float Duration    = 0.0f;   // 0 이면 instant (NotifyState 동작 안 함)
+	int32 TrackIndex  = 0;
 
 	UAnimNotify*      Notify      = nullptr;
 	UAnimNotifyState* NotifyState = nullptr;

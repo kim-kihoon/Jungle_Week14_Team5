@@ -390,7 +390,9 @@ void UAnimInstance::DispatchQueuedAnimEvents()
 		if (IsValid(Q.Event.Notify) && IsValid(Q.Sequence))
 		{
 			// UAnimNotify::Notify 시그니처가 비-const 라 const_cast.
+			Q.Event.Notify->SetDispatchVolumeScale(Q.Sequence->GetNotifyTrackVolume(Q.Event.TrackIndex));
 			Q.Event.Notify->Notify(OwnerComponent, const_cast<UAnimSequenceBase*>(Q.Sequence));
+			Q.Event.Notify->SetDispatchVolumeScale(1.0f);
 		}
 
 		// 2) AnimInstance 자식이 NotifyName 매칭으로 추가 처리할 수 있도록 fallback 후크.

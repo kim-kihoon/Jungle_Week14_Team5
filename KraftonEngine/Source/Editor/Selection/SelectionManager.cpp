@@ -1,5 +1,6 @@
 #include "Editor/Selection/SelectionManager.h"
 #include "Object/Object.h"
+#include "Component/ActorComponent.h"
 #include "Component/Debug/GizmoComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/SceneComponent.h"
@@ -10,9 +11,75 @@
 
 #include <algorithm>
 
+FSelectionDetailTarget FSelectionDetailTarget::FromObject(UObject* Object)
+{
+    FSelectionDetailTarget Target;
+    if (IsValid(Object))
+    {
+        Target.ObjectPtr = Object;
+        Target.StructType = Object->GetClass();
+        Target.ContainerPtr = Object;
+    }
+    return Target;
+}
+
+void FSelectionDetailTarget::Reset()
+{
+    ObjectPtr = nullptr;
+    StructType = nullptr;
+    ContainerPtr = nullptr;
+}
+
+bool FSelectionDetailTarget::HasTarget() const
+{
+    return StructType != nullptr && ContainerPtr != nullptr;
+}
+
+bool FSelectionDetailTarget::IsValidTarget() const
+{
+    if (!HasTarget())
+    {
+        return false;
+    }
+
+    return ObjectPtr == nullptr || IsValid(ObjectPtr);
+}
+
+namespace
+{
+    UActorComponent* GetComponentFromTarget(const FSelectionDetailTarget& Target)
+    {
+        return Target.IsValidTarget() ? Cast<UActorComponent>(Target.ObjectPtr) : nullptr;
+    }
+}
+
 USceneComponent* FSelectionManager::GetSelectedComponent() const
 {
     return SelectedComponent.Get();
+}
+
+UActorComponent* FSelectionManager::GetSelectedActorComponent() const
+{
+    const FSelectionDetailTarget* PrimaryTarget = GetPrimaryDetailTarget();
+    return PrimaryTarget ? GetComponentFromTarget(*PrimaryTarget) : nullptr;
+}
+
+bool FSelectionManager::IsComponentDetailsSelected() const
+{
+    return GetSelectedActorComponent() != nullptr;
+}
+
+const FSelectionDetailTarget* FSelectionManager::GetPrimaryDetailTarget() const
+{
+    for (const FSelectionDetailTarget& Target : SelectedDetailTargets)
+    {
+        if (Target.IsValidTarget())
+        {
+            return &Target;
+        }
+    }
+
+    return nullptr;
 }
 
 bool FSelectionManager::IsSelected(AActor* Actor) const
@@ -106,7 +173,12 @@ void FSelectionManager::Select(AActor* Actor)
         return;
     }
 
-    if (SelectedActors.size() == 1 && SelectedActors.front().Get() == Actor && SelectedComponent.Get() == RootComponent)
+    const FSelectionDetailTarget* PrimaryTarget = GetPrimaryDetailTarget();
+    if (SelectedActors.size() == 1 &&
+        SelectedActors.front().Get() == Actor &&
+        SelectedComponent.Get() == RootComponent &&
+        PrimaryTarget &&
+        PrimaryTarget->ObjectPtr == Actor)
     {
         return;
     }
@@ -124,6 +196,7 @@ void FSelectionManager::Select(AActor* Actor)
     SelectedActors.push_back(Actor);
     SetActorProxiesSelected(Actor, true);
     SelectedComponent = RootComponent;
+    SetSingleDetailTarget(FSelectionDetailTarget::FromObject(Actor));
 
     SyncGizmo();
 }
@@ -180,6 +253,7 @@ void FSelectionManager::SelectRange(AActor* ClickedActor, const TArray<AActor*>&
     for (const TWeakObjectPtr<AActor>& PrevRef : SelectedActors) { if (AActor* Prev = PrevRef.Get()) SetActorProxiesSelected(Prev, false); }
 
     SelectedActors.clear();
+    SelectedDetailTargets.clear();
     SelectedComponent.Reset();
 
     for (int32 i = Lo; i <= Hi; ++i)
@@ -189,6 +263,7 @@ void FSelectionManager::SelectRange(AActor* ClickedActor, const TArray<AActor*>&
         {
             SelectedActors.push_back(Actor);
             SetActorProxiesSelected(Actor, true);
+            AddActorDetailTarget(Actor);
         }
     }
 
@@ -207,6 +282,23 @@ void FSelectionManager::ToggleSelect(AActor* Actor)
     {
         SetActorProxiesSelected(Actor, false);
         SelectedActors.erase(It);
+        SelectedDetailTargets.erase(
+            std::remove_if(
+                SelectedDetailTargets.begin(),
+                SelectedDetailTargets.end(),
+                [Actor](const FSelectionDetailTarget& Target)
+                {
+                    if (Target.ObjectPtr == Actor)
+                    {
+                        return true;
+                    }
+                    if (UActorComponent* Component = Cast<UActorComponent>(Target.ObjectPtr))
+                    {
+                        return Component->GetOwner() == Actor;
+                    }
+                    return false;
+                }),
+            SelectedDetailTargets.end());
         if (USceneComponent* AliveComponent = SelectedComponent.GetAlive())
         {
             if (AliveComponent->GetOwner() == Actor)
@@ -220,6 +312,7 @@ void FSelectionManager::ToggleSelect(AActor* Actor)
     {
         SelectedActors.push_back(Actor);
         SetActorProxiesSelected(Actor, true);
+        AddActorDetailTarget(Actor);
         if (SelectedActors.size() == 1)
         {
             USceneComponent* RootComponent = Actor->GetRootComponent();
@@ -238,6 +331,23 @@ void FSelectionManager::Deselect(AActor* Actor)
     {
         SetActorProxiesSelected(Actor, false);
         SelectedActors.erase(It);
+        SelectedDetailTargets.erase(
+            std::remove_if(
+                SelectedDetailTargets.begin(),
+                SelectedDetailTargets.end(),
+                [Actor](const FSelectionDetailTarget& Target)
+                {
+                    if (Target.ObjectPtr == Actor)
+                    {
+                        return true;
+                    }
+                    if (UActorComponent* Component = Cast<UActorComponent>(Target.ObjectPtr))
+                    {
+                        return Component->GetOwner() == Actor;
+                    }
+                    return false;
+                }),
+            SelectedDetailTargets.end());
         if (USceneComponent* AliveComponent = SelectedComponent.GetAlive())
         {
             if (AliveComponent->GetOwner() == Actor)
@@ -268,6 +378,7 @@ void FSelectionManager::ClearSelection()
     }
 
     SelectedActors.clear();
+    SelectedDetailTargets.clear();
     SelectedComponent.Reset();
     SyncGizmo();
 }
@@ -359,7 +470,7 @@ void FSelectionManager::SelectComponent(USceneComponent* Component)
         return;
     }
 
-    if (SelectedComponent.Get() == Target)
+    if (SelectedComponent.Get() == Target && GetSelectedActorComponent() == Target)
     {
         return;
     }
@@ -378,6 +489,54 @@ void FSelectionManager::SelectComponent(USceneComponent* Component)
     // Select(Owner)는 actor root를 선택 대상으로 잡기 때문에, owner 선택 보장 후
     // 실제 component 선택 대상을 다시 설정합니다.
     SelectedComponent = Target;
+    SetSingleDetailTarget(FSelectionDetailTarget::FromObject(Target));
+
+    SyncGizmo();
+}
+
+void FSelectionManager::SelectActorDetails(AActor* Actor)
+{
+    Select(Actor);
+}
+
+void FSelectionManager::SelectActorComponent(UActorComponent* Component)
+{
+    PruneInvalidSelection();
+
+    if (!IsValid(Component))
+    {
+        return;
+    }
+
+    if (USceneComponent* SceneComponent = Cast<USceneComponent>(Component))
+    {
+        SelectComponent(SceneComponent);
+        return;
+    }
+
+    AActor* Owner = Component->GetOwner();
+    if (!IsValid(Owner))
+    {
+        return;
+    }
+
+    if (!IsSelected(Owner))
+    {
+        for (const TWeakObjectPtr<AActor>& PrevRef : SelectedActors)
+        {
+            if (AActor* Prev = PrevRef.Get())
+            {
+                SetActorProxiesSelected(Prev, false);
+            }
+        }
+
+        SelectedActors.clear();
+        SelectedActors.push_back(Owner);
+        SetActorProxiesSelected(Owner, true);
+    }
+
+    SelectedComponent.Reset();
+    SetSingleDetailTarget(FSelectionDetailTarget::FromObject(Component));
 
     SyncGizmo();
 }
@@ -420,6 +579,45 @@ void FSelectionManager::AddReferencedObjects(FReferenceCollector& Collector)
     Collector.AddReferencedObject(Gizmo);
 }
 
+void FSelectionManager::SetSingleDetailTarget(const FSelectionDetailTarget& Target)
+{
+    SelectedDetailTargets.clear();
+    if (Target.IsValidTarget())
+    {
+        SelectedDetailTargets.push_back(Target);
+    }
+}
+
+void FSelectionManager::AddActorDetailTarget(AActor* Actor)
+{
+    if (!IsValid(Actor))
+    {
+        return;
+    }
+
+    const bool bAlreadySelected = std::any_of(
+        SelectedDetailTargets.begin(),
+        SelectedDetailTargets.end(),
+        [Actor](const FSelectionDetailTarget& Target)
+        {
+            return Target.ObjectPtr == Actor;
+        });
+
+    if (!bAlreadySelected)
+    {
+        SelectedDetailTargets.push_back(FSelectionDetailTarget::FromObject(Actor));
+    }
+}
+
+void FSelectionManager::RefreshDetailTargetsFromActors()
+{
+    SelectedDetailTargets.clear();
+    for (const TWeakObjectPtr<AActor>& ActorRef : SelectedActors)
+    {
+        AddActorDetailTarget(ActorRef.Get());
+    }
+}
+
 void FSelectionManager::PruneInvalidSelection()
 {
     bool bSelectionChanged = false;
@@ -437,6 +635,30 @@ void FSelectionManager::PruneInvalidSelection()
         SelectedActors.end()
     );
     bSelectionChanged = bSelectionChanged || OldActorCount != SelectedActors.size();
+
+    const size_t OldDetailTargetCount = SelectedDetailTargets.size();
+    SelectedDetailTargets.erase(
+        std::remove_if(
+            SelectedDetailTargets.begin(),
+            SelectedDetailTargets.end(),
+            [this](const FSelectionDetailTarget& Target)
+            {
+                if (!Target.IsValidTarget())
+                {
+                    return true;
+                }
+                if (UActorComponent* Component = Cast<UActorComponent>(Target.ObjectPtr))
+                {
+                    return !IsSelected(Component->GetOwner());
+                }
+                if (AActor* Actor = Cast<AActor>(Target.ObjectPtr))
+                {
+                    return !IsSelected(Actor);
+                }
+                return false;
+            }),
+        SelectedDetailTargets.end());
+    bSelectionChanged = bSelectionChanged || OldDetailTargetCount != SelectedDetailTargets.size();
 
     if (SelectedComponent.GetAlive())
     {
@@ -475,6 +697,12 @@ void FSelectionManager::PruneInvalidSelection()
                 break;
             }
         }
+    }
+
+    if (SelectedDetailTargets.empty() && !SelectedActors.empty())
+    {
+        RefreshDetailTargetsFromActors();
+        bSelectionChanged = true;
     }
 
     if (bSelectionChanged && IsValid(Gizmo))

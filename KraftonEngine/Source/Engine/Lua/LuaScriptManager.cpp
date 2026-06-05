@@ -11,11 +11,16 @@
 #include <fstream>
 #include <sstream>
 #include <windows.h>  // PostQuitMessage
+#ifdef GetCurrentTime
+#undef GetCurrentTime
+#endif
 #include "Animation/AnimInstance.h"
 #include "Animation/Graph/AnimGraphInstance.h"
+#include "Animation/Instance/AnimSingleNodeInstance.h"
 #include "Animation/Instance/LuaAnimInstance.h"
 #include "Animation/Montage/AnimMontage.h"
 #include "Animation/Sequence/AnimSequence.h"
+#include "Animation/Sequence/AnimSequenceBase.h"
 #include "CameraShake/CameraShakeAsset.h"
 #include "CameraShake/CameraShakeManager.h"
 #include "Component/ActorComponent.h"
@@ -3824,10 +3829,20 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         &UMaterialInstanceDynamic::GetOwnerObject
     );
 
+    Lua.new_usertype<UAnimSequenceBase>(
+        "AnimSequenceBase",
+        sol::base_classes,
+        sol::bases<UObject>(),
+        "GetPlayLength",
+        &UAnimSequenceBase::GetPlayLength,
+        "GetFrameRate",
+        &UAnimSequenceBase::GetFrameRate
+    );
+
     Lua.new_usertype<UAnimSequence>(
         "AnimSequence",
         sol::base_classes,
-        sol::bases<UObject>(),
+        sol::bases<UAnimSequenceBase, UObject>(),
         "GetNumberOfFrames",
         &UAnimSequence::GetNumberOfFrames,
         "TimeToFrame",
@@ -3855,7 +3870,7 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
     Lua.new_usertype<UAnimMontage>(
         "AnimMontage",
         sol::base_classes,
-        sol::bases<UObject>(),
+        sol::bases<UAnimSequenceBase, UObject>(),
         "GetSourceSequence",
         &UAnimMontage::GetSourceSequence,
         "SetSourceSequence",
@@ -4039,6 +4054,24 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             }
             return Value;
         }
+    );
+
+    Lua.new_usertype<UAnimSingleNodeInstance>(
+        "AnimSingleNodeInstance",
+        sol::base_classes,
+        sol::bases<UAnimInstance, UObject>(),
+        "GetAnimationAsset",
+        &UAnimSingleNodeInstance::GetAnimationAsset,
+        "GetCurrentTime",
+        &UAnimSingleNodeInstance::GetCurrentTime,
+        "GetPlayRate",
+        &UAnimSingleNodeInstance::GetPlayRate,
+        "SetPlayRate",
+        &UAnimSingleNodeInstance::SetPlayRate,
+        "IsPlaying",
+        &UAnimSingleNodeInstance::IsPlaying,
+        "IsLooping",
+        &UAnimSingleNodeInstance::IsLooping
     );
 
     Lua.new_usertype<ACharacter>(
@@ -4725,7 +4758,54 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         "GetAnimationMode",
         &USkeletalMeshComponent::GetAnimationMode,
         "GetAnimation",
-        &USkeletalMeshComponent::GetAnimation
+        &USkeletalMeshComponent::GetAnimation,
+        "GetCurrentAnimationTime",
+        [](USkeletalMeshComponent& Mesh)
+        {
+            if (UAnimSingleNodeInstance* SingleNode = Cast<UAnimSingleNodeInstance>(Mesh.GetAnimInstance()))
+            {
+                return SingleNode->GetCurrentTime();
+            }
+            return 0.0f;
+        },
+        "GetCurrentAnimationLength",
+        [](USkeletalMeshComponent& Mesh)
+        {
+            if (UAnimSequenceBase* Animation = Mesh.GetAnimation())
+            {
+                return Animation->GetPlayLength();
+            }
+            if (UAnimSingleNodeInstance* SingleNode = Cast<UAnimSingleNodeInstance>(Mesh.GetAnimInstance()))
+            {
+                if (UAnimSequenceBase* Animation = SingleNode->GetAnimationAsset())
+                {
+                    return Animation->GetPlayLength();
+                }
+            }
+            return 0.0f;
+        },
+        "IsCurrentAnimationFinished",
+        [](USkeletalMeshComponent& Mesh)
+        {
+            UAnimSingleNodeInstance* SingleNode = Cast<UAnimSingleNodeInstance>(Mesh.GetAnimInstance());
+            if (!SingleNode)
+            {
+                return false;
+            }
+            UAnimSequenceBase* Animation = SingleNode->GetAnimationAsset();
+            if (!Animation)
+            {
+                Animation = Mesh.GetAnimation();
+            }
+            if (!Animation)
+            {
+                return false;
+            }
+
+            constexpr float FinishEpsilon = 1.0e-4f;
+            const float Length = Animation->GetPlayLength();
+            return Length > 0.0f && SingleNode->GetCurrentTime() >= Length - FinishEpsilon;
+        }
     );
 
     Lua.new_usertype<FHitResult>(
