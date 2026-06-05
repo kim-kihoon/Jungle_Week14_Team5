@@ -2,6 +2,8 @@
 #include "Object/GarbageCollection.h"
 #include "Object/Object.h"
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
@@ -20,6 +22,94 @@
 namespace
 {
     constexpr const char* MaterialGraphGeneratorVersion = "MaterialGraph";
+
+	static bool ContainsToken(const FString& Stem, const char* Token)
+	{
+		return Stem.find(Token) != FString::npos;
+	}
+
+	static bool EndsWithToken(const FString& Text, const char* Token)
+	{
+		const size_t TokenLength = std::strlen(Token);
+		return Text.size() >= TokenLength
+			&& Text.compare(Text.size() - TokenLength, TokenLength, Token) == 0;
+	}
+
+	static bool PathLooksLikeNormalMap(const FString& TexturePath)
+	{
+		if (TexturePath.empty())
+		{
+			return false;
+		}
+
+		const std::filesystem::path Path(FPaths::ToWide(TexturePath));
+		FString Stem = FPaths::ToUtf8(Path.stem().wstring());
+		std::transform(Stem.begin(), Stem.end(), Stem.begin(), [](unsigned char Ch) { return static_cast<char>(std::tolower(Ch)); });
+		return ContainsToken(Stem, "_normal") || ContainsToken(Stem, "-normal") || ContainsToken(Stem, "normal")
+			|| ContainsToken(Stem, "_norm") || ContainsToken(Stem, "_bump") || ContainsToken(Stem, "-bump")
+			|| EndsWithToken(Stem, "_n") || EndsWithToken(Stem, "-n");
+	}
+
+	// hospital-map 등 legacy Auto 머티리얼: 잘못된 노멀/알베도 보정 후 디스크에 반영.
+	static void SanitizeLoadedImportMaterial(UMaterial* Material, FMaterialManager& Manager)
+	{
+		if (!Material || Material->IsMaterialInstance())
+		{
+			return;
+		}
+
+		const FString AssetPath = Material->GetAssetPathFileName();
+		if (AssetPath.find("Content/Material/Auto/") == FString::npos)
+		{
+			return;
+		}
+
+		if (Material->GetShaderPathForSerialize() != "Shaders/Geometry/UberLit.hlsl")
+		{
+			return;
+		}
+
+		bool bDirty = false;
+		const bool bEmissive = Material->GetScalarParameterValue("bEmissive") >= 0.5f;
+
+		UTexture2D* NormalTex = Material->GetTextureParameterValue("NormalTexture");
+		const FString NormalPath = NormalTex ? NormalTex->GetSourcePath() : FString();
+		if (Material->GetScalarParameterValue("HasNormalMap") >= 0.5f
+			&& (NormalPath.empty() || !PathLooksLikeNormalMap(NormalPath)))
+		{
+			Material->SetScalarParameter("HasNormalMap", 0.0f);
+			if (NormalTex)
+			{
+				Material->SetTextureParameter("NormalTexture", nullptr);
+			}
+			bDirty = true;
+		}
+
+		UTexture2D* DiffuseTex = Material->GetTextureParameterValue("DiffuseTexture");
+		FVector4 SectionColor = Material->GetVector4ParameterValue("SectionColor");
+		if (!bEmissive)
+		{
+			if (DiffuseTex)
+			{
+				if (SectionColor.X < 0.99f || SectionColor.Y < 0.99f || SectionColor.Z < 0.99f)
+				{
+					Material->SetVector4Parameter("SectionColor", FVector4(1.0f, 1.0f, 1.0f, 1.0f));
+					bDirty = true;
+				}
+			}
+			else if (SectionColor.X < 0.2f && SectionColor.Y < 0.2f && SectionColor.Z < 0.2f)
+			{
+				Material->SetVector4Parameter("SectionColor", FVector4(0.2f, 0.2f, 0.2f, 1.0f));
+				bDirty = true;
+			}
+		}
+
+		if (bDirty)
+		{
+			Material->RebuildCachedSRVs();
+			Manager.SaveMaterial(Material, AssetPath);
+		}
+	}
 
 	// ".mat" → ".uasset" 정규화(이미 .uasset 이면 그대로). 캐시 키 + 바이너리 타겟.
 	// 메시 임베드/하드코딩 legacy ".mat" 참조가 자동으로 ".uasset" 을 가리키게 한다.
@@ -259,6 +349,8 @@ UMaterial* FMaterialManager::LoadMaterialBinary(const FString& UassetPath)
         }
     }
 
+	SanitizeLoadedImportMaterial(Material, *this);
+
 	return Material;
 }
 
@@ -279,7 +371,8 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	Material->Create(UassetPath, Template, EMaterialDomain::Surface, BlendMode, std::move(Buffers));
 	Material->SetShaderPathForSerialize(DefaultShaderPath);
 	Material->SetVector4Parameter("SectionColor", SectionColor);
-	Material->SetScalarParameter("HasNormalMap", NormalTexturePath.empty() ? 0.0f : 1.0f);
+	const bool bUseNormalMap = !NormalTexturePath.empty() && PathLooksLikeNormalMap(NormalTexturePath);
+	Material->SetScalarParameter("HasNormalMap", bUseNormalMap ? 1.0f : 0.0f);
 	Material->SetScalarParameter("Opacity", std::clamp(Opacity, 0.0f, 1.0f)); // CB zero-init=0(투명) 방지
 	Material->SetScalarParameter("bEmissive", bEmissive ? 1.0f : 0.0f);
 	Material->SetScalarParameter("EmissiveIntensity", bEmissive ? EmissiveIntensity : 1.0f);
@@ -291,7 +384,7 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	if (!DiffuseTexturePath.empty())
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(DiffuseTexturePath, Device, ETextureColorSpace::SRGB))
 			Material->SetTextureParameter("DiffuseTexture", Tex);
-	if (!NormalTexturePath.empty())
+	if (bUseNormalMap)
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(NormalTexturePath, Device, ETextureColorSpace::Linear))
 			Material->SetTextureParameter("NormalTexture", Tex);
 

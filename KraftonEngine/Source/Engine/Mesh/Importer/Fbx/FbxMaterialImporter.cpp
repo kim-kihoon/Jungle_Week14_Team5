@@ -494,6 +494,15 @@ namespace
 		return Color.X < 0.02f && Color.Y < 0.02f && Color.Z < 0.02f;
 	}
 
+	FVector SanitizeLitDiffuseColor(const FVector& Color)
+	{
+		constexpr float MinChannel = 0.2f;
+		return FVector(
+			std::max(Color.X, MinChannel),
+			std::max(Color.Y, MinChannel),
+			std::max(Color.Z, MinChannel));
+	}
+
 	FString GetLowerTextureStem(const FString& TexturePath)
 	{
 		const fs::path Path(FPaths::ToWide(NormalizeTexturePathSeparators(TexturePath)));
@@ -531,6 +540,26 @@ namespace
 	{
 		const FString Stem = GetLowerTextureStem(TexturePath);
 		return HasColorTextureToken(Stem);
+	}
+
+	// Normal/Bump 슬롯에 컬러 텍스처가 들어오는 FBX에서 라이팅이 죽지 않도록 역할을 검증한다.
+	void TryAssignNormalMapSlot(FFbxImportedMaterialInfo& MaterialInfo, const FString& TexturePath)
+	{
+		if (TexturePath.empty())
+		{
+			return;
+		}
+
+		if (IsLikelyNormalTexturePath(TexturePath))
+		{
+			MaterialInfo.NormalTexturePath = TexturePath;
+			return;
+		}
+
+		if (IsLikelyColorTexturePath(TexturePath) && MaterialInfo.DiffuseTexturePath.empty())
+		{
+			MaterialInfo.DiffuseTexturePath = TexturePath;
+		}
 	}
 
 	bool TextureNameMatchesMaterial(const FString& TextureStem, const FString& MaterialName)
@@ -746,34 +775,12 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 		}
 
 		FbxProperty NormalProp = Material->FindProperty(FbxSurfaceMaterial::sNormalMap);
-		const FString NormalTexturePath = ReadFirstTextureFromProperty(NormalProp, ResolveContext);
-		if (!NormalTexturePath.empty())
-		{
-			if (IsLikelyColorTexturePath(NormalTexturePath) && MaterialInfo.DiffuseTexturePath.empty())
-			{
-				MaterialInfo.DiffuseTexturePath = NormalTexturePath;
-			}
-			else
-			{
-				MaterialInfo.NormalTexturePath = NormalTexturePath;
-			}
-		}
+		TryAssignNormalMapSlot(MaterialInfo, ReadFirstTextureFromProperty(NormalProp, ResolveContext));
 
 		if (MaterialInfo.NormalTexturePath.empty())
 		{
 			FbxProperty BumpProp = Material->FindProperty(FbxSurfaceMaterial::sBump);
-			const FString BumpTexturePath = ReadFirstTextureFromProperty(BumpProp, ResolveContext);
-			if (!BumpTexturePath.empty())
-			{
-				if (IsLikelyColorTexturePath(BumpTexturePath) && MaterialInfo.DiffuseTexturePath.empty())
-				{
-					MaterialInfo.DiffuseTexturePath = BumpTexturePath;
-				}
-				else
-				{
-					MaterialInfo.NormalTexturePath = BumpTexturePath;
-				}
-			}
+			TryAssignNormalMapSlot(MaterialInfo, ReadFirstTextureFromProperty(BumpProp, ResolveContext));
 		}
 
 		if (MaterialInfo.DiffuseTexturePath.empty())
@@ -944,9 +951,13 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 
 	std::filesystem::create_directories(FPaths::ToWide("Content/Material/Auto"));
 
-	const bool bUseImportedColor = MaterialInfo.DiffuseTexturePath.empty() || MaterialInfo.bTransparent || MaterialInfo.bEmissive;
+	// Diffuse 텍스처가 있으면 SectionColor는 흰색(텍스처 알베도 유지). Emissive/무텍스처만 FBX 색 사용.
+	const bool bUseImportedColor = MaterialInfo.DiffuseTexturePath.empty() || MaterialInfo.bEmissive;
+	const FVector DiffuseForSection = MaterialInfo.bEmissive
+		? MaterialInfo.DiffuseColor
+		: SanitizeLitDiffuseColor(MaterialInfo.DiffuseColor);
 	const FVector4 SectionColor = bUseImportedColor
-		? FVector4(MaterialInfo.DiffuseColor.X, MaterialInfo.DiffuseColor.Y, MaterialInfo.DiffuseColor.Z, 1.0f)
+		? FVector4(DiffuseForSection.X, DiffuseForSection.Y, DiffuseForSection.Z, 1.0f)
 		: FVector4(1.0f, 1.0f, 1.0f, 1.0f);
 	const FString DiffuseTex = MaterialInfo.DiffuseTexturePath.empty() ? FString() : FPaths::MakeProjectRelative(MaterialInfo.DiffuseTexturePath);
 	const FString NormalTex  = MaterialInfo.NormalTexturePath.empty()  ? FString() : FPaths::MakeProjectRelative(MaterialInfo.NormalTexturePath);
