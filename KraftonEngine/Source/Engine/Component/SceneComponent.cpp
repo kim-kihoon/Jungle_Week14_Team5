@@ -360,9 +360,7 @@ void USceneComponent::UpdateWorldMatrix() const
 		if (bParentHasSocket)
 		{
 			const FMatrix SocketMatrix = ParentComponent->GetSocketTransform(AttachSocketName).ToMatrix();
-			CachedWorldMatrix = bAbsoluteScale
-				? RelativeMatrix * GetRotationTranslationWithoutScale(SocketMatrix)
-				: RelativeMatrix * SocketMatrix;
+			CachedWorldMatrix = RelativeMatrix * GetRotationTranslationWithoutScale(SocketMatrix);
 		}
 		else if (bHasAttachSocketName)
 		{

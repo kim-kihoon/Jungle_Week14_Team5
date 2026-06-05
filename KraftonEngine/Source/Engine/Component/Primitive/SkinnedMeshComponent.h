@@ -11,6 +11,7 @@
 struct FSkeletalMesh;
 class USkeletalMesh;
 class UMaterial;
+class USkeleton;
 
 // ==================================================================================
 // SkeletalMesh의 런타임 상태를 소유하는 기본 컴포넌트.
@@ -145,6 +146,8 @@ public:
 	uint64 GetSkinnedRevision() const { return SkinnedRevision; }
 	FMeshBuffer* GetMeshBuffer() const override;
 	FMeshDataView GetMeshDataView() const override;
+	void RefreshSocketAttachedChildren();
+	static void RefreshSocketAttachedChildrenForSkeleton(const USkeleton* Skeleton);
 
 protected:
 	// Tick/skinning 섹션: animation system 없이 현재 bone edit pose를 매 frame CPU skinning 결과로 반영한다.

@@ -22,6 +22,7 @@
 #include "GameFramework/Pawn/WheeledVehiclePawn.h"
 #include "GameFramework/World.h"
 #include "Render/Pipeline/Renderer.h"
+#include "Serialization/SceneSaveManager.h"
 #include "Viewport/Viewport.h"
 #include "Slate/SSplitter.h"
 #include "Slate/SlateApplication.h"
@@ -899,6 +900,29 @@ void FLevelViewportLayout::RenderViewportUI(float DeltaTime)
 				AStaticMeshActor* NewActor = Cast<AStaticMeshActor>(FObjectFactory::Get().Create(AStaticMeshActor::StaticClass()->GetName(), Editor->GetWorld()));
 				NewActor->InitDefaultComponents(FPaths::ToUtf8(ContentItem.Path));
 				Editor->GetWorld()->AddActor(NewActor);
+			}
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ActorTemplateContentItem"))
+			{
+				FContentItem ContentItem = *reinterpret_cast<const FContentItem*>(payload->Data);
+				FString Error;
+				AActor* SpawnedActor = nullptr;
+				if (Editor && Editor->GetWorld())
+				{
+					SpawnedActor = FSceneSaveManager::LoadActorTemplateFromJSON(
+						FPaths::ToUtf8(ContentItem.Path.wstring()),
+						Editor->GetWorld(),
+						&Error
+					);
+				}
+
+				if (SpawnedActor && SelectionManager)
+				{
+					SelectionManager->Select(SpawnedActor);
+				}
+				else if (!Error.empty())
+				{
+					UE_LOG("[ActorTemplate] Spawn failed: %s", Error.c_str());
+				}
 			}
 			ImGui::EndDragDropTarget();
 		}

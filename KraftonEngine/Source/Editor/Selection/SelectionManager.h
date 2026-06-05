@@ -7,9 +7,25 @@
 #include <algorithm>
 
 class AActor;
+class UActorComponent;
+class UObject;
 class USceneComponent;
+class UStruct;
 class UGizmoComponent;
 class UWorld;
+
+struct FSelectionDetailTarget
+{
+	UObject* ObjectPtr = nullptr;
+	UStruct* StructType = nullptr;
+	void* ContainerPtr = nullptr;
+
+	static FSelectionDetailTarget FromObject(UObject* Object);
+
+	void Reset();
+	bool HasTarget() const;
+	bool IsValidTarget() const;
+};
 
 class FSelectionManager : public FGCObject
 {
@@ -27,6 +43,13 @@ public:
 
 	void SelectComponent(USceneComponent* Component);
 	USceneComponent* GetSelectedComponent() const;
+	void SelectActorDetails(AActor* Actor);
+	void SelectActorComponent(UActorComponent* Component);
+	UActorComponent* GetSelectedActorComponent() const;
+	bool IsComponentDetailsSelected() const;
+	const FSelectionDetailTarget* GetPrimaryDetailTarget() const;
+	const TArray<FSelectionDetailTarget>& GetSelectedDetailTargets() const { return SelectedDetailTargets; }
+	void SetSingleDetailTarget(const FSelectionDetailTarget& Target);
 
 	bool IsSelected(AActor* Actor) const;
 
@@ -45,11 +68,14 @@ public:
 private:
 	void PruneInvalidSelection();
 	void SyncGizmo();
+	void AddActorDetailTarget(AActor* Actor);
 	void SetActorProxiesSelected(AActor* Actor, bool bSelected);
 	void RefreshSelectedActorCache();
+	void RefreshDetailTargetsFromActors();
 
 	TArray<TWeakObjectPtr<AActor>> SelectedActors;
 	TArray<AActor*> SelectedActorCache;
+	TArray<FSelectionDetailTarget> SelectedDetailTargets;
 	TWeakObjectPtr<USceneComponent> SelectedComponent;
 	UGizmoComponent* Gizmo = nullptr;
 	TWeakObjectPtr<UWorld> World;

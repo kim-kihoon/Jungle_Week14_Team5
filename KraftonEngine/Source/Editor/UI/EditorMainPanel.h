@@ -5,7 +5,9 @@
 #include "Editor/UI/Panel/EditorControlWidget.h"
 #include "Editor/Settings/EditorSettings.h"
 #include "Editor/UI/Panel/EditorPropertyWidget.h"
+#include "Editor/UI/Panel/EditorReflectionPropertyWidget.h"
 #include "Editor/UI/Panel/EditorSceneWidget.h"
+#include "Editor/UI/Panel/EditorSceneManagerWidget.h"
 #include "Editor/UI/Panel/EditorStatWidget.h"
 #include "Editor/UI/Debug/EditorShadowMapDebugWidget.h"
 #include "Editor/UI/Debug/EditorAnimationDebugWidget.h"
@@ -35,7 +37,11 @@ public:
 	void SaveToSettings() const;
 	void HideEditorWindows();
 	void ShowEditorWindows();
-	void SetShowEditorOnlyComponents(bool bEnable) { PropertyWidget.SetShowEditorOnlyComponents(bEnable); }
+	void SetShowEditorOnlyComponents(bool bEnable)
+	{
+		PropertyWidget.SetShowEditorOnlyComponents(bEnable);
+		SceneManagerWidget.SetShowEditorOnlyComponents(bEnable);
+	}
 	bool IsShowingEditorOnlyComponents() const { return PropertyWidget.IsShowingEditorOnlyComponents(); }
 	void HideEditorWindowsForPIE();
 	void RestoreEditorWindowsAfterPIE();
@@ -69,7 +75,9 @@ private:
 	FEditorConsoleWidget ConsoleWidget;
 	FEditorControlWidget ControlWidget;
 	FEditorPropertyWidget PropertyWidget;
+	FEditorReflectionPropertyWidget ReflectionPropertyWidget;
 	FEditorSceneWidget SceneWidget;
+	FEditorSceneManagerWidget SceneManagerWidget;
 	FEditorStatWidget StatWidget;
 	FEditorContentBrowserWidget ContentBrowserWidget;
 	EditorShadowMapDebugWidget ShadowMapDebugWidget;

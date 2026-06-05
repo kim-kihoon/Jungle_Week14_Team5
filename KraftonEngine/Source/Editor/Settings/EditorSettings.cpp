@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 
 namespace Key
 {
@@ -81,13 +82,16 @@ namespace Key
 	constexpr const char* ShowConsole = "ShowConsole";
 	constexpr const char* ShowControlPanel = "ShowControlPanel";
 	constexpr const char* ShowPropertyWindow = "ShowPropertyWindow";
+	constexpr const char* ShowReflectionPropertyWindow = "ShowReflectionPropertyWindow";
 	constexpr const char* ShowSceneManager = "ShowSceneManager";
+	constexpr const char* ShowSceneManagerWindow = "ShowSceneManagerWindow";
 	constexpr const char* ShowStatProfiler = "ShowStatProfiler";
 	constexpr const char* ShowContentBrowser = "ShowContentBrowser";
 	constexpr const char* ShowImGuiSettings = "ShowImGuiSettings";
 	constexpr const char* ShowEditorDebug = "ShowEditorDebug";
 	constexpr const char* ShowShadowMapDebug = "ShowShadowMapDebug";
 	constexpr const char* ShowAnimationDebug = "ShowAnimationDebug";
+	constexpr const char* ReflectionPropertyLabelColumnWidth = "ReflectionPropertyLabelColumnWidth";
 
 	// Perspective Camera
 	constexpr const char* PerspectiveCamera = "PerspectiveCamera";
@@ -385,13 +389,16 @@ void FEditorSettings::SaveToFile(const FString& Path) const
 	WidgetsObj[Key::ShowConsole] = UI.bConsole;
 	WidgetsObj[Key::ShowControlPanel] = UI.bControl;
 	WidgetsObj[Key::ShowPropertyWindow] = UI.bProperty;
+	WidgetsObj[Key::ShowReflectionPropertyWindow] = UI.bReflectionProperty;
 	WidgetsObj[Key::ShowSceneManager] = UI.bScene;
+	WidgetsObj[Key::ShowSceneManagerWindow] = UI.bSceneManager;
 	WidgetsObj[Key::ShowStatProfiler] = UI.bStat;
 	WidgetsObj[Key::ShowContentBrowser] = UI.bContentBrowser;
 	WidgetsObj[Key::ShowImGuiSettings] = UI.bImGUISettings;
 	WidgetsObj[Key::ShowEditorDebug] = UI.bEditorDebug;
 	WidgetsObj[Key::ShowShadowMapDebug] = UI.bShadowMapDebug;
 	WidgetsObj[Key::ShowAnimationDebug] = UI.bAnimationDebug;
+	WidgetsObj[Key::ReflectionPropertyLabelColumnWidth] = ReflectionPropertyLabelColumnWidth;
 	Root[Key::UIWidgets] = WidgetsObj;
 
 	// Perspective Camera
@@ -524,13 +531,22 @@ void FEditorSettings::LoadFromFile(const FString& Path)
 		if (W.hasKey(Key::ShowConsole))        UI.bConsole = W[Key::ShowConsole].ToBool();
 		if (W.hasKey(Key::ShowControlPanel))   UI.bControl = W[Key::ShowControlPanel].ToBool();
 		if (W.hasKey(Key::ShowPropertyWindow)) UI.bProperty = W[Key::ShowPropertyWindow].ToBool();
+		if (W.hasKey(Key::ShowReflectionPropertyWindow)) UI.bReflectionProperty = W[Key::ShowReflectionPropertyWindow].ToBool();
 		if (W.hasKey(Key::ShowSceneManager))   UI.bScene = W[Key::ShowSceneManager].ToBool();
+		if (W.hasKey(Key::ShowSceneManagerWindow)) UI.bSceneManager = W[Key::ShowSceneManagerWindow].ToBool();
 		if (W.hasKey(Key::ShowStatProfiler))   UI.bStat = W[Key::ShowStatProfiler].ToBool();
 		if (W.hasKey(Key::ShowContentBrowser)) UI.bContentBrowser = W[Key::ShowContentBrowser].ToBool();
 		if (W.hasKey(Key::ShowImGuiSettings))  UI.bImGUISettings = W[Key::ShowImGuiSettings].ToBool();
 		if (W.hasKey(Key::ShowEditorDebug))    UI.bEditorDebug = W[Key::ShowEditorDebug].ToBool();
 		if (W.hasKey(Key::ShowShadowMapDebug)) UI.bShadowMapDebug = W[Key::ShowShadowMapDebug].ToBool();
 		if (W.hasKey(Key::ShowAnimationDebug)) UI.bAnimationDebug = W[Key::ShowAnimationDebug].ToBool();
+		if (W.hasKey(Key::ReflectionPropertyLabelColumnWidth))
+		{
+			ReflectionPropertyLabelColumnWidth = std::clamp(
+				static_cast<float>(W[Key::ReflectionPropertyLabelColumnWidth].ToFloat()),
+				80.0f,
+				320.0f);
+		}
 	}
 
 	// Perspective Camera

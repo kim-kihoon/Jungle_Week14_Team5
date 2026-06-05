@@ -110,6 +110,7 @@ private:
 
 private:
 	USkeletalMesh* SelectedMesh = nullptr;
+	USkeleton* SelectedSocketSkeleton = nullptr;
 	int32 SelectedBoneIndex = -1;
 	int32 SelectedSocketIndex = -1;
 

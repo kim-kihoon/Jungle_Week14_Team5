@@ -3,6 +3,8 @@
 #include "Object/Object.h"
 #include "Animation/Notify/AnimNotifyEvent.h"
 
+#include <algorithm>
+
 struct FPoseContext;
 struct FAnimExtractContext;
 class FReferenceCollector;
@@ -56,8 +58,19 @@ public:
         return Notifies;
     }
 
+    float GetNotifyTrackVolume(int32 TrackIndex) const
+    {
+        if (TrackIndex < 0 || TrackIndex >= static_cast<int32>(NotifyTrackVolumes.size()))
+        {
+            return 1.0f;
+        }
+        return std::clamp(NotifyTrackVolumes[TrackIndex], 0.0f, 1.0f);
+    }
+
 protected:
     float                    PlayLength = 0.0f;  // sec
     float                    FrameRate  = 30.0f; // fps
+    int32                    NotifyTrackCount = 1;
+    TArray<float>            NotifyTrackVolumes;
     TArray<FAnimNotifyEvent> Notifies; 
 };

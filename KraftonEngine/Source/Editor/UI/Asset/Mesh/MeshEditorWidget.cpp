@@ -1572,6 +1572,7 @@ void FMeshEditorWidget::RenderSkeletonLayout()
 		if (bSocketChanged)
 		{
 			ViewportClient.SetSelectedSocket(Cast<USkeletalMesh>(EditedObject), Skeleton, SelectedSocketIndex);
+			USkinnedMeshComponent::RefreshSocketAttachedChildrenForSkeleton(Skeleton);
 		}
 	}
 	else if (Skeleton && SelectedBoneIndex != -1)
@@ -3483,6 +3484,7 @@ void FMeshEditorWidget::RenderBoneTree(USkeleton* Skeleton, const FReferenceSkel
 			SelectedSocketIndex = static_cast<int32>(Skeleton->GetSockets().size()) - 1;
 			BufferedSocketIndex = -2;
 			ViewportClient.SetSelectedSocket(Cast<USkeletalMesh>(EditedObject), Skeleton, SelectedSocketIndex);
+			USkinnedMeshComponent::RefreshSocketAttachedChildrenForSkeleton(Skeleton);
 			bSkeletonDirty = true;
 		}
 		ImGui::EndPopup();
@@ -3544,6 +3546,7 @@ void FMeshEditorWidget::RenderSocketTreeNode(USkeleton* Skeleton, int32 SocketIn
 			SelectedSocketIndex = -1;
 			BufferedSocketIndex = -2;
 			ViewportClient.SetSelectedBone(Cast<USkeletalMesh>(EditedObject), -1);
+			USkinnedMeshComponent::RefreshSocketAttachedChildrenForSkeleton(Skeleton);
 			bSkeletonDirty = true;
 		}
 		ImGui::EndPopup();
