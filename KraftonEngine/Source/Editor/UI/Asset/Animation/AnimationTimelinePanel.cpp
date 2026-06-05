@@ -13,8 +13,10 @@
 #include "Object/GarbageCollection.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Object/Reflection/UClass.h"
+#include "Core/Property/ArrayProperty.h"
 #include "Core/Types/PropertyTypes.h"
 #include "Editor/UI/Asset/Animation/MorphCurveEditObject.h"
+#include "Serialization/MemoryArchive.h"
 
 #include <imgui.h>
 #include <algorithm>
@@ -112,6 +114,78 @@ namespace
 		return Event;
 	}
 
+	struct FNotifyClipboard
+	{
+		TArray<uint8> Payload;
+	};
+
+	static FNotifyClipboard GNotifyClipboard;
+
+	bool HasNotifyName(const TArray<FAnimNotifyEvent>& Notifies, const FString& CandidateName)
+	{
+		const FName Candidate(CandidateName);
+		for (const FAnimNotifyEvent& Notify : Notifies)
+		{
+			if (Notify.NotifyName == Candidate)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	FName MakeUniqueNotifyCopyName(const TArray<FAnimNotifyEvent>& Notifies, const FName& SourceName)
+	{
+		const FString BaseName = SourceName.ToString().empty() ? FString("Notify") : SourceName.ToString();
+		FString Candidate = BaseName + "_Copy";
+		int32 Suffix = 2;
+		while (HasNotifyName(Notifies, Candidate))
+		{
+			Candidate = BaseName + "_Copy_" + std::to_string(Suffix++);
+		}
+		return FName(Candidate);
+	}
+
+	bool CopyNotifyToClipboard(const FAnimNotifyEvent& Notify)
+	{
+		FMemoryArchive Writer(true);
+		FAnimNotifyEvent CopySource = Notify;
+		CopySource.Serialize(Writer, nullptr);
+		GNotifyClipboard.Payload = Writer.GetBuffer();
+		return !GNotifyClipboard.Payload.empty();
+	}
+
+	bool PasteNotifyFromClipboard(UAnimSequence* Seq, float PasteTime, int32& InOutSelectedNotifyIndex)
+	{
+		if (!Seq || GNotifyClipboard.Payload.empty())
+		{
+			return false;
+		}
+
+		Seq->GetMutableModelNotifies();
+		UObject* Outer = Seq->GetDataModel();
+		if (!Outer)
+		{
+			return false;
+		}
+
+		FMemoryArchive Reader(GNotifyClipboard.Payload, false);
+		FAnimNotifyEvent Pasted;
+		Pasted.Serialize(Reader, Outer);
+
+		TArray<FAnimNotifyEvent>& Notifies = Seq->GetMutableModelNotifies();
+		Pasted.NotifyName = MakeUniqueNotifyCopyName(Notifies, Pasted.NotifyName);
+		const float MaxStart = Pasted.Duration > 0.0f
+			? std::max(Seq->GetPlayLength() - Pasted.Duration, 0.0f)
+			: Seq->GetPlayLength();
+		Pasted.TriggerTime = std::clamp(PasteTime, 0.0f, MaxStart);
+
+		Notifies.push_back(Pasted);
+		InOutSelectedNotifyIndex = static_cast<int32>(Notifies.size()) - 1;
+		Seq->RefreshRuntimeNotifies();
+		return true;
+	}
+
 	// 가용 폭에 안 맞으면 끝에 "..." 을 붙여 잘라낸다. CalcTextSize 가 픽셀 단위 폭을 알려주므로
 	// 끝부터 한 글자씩 줄여가며 ellipsis 와 합한 폭이 들어맞을 때까지 반복. 일반 notify 이름은
 	// 짧으므로 linear truncation 비용 무시 가능.
@@ -141,6 +215,70 @@ namespace
 	// payload 편집용 경량 인스펙터 — 풀 FEditorPropertyWidget 의존성 없이 timeline 패널 안에서
 	// 자족. 지원 타입은 Notify payload 에 흔히 쓰일 단순형 (Bool/Int/Float/String/Vec3/Vec4/Color4).
 	// 그 외 타입은 disabled placeholder.
+	bool RenderStringArrayPropertyInline(FPropertyValue& Prop)
+	{
+		const FArrayProperty* ArrayProp = Prop.Property ? Prop.Property->AsArrayProperty() : nullptr;
+		const FArrayProperty::FArrayOps* ArrayOps = ArrayProp ? ArrayProp->GetArrayOps() : nullptr;
+		void* ArrayPtr = Prop.GetValuePtr();
+		if (!ArrayProp || ArrayProp->GetElementType() != EPropertyType::String || !ArrayOps ||
+			!ArrayOps->GetNum || !ArrayOps->InsertDefault || !ArrayOps->RemoveAt || !ArrayOps->GetElementPtr ||
+			!ArrayPtr)
+		{
+			ImGui::TextDisabled("(unsupported array)");
+			return false;
+		}
+
+		bool bChanged = false;
+		if (ImGui::SmallButton("+"))
+		{
+			ArrayOps->InsertDefault(ArrayPtr, ArrayOps->GetNum(ArrayPtr));
+			bChanged = true;
+		}
+
+		const size_t Num = ArrayOps->GetNum(ArrayPtr);
+		if (Num == 0)
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("(empty)");
+			return bChanged;
+		}
+
+		for (size_t Index = 0; Index < Num; ++Index)
+		{
+			ImGui::PushID(static_cast<int>(Index));
+			FString* Value = static_cast<FString*>(ArrayOps->GetElementPtr(ArrayPtr, Index));
+			if (Value)
+			{
+				char Buf[256];
+				strncpy_s(Buf, sizeof(Buf), Value->c_str(), _TRUNCATE);
+
+				const float RemoveButtonWidth = ImGui::GetFrameHeight();
+				ImGui::SetNextItemWidth((std::max)(80.0f, ImGui::GetContentRegionAvail().x - RemoveButtonWidth - 8.0f));
+				if (ImGui::InputText("##item", Buf, sizeof(Buf)))
+				{
+					*Value = Buf;
+					bChanged = true;
+				}
+			}
+			else
+			{
+				ImGui::TextDisabled("(invalid)");
+			}
+
+			ImGui::SameLine();
+			if (ImGui::SmallButton("-"))
+			{
+				ArrayOps->RemoveAt(ArrayPtr, Index);
+				bChanged = true;
+				ImGui::PopID();
+				break;
+			}
+			ImGui::PopID();
+		}
+
+		return bChanged;
+	}
+
 	bool RenderObjectPropertiesInline(UObject* Object)
 	{
 		if (!Object)
@@ -290,6 +428,11 @@ namespace
 							ImGui::EndCombo();
 						}
 					}
+					break;
+				}
+				case EPropertyType::Array:
+				{
+					bChanged = RenderStringArrayPropertyInline(Prop);
 					break;
 				}
 				default:
@@ -682,6 +825,26 @@ bool FAnimationTimelinePanel::Render(UAnimSingleNodeInstance* NodeInst,
 
 	const float CurrentTime  = NodeInst ? NodeInst->GetCurrentTime() : 0.0f;
 	const int   CurrentFrame = static_cast<int>(std::lround((CurrentTime / PlayLength) * EndFrame));
+
+	const ImGuiIO& IO = ImGui::GetIO();
+	if (IO.KeyCtrl && !IO.WantTextInput)
+	{
+		if (ImGui::IsKeyPressed(ImGuiKey_C) && InOutSelectedNotifyIndex >= 0)
+		{
+			const TArray<FAnimNotifyEvent>& Notifies = Seq->GetMutableModelNotifies();
+			if (InOutSelectedNotifyIndex < static_cast<int32>(Notifies.size()))
+			{
+				CopyNotifyToClipboard(Notifies[InOutSelectedNotifyIndex]);
+			}
+		}
+		if (ImGui::IsKeyPressed(ImGuiKey_V))
+		{
+			if (PasteNotifyFromClipboard(Seq, CurrentTime, InOutSelectedNotifyIndex))
+			{
+				bChanged = true;
+			}
+		}
+	}
 
 	// ── 배경 ──
 	DL->AddRectFilled(Origin, ImVec2(Origin.x + FullW, Origin.y + PanelHeight), ColPanelBg);

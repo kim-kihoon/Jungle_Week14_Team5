@@ -39,12 +39,16 @@ public:
 	FString ContentBrowserPath; // 비어있으면 프로젝트 루트
 
 	// UI 위젯 표시 여부
+	float ReflectionPropertyLabelColumnWidth = 150.0f;
+
 	struct FUIVisibility
 	{
 		bool bConsole = true;
 		bool bControl = true;
 		bool bProperty = true;
+		bool bReflectionProperty = true;
 		bool bScene = true;
+		bool bSceneManager = true;
 		bool bStat = false;
 		bool bContentBrowser = true;
 		bool bImGUISettings = false;

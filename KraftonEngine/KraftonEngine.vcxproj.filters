@@ -968,6 +968,12 @@
     <ClCompile Include="Source\Editor\UI\Panel\EditorPropertyWidget.cpp">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Panel\EditorReflectionPropertyWidget.cpp">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Panel\EditorSceneManagerWidget.cpp">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Editor\UI\Panel\EditorSceneWidget.cpp">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClCompile>
@@ -982,6 +988,9 @@
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\Toolbar\ViewportToolbar.cpp">
       <Filter>Source\Editor\UI\Toolbar</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Util\BasicReflectionPropertyRenderer.cpp">
+      <Filter>Source\Editor\UI\Util</Filter>
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\Util\EditorDragSource.cpp">
       <Filter>Source\Editor\UI\Util</Filter>
@@ -1092,6 +1101,9 @@
       <Filter>Source\Engine\Animation\Notify</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Animation\Notify\AnimNotify_PlaySound.cpp">
+      <Filter>Source\Engine\Animation\Notify</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Animation\Notify\AnimNotify_RandomSound.cpp">
       <Filter>Source\Engine\Animation\Notify</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Animation\Sequence\AnimDataModel.cpp">
@@ -2261,6 +2273,12 @@
     <ClInclude Include="Source\Editor\UI\Panel\EditorPropertyWidget.h">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Panel\EditorReflectionPropertyWidget.h">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Panel\EditorSceneManagerWidget.h">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Editor\UI\Panel\EditorSceneWidget.h">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClInclude>
@@ -2275,6 +2293,9 @@
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Toolbar\ViewportToolbar.h">
       <Filter>Source\Editor\UI\Toolbar</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Util\BasicReflectionPropertyRenderer.h">
+      <Filter>Source\Editor\UI\Util</Filter>
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Util\EditorDragSource.h">
       <Filter>Source\Editor\UI\Util</Filter>
@@ -2415,6 +2436,9 @@
       <Filter>Source\Engine\Animation\Notify</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Animation\Notify\AnimNotify_PlaySound.h">
+      <Filter>Source\Engine\Animation\Notify</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Animation\Notify\AnimNotify_RandomSound.h">
       <Filter>Source\Engine\Animation\Notify</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Animation\Sequence\AnimDataModel.h">

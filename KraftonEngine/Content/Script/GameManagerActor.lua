@@ -3,7 +3,7 @@ local GameManager = require("GameManager")
 function BeginPlay()
     GameManager:Reset()
 
-    GameManager:SetTimeLimit(10)
+    GameManager:SetTimeLimit(60)
 
 
 
