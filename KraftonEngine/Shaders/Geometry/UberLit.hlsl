@@ -36,14 +36,28 @@ cbuffer PerShader1 : register(b2)
 {
     float4 SectionColor;
     float HasNormalMap;
-    float Opacity;   // 머티리얼 불투명도 [0,1] — _pad.x 재사용(레이아웃 32B 유지). 기본 1, Transparent 블렌드에서만 가시 효과.
-    float2 _pad;
+    float Opacity;   // 머티리얼 불투명도 [0,1]. 기본 1, Transparent 블렌드에서만 가시 효과.
+    float bEmissive;
+    float EmissiveIntensity;
+    float SpecularIntensity;
+    float Shininess;
+    float Metallic;
 };
 
 
 // 머티리얼 확장 파라미터 — 팀원 A CB 시스템 완성 후 b2 확장 예정
 static const float4 g_DefaultEmissive = float4(0, 0, 0, 0);
 static const float g_DefaultShininess = 32.0f;
+
+float GetMaterialShininess()
+{
+    return Shininess > 0.0f ? max(2.0f, Shininess) : g_DefaultShininess;
+}
+
+float GetMaterialSpecularIntensity()
+{
+    return SpecularIntensity > 0.0f ? SpecularIntensity : 1.0f;
+}
 
 // =============================================================================
 // VS ↔ PS 인터페이스
@@ -92,7 +106,7 @@ UberVS_Output VS_StaticMesh(VS_Input_PNCTT input)
 
     float3 V = normalize(CameraWorldPos - output.worldPos);
     output.litDiffuse = AccumulateDiffuseVS(output.worldPos, N);
-    output.litSpecular = AccumulateSpecularVS(output.worldPos, N, V, g_DefaultShininess);
+    output.litSpecular = AccumulateSpecularVS(output.worldPos, N, V, GetMaterialShininess());
 
 #endif
 
@@ -138,7 +152,7 @@ UberVS_Output VS_SkeletalMesh(VS_Input_PNCTTBB input)
 
     float3 V = normalize(CameraWorldPos - output.worldPos);
     output.litDiffuse = AccumulateDiffuseVS(output.worldPos, N);
-    output.litSpecular = AccumulateSpecularVS(output.worldPos, N, V, g_DefaultShininess);
+    output.litSpecular = AccumulateSpecularVS(output.worldPos, N, V, GetMaterialShininess());
 
 #endif
 
@@ -155,6 +169,11 @@ float4 PS(UberVS_Output input) : SV_TARGET
         texColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
 
     float4 baseColor = texColor * input.color;
+
+    if (bEmissive >= 0.5f)
+    {
+        return float4(ApplyWireframe(baseColor.rgb * EmissiveIntensity), baseColor.a * Opacity);
+    }
 
     float3 N = normalize(input.normal);
 
@@ -186,13 +205,17 @@ float4 PS(UberVS_Output input) : SV_TARGET
 
 #elif defined(LIGHTING_MODEL_PHONG) && LIGHTING_MODEL_PHONG
     diffuse = AccumulateDiffuse(input.worldPos, N, input.position);
-    specular = AccumulateSpecular(input.worldPos, N, V, g_DefaultShininess, input.position);
+    specular = AccumulateSpecular(input.worldPos, N, V, GetMaterialShininess(), input.position);
 
 #endif
 
     // Diffuse에만 albedo를 곱하고, Specular는 빛 색상 그대로 더한다
     // (비금속 표면: specular 반사 = 빛의 색, 물체 색이 아님)
-    float3 finalColor = baseColor.rgb * diffuse + specular + g_DefaultEmissive.rgb;
+    float metallic = saturate(Metallic);
+    float3 diffuseColor = baseColor.rgb;
+    float3 specularColor = lerp(float3(1.0f, 1.0f, 1.0f), baseColor.rgb, metallic);
+    specular *= GetMaterialSpecularIntensity() * specularColor;
+    float3 finalColor = diffuseColor * diffuse + specular + g_DefaultEmissive.rgb;
     finalColor = ApplyWireframe(finalColor);
 #endif
 

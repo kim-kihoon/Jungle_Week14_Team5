@@ -23,7 +23,11 @@ cbuffer PerShader1 : register(b2)
     float4 SectionColor;
     float HasNormalMap;
     float Opacity;
-    float2 _pad;
+    float bEmissive;
+    float EmissiveIntensity;
+    float SpecularIntensity;
+    float Shininess;
+    float Metallic;
 };
 
 cbuffer ForwardFogParams : register(b7)
@@ -40,6 +44,16 @@ cbuffer ForwardFogParams : register(b7)
 
 static const float4 g_DefaultEmissive = float4(0, 0, 0, 0);
 static const float g_DefaultShininess = 32.0f;
+
+float GetMaterialShininess()
+{
+    return Shininess > 0.0f ? max(2.0f, Shininess) : g_DefaultShininess;
+}
+
+float GetMaterialSpecularIntensity()
+{
+    return SpecularIntensity > 0.0f ? SpecularIntensity : 1.0f;
+}
 
 struct UberTransparentVS_Output
 {
@@ -78,7 +92,7 @@ UberTransparentVS_Output BuildVS(float3 position, float3 normal, float4 color, f
 
     float3 V = normalize(CameraWorldPos - output.worldPos);
     output.litDiffuse = AccumulateDiffuseVS(output.worldPos, N);
-    output.litSpecular = AccumulateSpecularVS(output.worldPos, N, V, g_DefaultShininess);
+    output.litSpecular = AccumulateSpecularVS(output.worldPos, N, V, GetMaterialShininess());
 #endif
 
     return output;
@@ -109,6 +123,17 @@ float4 PS(UberTransparentVS_Output input) : SV_TARGET
 
     float4 baseColor = texColor * input.color;
 
+    if (bEmissive >= 0.5f)
+    {
+        float3 finalColor = baseColor.rgb * EmissiveIntensity;
+        float fwdFog = ComputeHeightFogFactor(
+            input.worldPos, CameraWorldPos,
+            FwdFogDensity, FwdFogHeightFalloff, FwdFogBaseHeight,
+            FwdFogStartDistance, FwdFogCutoffDistance, FwdFogMaxOpacity);
+        finalColor = lerp(finalColor, FwdFogColor.rgb, fwdFog);
+        return float4(finalColor, baseColor.a * Opacity);
+    }
+
     float3 N = normalize(input.normal);
 
 #if !defined(LIGHTING_MODEL_GOURAUD)
@@ -134,10 +159,14 @@ float4 PS(UberTransparentVS_Output input) : SV_TARGET
     diffuse = AccumulateDiffuse(input.worldPos, N, input.position);
 #elif defined(LIGHTING_MODEL_PHONG) && LIGHTING_MODEL_PHONG
     diffuse = AccumulateDiffuse(input.worldPos, N, input.position);
-    specular = AccumulateSpecular(input.worldPos, N, V, g_DefaultShininess, input.position);
+    specular = AccumulateSpecular(input.worldPos, N, V, GetMaterialShininess(), input.position);
 #endif
 
-    float3 finalColor = baseColor.rgb * diffuse + specular + g_DefaultEmissive.rgb;
+    float metallic = saturate(Metallic);
+    float3 diffuseColor = baseColor.rgb;
+    float3 specularColor = lerp(float3(1.0f, 1.0f, 1.0f), baseColor.rgb, metallic);
+    specular *= GetMaterialSpecularIntensity() * specularColor;
+    float3 finalColor = diffuseColor * diffuse + specular + g_DefaultEmissive.rgb;
 #endif
 
     float fwdFog = ComputeHeightFogFactor(
