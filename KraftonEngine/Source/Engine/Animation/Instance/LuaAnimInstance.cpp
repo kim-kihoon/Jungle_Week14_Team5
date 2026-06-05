@@ -523,6 +523,44 @@ void ULuaAnimInstance::InstallBindings()
 	Anim.set_function("is_key_pressed",
 		[](int VK) -> bool { return FLuaScriptManager::GetLuaInputSnapshot().WasPressed(VK); });
 
+	Anim.set_function("get_owner_actor",
+		[this]() -> AActor*
+		{
+			return OwningComponent ? OwningComponent->GetOwner() : nullptr;
+		});
+	Anim.set_function("has_socket",
+		[this](std::string SocketName) -> bool
+		{
+			return OwningComponent && !SocketName.empty() && OwningComponent->HasSocket(FName(SocketName));
+		});
+	Anim.set_function("get_socket_location",
+		[this](std::string SocketName) -> FVector
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return FVector::ZeroVector;
+			}
+			return OwningComponent->GetSocketWorldLocation(FName(SocketName));
+		});
+	Anim.set_function("get_socket_rotation",
+		[this](std::string SocketName) -> FVector
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return FVector::ZeroVector;
+			}
+			return OwningComponent->GetSocketWorldRotation(FName(SocketName)).ToVector();
+		});
+	Anim.set_function("get_socket_forward",
+		[this](std::string SocketName) -> FVector
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return FVector::ForwardVector;
+			}
+			return OwningComponent->GetSocketForwardVector(FName(SocketName));
+		});
+
 	Anim.set_function("set_socket_child_visibility",
 		[this](std::string SocketName, bool bVisible) -> bool
 		{

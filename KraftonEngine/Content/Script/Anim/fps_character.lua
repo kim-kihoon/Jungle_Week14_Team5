@@ -12,6 +12,9 @@ local FPS_FIRE_EXIT_BLEND = 0.1
 
 local KEY_SPACE = 0x20
 local PISTOL_SOCKET = "PistolSocket"
+local MUZZLE_SOCKET = "Muzzle"
+local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemplate"
+local PROJECTILE_SPAWN_OFFSET = 0.0
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
@@ -103,6 +106,35 @@ local function update_camera_hold_motion(self, dt)
     local bobZ = math.abs(math.sin(phase)) * CAMERA_BOB_UP_AMOUNT * weight
 
     set_camera_mesh_position(1.0, bobX, bobY, bobZ)
+end
+
+local function spawn_projectile_from_muzzle()
+    if World == nil or World.SpawnActorTemplate == nil then
+        return nil
+    end
+
+    if not Anim.has_socket(MUZZLE_SOCKET) then
+        return nil
+    end
+
+    local location = Anim.get_socket_location(MUZZLE_SOCKET)
+    local rotation = Anim.get_socket_rotation(MUZZLE_SOCKET)
+    local forward = Anim.get_socket_forward(MUZZLE_SOCKET)
+    local spawnLocation = location + forward * PROJECTILE_SPAWN_OFFSET
+
+    local projectile = World.SpawnActorTemplate(
+        PROJECTILE_TEMPLATE_PATH,
+        spawnLocation,
+        rotation)
+
+    if projectile ~= nil then
+        local movement = projectile:GetProjectileMovementComponent()
+        if movement ~= nil then
+            movement:SetIgnoredActor(Anim.get_owner_actor())
+        end
+    end
+
+    return projectile
 end
 
 local function show_pistol()
@@ -246,6 +278,7 @@ function update(self, dt)
                 update_switch_to_pistol(self, 0.0)
             end
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
+            spawn_projectile_from_muzzle()
             self.ActionTime = 0.0
             self.ActionPhase = ACTION_PISTOL_FIRE
         elseif self.CurrentTool == TOOL_CAMERA then

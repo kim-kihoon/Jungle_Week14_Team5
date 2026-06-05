@@ -4,8 +4,11 @@
 #include "Core/Types/CollisionTypes.h"
 #include "Core/Types/CoreTypes.h"
 #include "Math/Vector.h"
+#include "Object/Ptr/WeakObjectPtr.h"
 
 #include "Source/Engine/Component/Movement/ProjectileMovementComponent.generated.h"
+class AActor;
+
 enum class EProjectileHitBehavior : int32
 {
 	Stop = 0,
@@ -43,6 +46,10 @@ public:
 	FVector GetPreviewVelocity() const;
 	UFUNCTION(Callable, Category="Movement|Projectile")
 	void StopSimulating();
+	UFUNCTION(Callable, Category="Movement|Projectile")
+	void SetIgnoredActor(AActor* Actor);
+	UFUNCTION(Pure, Category="Movement|Projectile")
+	AActor* GetIgnoredActor() const { return IgnoredActor.Get(); }
 
     UFUNCTION(Callable, Category="Movement|Collision")
     void SetSweepCollisionEnabled(bool bInEnableSweep) { bSweepCollision = bInEnableSweep; }
@@ -64,6 +71,7 @@ protected:
 	UPROPERTY(Edit, Save, Category="Movement", DisplayName="Projectile Gravity Scale", Min=0.0f, Max=10.0f, Speed=0.1f)
 	float ProjectileGravityScale = 1.0f;
 	bool bVelocityInitialized = false;
+	TWeakObjectPtr<AActor> IgnoredActor;
 
     // true면 UpdatedComponent의 shape를 Start→End로 sweep한 뒤 이동한다.
     // CCD가 잡지 못하는 SetWorldLocation 기반 projectile 관통 방지용이다.

@@ -173,7 +173,8 @@ void UProjectileMovementComponent::TickComponent(float DeltaTime, ELevelTick Tic
 
                 FHitResult Hit;
                 const FQuat SweepRotation = UpdatedSceneComponent->GetWorldMatrix().ToQuat();
-                if (World->PhysicsSweep(CurrentLocation, TargetLocation, SweepRotation, SweepShape, Hit, TraceChannel, OwnerActor))
+                const AActor* IgnoreActor = IgnoredActor.IsValid() ? IgnoredActor.Get() : OwnerActor;
+                if (World->PhysicsSweep(CurrentLocation, TargetLocation, SweepRotation, SweepShape, Hit, TraceChannel, IgnoreActor))
                 {
                     const FVector MoveDir = MoveDelta.Normalized();
                     const float SafeDistance = (std::max)(0.0f, Hit.Distance - SweepPullbackDistance);
@@ -232,6 +233,11 @@ void UProjectileMovementComponent::StopSimulating()
 {
 	Velocity = FVector(0.0f, 0.0f, 0.0f);
 	bVelocityInitialized = true;
+}
+
+void UProjectileMovementComponent::SetIgnoredActor(AActor* Actor)
+{
+	IgnoredActor = Actor;
 }
 
 FVector UProjectileMovementComponent::GetPreviewVelocity() const
