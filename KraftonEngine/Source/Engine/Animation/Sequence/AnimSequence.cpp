@@ -19,6 +19,23 @@
 #include <cmath>
 namespace
 {
+    static void SyncNotifyTrackVolumes(int32& TrackCount, TArray<float>& TrackVolumes)
+    {
+        TrackCount = std::max(TrackCount, 1);
+        if (TrackVolumes.size() < static_cast<size_t>(TrackCount))
+        {
+            TrackVolumes.resize(TrackCount, 1.0f);
+        }
+        else if (TrackVolumes.size() > static_cast<size_t>(TrackCount))
+        {
+            TrackVolumes.resize(TrackCount);
+        }
+        for (float& Volume : TrackVolumes)
+        {
+            Volume = std::clamp(Volume, 0.0f, 1.0f);
+        }
+    }
+
     static float NormalizeTime(float Time, float Length, bool bLooping)
     {
         if (Length <= 0.0f)
@@ -501,9 +518,12 @@ void UAnimSequence::Serialize(FArchive& Ar)
 
     if (IsValid(DataModel))
     {
+        SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
         PlayLength = DataModel->PlayLength;
         FrameRate  = DataModel->FrameRate;
         Notifies   = DataModel->Notifies;
+        NotifyTrackCount = std::max(DataModel->NotifyTrackCount, 1);
+        NotifyTrackVolumes = DataModel->NotifyTrackVolumes;
     }
 }
 
@@ -513,9 +533,12 @@ void UAnimSequence::SetDataModel(UAnimDataModel* InModel)
 
     if (DataModel)
     {
+        SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
         PlayLength = DataModel->PlayLength;
         FrameRate  = DataModel->FrameRate;
         Notifies   = DataModel->Notifies;
+        NotifyTrackCount = std::max(DataModel->NotifyTrackCount, 1);
+        NotifyTrackVolumes = DataModel->NotifyTrackVolumes;
     }
 }
 
@@ -543,9 +566,12 @@ TArray<FBoneAnimationTrack>& UAnimSequence::GetMutableBoneTracks()
     if (!DataModel)
     {
         DataModel = UObjectManager::Get().CreateObject<UAnimDataModel>(this);
+        SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
         PlayLength = DataModel->PlayLength;
         FrameRate  = DataModel->FrameRate;
         Notifies   = DataModel->Notifies;
+        NotifyTrackCount = std::max(DataModel->NotifyTrackCount, 1);
+        NotifyTrackVolumes = DataModel->NotifyTrackVolumes;
     }
 
     return DataModel ? DataModel->BoneAnimationTracks : EmptyTracks;
@@ -564,9 +590,12 @@ TArray<FMorphTargetCurve>& UAnimSequence::GetMutableMorphTargetCurves()
     if (!DataModel)
     {
         DataModel  = UObjectManager::Get().CreateObject<UAnimDataModel>(this);
+        SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
         PlayLength = DataModel->PlayLength;
         FrameRate  = DataModel->FrameRate;
         Notifies   = DataModel->Notifies;
+        NotifyTrackCount = std::max(DataModel->NotifyTrackCount, 1);
+        NotifyTrackVolumes = DataModel->NotifyTrackVolumes;
     }
 
     return DataModel ? DataModel->MorphTargetCurves : EmptyCurves;
@@ -618,9 +647,12 @@ TArray<FAnimNotifyEvent>& UAnimSequence::GetMutableModelNotifies()
     if (!DataModel)
     {
         DataModel = UObjectManager::Get().CreateObject<UAnimDataModel>(this);
+        SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
         PlayLength = DataModel->PlayLength;
         FrameRate  = DataModel->FrameRate;
         Notifies   = DataModel->Notifies;
+        NotifyTrackCount = std::max(DataModel->NotifyTrackCount, 1);
+        NotifyTrackVolumes = DataModel->NotifyTrackVolumes;
     }
     return DataModel->Notifies;
 }
@@ -630,8 +662,69 @@ void UAnimSequence::RefreshRuntimeNotifies()
     if (DataModel)
     {
         // 베이스 캐시 = UAnimInstance::AddAnimNotifies 가 읽는 dispatch 소스.
+        SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
         Notifies = DataModel->Notifies;
+        NotifyTrackCount = std::max(DataModel->NotifyTrackCount, 1);
+        NotifyTrackVolumes = DataModel->NotifyTrackVolumes;
     }
+}
+
+int32 UAnimSequence::GetNotifyTrackCount() const
+{
+    return DataModel ? std::max(DataModel->NotifyTrackCount, 1) : std::max(NotifyTrackCount, 1);
+}
+
+float UAnimSequence::GetNotifyTrackVolume(int32 TrackIndex) const
+{
+    const TArray<float>& Volumes = DataModel ? DataModel->NotifyTrackVolumes : NotifyTrackVolumes;
+    if (TrackIndex < 0 || TrackIndex >= static_cast<int32>(Volumes.size()))
+    {
+        return 1.0f;
+    }
+    return std::clamp(Volumes[TrackIndex], 0.0f, 1.0f);
+}
+
+void UAnimSequence::SetNotifyTrackCount(int32 InTrackCount)
+{
+    GetMutableModelNotifies();
+    const int32 ClampedTrackCount = std::max(InTrackCount, 1);
+    if (DataModel)
+    {
+        DataModel->NotifyTrackCount = ClampedTrackCount;
+        SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
+        for (FAnimNotifyEvent& Notify : DataModel->Notifies)
+        {
+            Notify.TrackIndex = std::clamp(Notify.TrackIndex, 0, ClampedTrackCount - 1);
+        }
+    }
+    NotifyTrackCount = ClampedTrackCount;
+    NotifyTrackVolumes = DataModel ? DataModel->NotifyTrackVolumes : NotifyTrackVolumes;
+    RefreshRuntimeNotifies();
+}
+
+void UAnimSequence::SetNotifyTrackVolume(int32 TrackIndex, float Volume)
+{
+    GetMutableModelNotifies();
+    if (!DataModel)
+    {
+        return;
+    }
+
+    SyncNotifyTrackVolumes(DataModel->NotifyTrackCount, DataModel->NotifyTrackVolumes);
+    if (TrackIndex < 0 || TrackIndex >= DataModel->NotifyTrackCount)
+    {
+        return;
+    }
+
+    DataModel->NotifyTrackVolumes[TrackIndex] = std::clamp(Volume, 0.0f, 1.0f);
+    RefreshRuntimeNotifies();
+}
+
+int32 UAnimSequence::AddNotifyTrack()
+{
+    const int32 NewTrackIndex = GetNotifyTrackCount();
+    SetNotifyTrackCount(NewTrackIndex + 1);
+    return NewTrackIndex;
 }
 
 int32 UAnimSequence::GetNumberOfFrames() const
@@ -1103,11 +1196,11 @@ UAnimSequence* UAnimSequence::CreateMockWaveSequence(
     {
         UAnimNotify_LogMessage* N1 = UObjectManager::Get().CreateObject<UAnimNotify_LogMessage>(Model);
         N1->Message = "wave-step (early)";
-        Model->Notifies.push_back({ FName("WaveStep"), DurationSeconds * 0.25f, 0.0f, N1 });
+        Model->Notifies.push_back({ FName("WaveStep"), DurationSeconds * 0.25f, 0.0f, 0, N1 });
 
         UAnimNotify_LogMessage* N2 = UObjectManager::Get().CreateObject<UAnimNotify_LogMessage>(Model);
         N2->Message = "wave-step (late)";
-        Model->Notifies.push_back({ FName("WaveStep"), DurationSeconds * 0.75f, 0.0f, N2 });
+        Model->Notifies.push_back({ FName("WaveStep"), DurationSeconds * 0.75f, 0.0f, 0, N2 });
     }
 
     UAnimSequence* Seq = UObjectManager::Get().CreateObject<UAnimSequence>();

@@ -9,7 +9,28 @@ namespace
 {
 	static TSet<FString> GLoadedRandomSoundPaths;
 
-	FString PickRandomSoundPath(const TArray<FString>& SoundPaths)
+	const FAnimNotifySoundEntry* PickRandomSoundEntry(const TArray<FAnimNotifySoundEntry>& Sounds)
+	{
+		TArray<const FAnimNotifySoundEntry*> Candidates;
+		for (const FAnimNotifySoundEntry& Sound : Sounds)
+		{
+			if (!Sound.SoundPath.empty())
+			{
+				Candidates.push_back(&Sound);
+			}
+		}
+
+		if (Candidates.empty())
+		{
+			return nullptr;
+		}
+
+		static std::mt19937 RNG{ std::random_device{}() };
+		std::uniform_int_distribution<size_t> Dist(0, Candidates.size() - 1);
+		return Candidates[Dist(RNG)];
+	}
+
+	FAnimNotifySoundEntry PickLegacyRandomSoundEntry(const TArray<FString>& SoundPaths, float Volume)
 	{
 		TArray<const FString*> Candidates;
 		for (const FString& Path : SoundPaths)
@@ -22,36 +43,59 @@ namespace
 
 		if (Candidates.empty())
 		{
-			return FString();
+			return FAnimNotifySoundEntry();
 		}
 
 		static std::mt19937 RNG{ std::random_device{}() };
 		std::uniform_int_distribution<size_t> Dist(0, Candidates.size() - 1);
-		return *Candidates[Dist(RNG)];
+		FAnimNotifySoundEntry Result;
+		Result.SoundPath = *Candidates[Dist(RNG)];
+		Result.Volume = Volume;
+		Result.Pitch = 1.0f;
+		return Result;
+	}
+
+	bool PlayRandomNotifySound(const FAnimNotifySoundEntry& Sound)
+	{
+		if (Sound.SoundPath.empty())
+		{
+			return false;
+		}
+
+		const FString Key = FString("AnimNotifyRandom:") + Sound.SoundPath;
+		if (GLoadedRandomSoundPaths.find(Sound.SoundPath) == GLoadedRandomSoundPaths.end())
+		{
+			if (FAudioManager::Get().LoadAudio(Key, Sound.SoundPath, /*bLoop=*/false))
+			{
+				GLoadedRandomSoundPaths.insert(Sound.SoundPath);
+			}
+			else
+			{
+				UE_LOG("[AnimNotify_RandomSound] LoadAudio failed: %s", Sound.SoundPath.c_str());
+				return false;
+			}
+		}
+
+		FAudioManager::Get().PlayAudio(Key, Sound.Volume, Sound.Pitch);
+		return true;
 	}
 }
 
 void UAnimNotify_RandomSound::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnimSequenceBase* /*Anim*/)
 {
-	const FString SoundPath = PickRandomSoundPath(SoundPaths);
-	if (SoundPath.empty())
+	const float TrackVolumeScale = GetDispatchVolumeScale();
+	if (!Sounds.empty())
 	{
+		if (const FAnimNotifySoundEntry* Sound = PickRandomSoundEntry(Sounds))
+		{
+			FAnimNotifySoundEntry ScaledSound = *Sound;
+			ScaledSound.Volume *= TrackVolumeScale;
+			PlayRandomNotifySound(ScaledSound);
+		}
 		return;
 	}
 
-	const FString Key = FString("AnimNotifyRandom:") + SoundPath;
-	if (GLoadedRandomSoundPaths.find(SoundPath) == GLoadedRandomSoundPaths.end())
-	{
-		if (FAudioManager::Get().LoadAudio(Key, SoundPath, /*bLoop=*/false))
-		{
-			GLoadedRandomSoundPaths.insert(SoundPath);
-		}
-		else
-		{
-			UE_LOG("[AnimNotify_RandomSound] LoadAudio failed: %s", SoundPath.c_str());
-			return;
-		}
-	}
-
-	FAudioManager::Get().PlayAudio(Key, Volume);
+	FAnimNotifySoundEntry LegacySound = PickLegacyRandomSoundEntry(SoundPaths, Volume);
+	LegacySound.Volume *= TrackVolumeScale;
+	PlayRandomNotifySound(LegacySound);
 }

@@ -53,6 +53,11 @@ public:
     // 편집 후 RefreshRuntimeNotifies() 로 dispatch 캐시(base Notifies)를 동기화한다.
     TArray<FAnimNotifyEvent>& GetMutableModelNotifies();
     void RefreshRuntimeNotifies();
+    int32 GetNotifyTrackCount() const;
+    float GetNotifyTrackVolume(int32 TrackIndex) const;
+    void SetNotifyTrackCount(int32 InTrackCount);
+    void SetNotifyTrackVolume(int32 TrackIndex, float Volume);
+    int32 AddNotifyTrack();
 
     int32 TimeToFrame(float TimeSeconds) const;
     float FrameToTime(int32 FrameIndex) const;

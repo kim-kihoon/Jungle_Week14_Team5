@@ -35,11 +35,12 @@ namespace
 
 void UAnimNotify_PlaySound::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnimSequenceBase* /*Anim*/)
 {
+	const float TrackVolumeScale = GetDispatchVolumeScale();
 	if (!Sounds.empty())
 	{
 		for (const FAnimNotifySoundEntry& Sound : Sounds)
 		{
-			PlayNotifySoundPath(Sound.SoundPath, Sound.Volume, Sound.Pitch);
+			PlayNotifySoundPath(Sound.SoundPath, Sound.Volume * TrackVolumeScale, Sound.Pitch);
 		}
 		return;
 	}
@@ -47,11 +48,11 @@ void UAnimNotify_PlaySound::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnimSe
 	bool bPlayedAny = false;
 	for (const FString& Path : SoundPaths)
 	{
-		bPlayedAny = PlayNotifySoundPath(Path, Volume, 1.0f) || bPlayedAny;
+		bPlayedAny = PlayNotifySoundPath(Path, Volume * TrackVolumeScale, 1.0f) || bPlayedAny;
 	}
 
 	if (!bPlayedAny)
 	{
-		PlayNotifySoundPath(SoundPath, Volume, 1.0f);
+		PlayNotifySoundPath(SoundPath, Volume * TrackVolumeScale, 1.0f);
 	}
 }

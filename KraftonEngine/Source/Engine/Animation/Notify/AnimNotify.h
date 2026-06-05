@@ -2,6 +2,8 @@
 
 #include "Object/Object.h"
 
+#include <algorithm>
+
 class USkeletalMeshComponent;
 class UAnimSequenceBase;
 
@@ -24,9 +26,21 @@ public:
 	UAnimNotify() = default;
 	~UAnimNotify() override = default;
 
+	void SetDispatchVolumeScale(float InScale)
+	{
+		DispatchVolumeScale = std::clamp(InScale, 0.0f, 1.0f);
+	}
+
+	float GetDispatchVolumeScale() const
+	{
+		return DispatchVolumeScale;
+	}
+
 	// dispatch entry. MeshComp 는 현재 재생 중인 컴포넌트, Anim 은 해당 시퀀스.
 	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim)
 	{
 		(void)MeshComp; (void)Anim;
 	}
+private:
+	float DispatchVolumeScale = 1.0f;
 };
