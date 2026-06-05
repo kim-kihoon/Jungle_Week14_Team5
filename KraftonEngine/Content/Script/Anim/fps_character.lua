@@ -35,6 +35,11 @@ local CAMERA_READY_Z = 0.8
 local CAMERA_DOWN_X = 0.5
 local CAMERA_DOWN_Y = 0.0
 local CAMERA_DOWN_Z = 0.0
+local CAMERA_BOB_RATE = 7.5
+local CAMERA_BOB_SMOOTH = 8.0
+local CAMERA_BOB_FORWARD_AMOUNT = 0.010
+local CAMERA_BOB_SIDE_AMOUNT = 0.010
+local CAMERA_BOB_UP_AMOUNT = 0.015
 
 local function clamp01(value)
     if value < 0.0 then
@@ -70,12 +75,34 @@ local function is_switching(self)
     return self.SwitchPhase ~= SWITCH_NONE
 end
 
-local function set_camera_mesh_position(alpha)
+local function set_camera_mesh_position(alpha, bob_x, bob_y, bob_z)
+    bob_x = bob_x or 0.0
+    bob_y = bob_y or 0.0
+    bob_z = bob_z or 0.0
+
     Anim.set_static_mesh_relative_location_by_path(
         CAMERA_MESH_PATH,
-        lerp(CAMERA_DOWN_X, CAMERA_READY_X, alpha),
-        lerp(CAMERA_DOWN_Y, CAMERA_READY_Y, alpha),
-        lerp(CAMERA_DOWN_Z, CAMERA_READY_Z, alpha))
+        lerp(CAMERA_DOWN_X, CAMERA_READY_X, alpha) + bob_x,
+        lerp(CAMERA_DOWN_Y, CAMERA_READY_Y, alpha) + bob_y,
+        lerp(CAMERA_DOWN_Z, CAMERA_READY_Z, alpha) + bob_z)
+end
+
+local function update_camera_hold_motion(self, dt)
+    local targetWeight = 0.0
+    if self.Speed > self.SpeedThreshold then
+        targetWeight = clamp01((self.Speed - self.SpeedThreshold) / 4.0)
+    end
+
+    self.CameraBobWeight = lerp(self.CameraBobWeight, targetWeight, clamp01(dt * CAMERA_BOB_SMOOTH))
+    self.CameraBobTime = self.CameraBobTime + dt * CAMERA_BOB_RATE * lerp(0.45, 1.0, self.CameraBobWeight)
+
+    local phase = self.CameraBobTime
+    local weight = self.CameraBobWeight
+    local bobX = math.sin(phase * 2.0) * CAMERA_BOB_FORWARD_AMOUNT * weight
+    local bobY = math.sin(phase) * CAMERA_BOB_SIDE_AMOUNT * weight
+    local bobZ = math.abs(math.sin(phase)) * CAMERA_BOB_UP_AMOUNT * weight
+
+    set_camera_mesh_position(1.0, bobX, bobY, bobZ)
 end
 
 local function show_pistol()
@@ -120,6 +147,8 @@ function init(self)
     self.SwitchTime = 0.0
     self.ActionPhase = ACTION_NONE
     self.ActionTime = 0.0
+    self.CameraBobTime = 0.0
+    self.CameraBobWeight = 0.0
     self.PistolFireDuration = Anim.get_sequence_length(PISTOL_FIRE_PATH)
 
     local fps = Anim.create_state_machine("FPS")
@@ -219,6 +248,8 @@ function update(self, dt)
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
             self.ActionTime = 0.0
             self.ActionPhase = ACTION_PISTOL_FIRE
+        elseif self.CurrentTool == TOOL_CAMERA then
+            update_camera_hold_motion(self, dt)
         end
         return
     end
