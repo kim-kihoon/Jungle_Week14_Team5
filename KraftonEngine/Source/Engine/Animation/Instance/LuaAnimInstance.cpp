@@ -560,6 +560,20 @@ void ULuaAnimInstance::InstallBindings()
 			return false;
 		});
 
+	Anim.set_function("set_owner_mesh_pitch",
+		[this](float PitchDegrees) -> bool
+		{
+			if (!OwningComponent)
+			{
+				return false;
+			}
+
+			FRotator Rotation = OwningComponent->GetRelativeRotation();
+			Rotation.Pitch = PitchDegrees;
+			OwningComponent->SetRelativeRotation(Rotation);
+			return true;
+		});
+
 	Anim.set_function("set_static_mesh_visibility_by_path",
 		[this](std::string MeshPath, bool bVisible) -> bool
 		{
@@ -576,16 +590,105 @@ void ULuaAnimInstance::InstallBindings()
 
 			bool bChangedAny = false;
 			const FString TargetPath(MeshPath);
-			for (UActorComponent* Component : Owner->GetComponents())
+
+			TArray<USceneComponent*> SceneStack;
+			if (USceneComponent* Root = Owner->GetRootComponent())
 			{
-				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
-				if (!StaticMeshComponent || StaticMeshComponent->GetStaticMeshPath() != TargetPath)
+				SceneStack.push_back(Root);
+			}
+
+			for (size_t Index = 0; Index < SceneStack.size(); ++Index)
+			{
+				USceneComponent* SceneComponent = SceneStack[Index];
+				if (!SceneComponent)
 				{
 					continue;
 				}
 
-				StaticMeshComponent->SetVisibility(bVisible);
-				bChangedAny = true;
+				for (USceneComponent* Child : SceneComponent->GetChildren())
+				{
+					if (Child)
+					{
+						SceneStack.push_back(Child);
+					}
+				}
+
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(SceneComponent);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetVisibility(bVisible);
+					bChangedAny = true;
+				}
+			}
+
+			for (UActorComponent* Component : Owner->GetComponents())
+			{
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetVisibility(bVisible);
+					bChangedAny = true;
+				}
+			}
+			return bChangedAny;
+		});
+
+	Anim.set_function("set_static_mesh_relative_location_by_path",
+		[this](std::string MeshPath, float X, float Y, float Z) -> bool
+		{
+			if (!OwningComponent || MeshPath.empty())
+			{
+				return false;
+			}
+
+			AActor* Owner = OwningComponent->GetOwner();
+			if (!Owner)
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FString TargetPath(MeshPath);
+			const FVector NewLocation(X, Y, Z);
+
+			TArray<USceneComponent*> SceneStack;
+			if (USceneComponent* Root = Owner->GetRootComponent())
+			{
+				SceneStack.push_back(Root);
+			}
+
+			for (size_t Index = 0; Index < SceneStack.size(); ++Index)
+			{
+				USceneComponent* SceneComponent = SceneStack[Index];
+				if (!SceneComponent)
+				{
+					continue;
+				}
+
+				for (USceneComponent* Child : SceneComponent->GetChildren())
+				{
+					if (Child)
+					{
+						SceneStack.push_back(Child);
+					}
+				}
+
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(SceneComponent);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetRelativeLocation(NewLocation);
+					bChangedAny = true;
+				}
+			}
+
+			for (UActorComponent* Component : Owner->GetComponents())
+			{
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetRelativeLocation(NewLocation);
+					bChangedAny = true;
+				}
 			}
 			return bChangedAny;
 		});
