@@ -28,7 +28,7 @@ Anomalies/*.lua
   └─ OffscreenAnimation
 
 DebugManager
-  └─ 넘패드 입력으로 특정 규칙 강제 적용
+  └─ 숫자 키 입력으로 특정 규칙 강제 적용
 ```
 
 ## 사용 방법
@@ -70,12 +70,12 @@ GameManager:ReportAnomalyShot(hit.Actor)
 
 ### 디버그 키
 
-`GameManagerActor.lua`의 Tick에서 `DebugManager:Tick(dt, GameManager)`를 호출한다. 현재 매핑은 다음과 같다.
+`GameManagerActor.lua`의 Tick에서 `DebugManager:Tick(dt, GameManager)`를 호출한다. 현재 매핑은 키보드 상단 숫자 키 기준으로 다음과 같다.
 
 ```txt
-Numpad1 -> PhotoInvisible
-Numpad2 -> NoShadow
-Numpad3 -> OffscreenAnimation
+1 -> PhotoInvisible
+2 -> NoShadow
+3 -> OffscreenAnimation
 ```
 
 디버그 키는 랜덤 규칙 선택을 거치지 않고 지정한 규칙만 강제로 적용한다. 단, 대상 액터는 `AnomalyCandidate` 후보 중에서 선택한다.
@@ -99,7 +99,7 @@ GameManager:AdvanceAnomalyLoop()
 
 ```txt
 DebugManager:Tick(dt, GameManager)
-  └─ Input.GetKeyDown("Numpad1" / "Numpad2" / "Numpad3")
+  └─ Input.GetKeyDown("1" / "2" / "3")
        └─ GameManager:DebugSpawnAnomalyRule(ruleName)
             └─ AnomalyManager:SelectAndSpawnRule(ruleName)
                  ├─ 기존 활성 이상현상 Despawn
@@ -293,8 +293,8 @@ World.GetGameTime()
 ## 현재 디버그 씬 체크리스트
 
 - 후보 액터에 `AnomalyCandidate` 태그가 붙어 있는지 확인한다.
-- `Numpad1`을 눌렀을 때 활성 대상에 `PhotoInvisible` 태그가 붙는지 확인한다.
-- `Numpad2`를 눌렀을 때 대상 본체는 보이고 그림자만 사라지는지 확인한다.
-- `Numpad3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
+- `1`을 눌렀을 때 활성 대상에 `PhotoInvisible` 태그가 붙는지 확인한다.
+- `2`를 눌렀을 때 대상 본체는 보이고 그림자만 사라지는지 확인한다.
+- `3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
 - 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어되는지 확인한다.
 - 씬을 재시작하거나 게임이 리셋될 때 이전 이상현상 상태가 복구되는지 확인한다.

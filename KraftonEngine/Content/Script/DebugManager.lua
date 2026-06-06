@@ -4,15 +4,15 @@ DebugManager.bEnabled = true
 
 DebugManager.Scenarios = {
     {
-        Key = "Numpad1",
+        Key = "1",
         RuleName = "PhotoInvisible"
     },
     {
-        Key = "Numpad2",
+        Key = "2",
         RuleName = "NoShadow"
     },
     {
-        Key = "Numpad3",
+        Key = "3",
         RuleName = "OffscreenAnimation"
     }
 }
