@@ -16,9 +16,9 @@
 
 namespace
 {
-	float Clamp01(float Value)
+	float ClampVolumeGain(float Value)
 	{
-		return std::max(0.0f, std::min(1.0f, Value));
+		return std::clamp(Value, 0.0f, AudioMaxChannelGain);
 	}
 
 	FString MakeObjectScopedName(const UObject* Object)
@@ -73,7 +73,7 @@ void UAudioComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			GetWorldLocation(),
 			MinDistance,
 			std::max(MaxDistance, MinDistance));
-		FAudioManager::Get().SetLoopVolume(GetLoopName(), Clamp01(Volume));
+		FAudioManager::Get().SetLoopVolume(GetLoopName(), ClampVolumeGain(Volume));
 	}
 	else
 	{
@@ -97,7 +97,7 @@ void UAudioComponent::Play()
 		Settings3D.MaxDistance = std::max(MaxDistance, MinDistance);
 	}
 
-	const float PlayVolume = bSpatialize ? Clamp01(Volume) : ComputeAttenuatedVolume();
+	const float PlayVolume = bSpatialize ? ClampVolumeGain(Volume) : ComputeAttenuatedVolume();
 	const FAudio3DPlaySettings* Settings3DPtr = bSpatialize ? &Settings3D : nullptr;
 	if (bLoop)
 	{
@@ -122,7 +122,7 @@ void UAudioComponent::Stop()
 
 void UAudioComponent::SetVolume(float InVolume)
 {
-	Volume = Clamp01(InVolume);
+	Volume = ClampVolumeGain(InVolume);
 	if (bPlaying && bLoop)
 	{
 		const float LoopVolume = bSpatialize ? Volume : ComputeAttenuatedVolume();
@@ -154,7 +154,7 @@ bool UAudioComponent::EnsureLoaded()
 
 float UAudioComponent::ComputeAttenuatedVolume() const
 {
-	const float BaseVolume = Clamp01(Volume);
+	const float BaseVolume = ClampVolumeGain(Volume);
 	if (!bSpatialize)
 	{
 		return BaseVolume;
@@ -177,7 +177,7 @@ float UAudioComponent::ComputeAttenuatedVolume() const
 	}
 
 	const float T = (Distance - MinDistance) / std::max(EffectiveMaxDistance - MinDistance, 0.001f);
-	const float Attenuation = std::pow(1.0f - Clamp01(T), std::max(FalloffExponent, 0.1f));
+	const float Attenuation = std::pow(1.0f - std::clamp(T, 0.0f, 1.0f), std::max(FalloffExponent, 0.1f));
 	return BaseVolume * Attenuation;
 }
 

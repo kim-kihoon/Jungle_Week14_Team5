@@ -54,7 +54,7 @@ private:
 	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Spatialize")
 	bool bSpatialize = true;
 
-	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Volume", Min=0.0f, Max=1.0f, Speed=0.01f)
+	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Volume", Min=0.0f, Max=10.0f, Speed=0.01f)
 	float Volume = 1.0f;
 
 	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Pitch", Min=0.1f, Max=4.0f, Speed=0.01f)
