@@ -3286,7 +3286,7 @@
             "Gravity" : 9.800000,
             "JumpZVelocity" : 6.000000,
             "MaxAcceleration" : 20.000000,
-            "MaxWalkSpeed" : 2.000000,
+            "MaxWalkSpeed" : 1.400000,
             "ObjectName" : "UCharacterMovementComponent_1",
             "RotationYawRate" : 540.000000,
             "SweepPullbackDistance" : 0.010000,

@@ -182,6 +182,7 @@ bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoo
 
 	if (System->createSound(FullPath.c_str(), Mode, nullptr, &Sound) != FMOD_OK)
 	{
+		UE_LOG("[AudioManager] LoadAudio failed. Key=%s Path=%s", Key.c_str(), FullPath.c_str());
 		return false;
 	}
 
@@ -467,4 +468,9 @@ void FAudioManager::LoadDefaultAudios()
 	LoadAudio("DoorOpen", "SFX/door-open.mp3", false, true);
 	LoadAudio("HeavyDoorOpen", "SFX/heavy-door-open.mp3", false, true);
 	LoadAudio("DoorClose", "SFX/door-close.mp3", false, true);
+	LoadAudio("ParquetFloor01", "SFX/Parquet_Floor_Mono_01.WAV", false, true);
+	LoadAudio("ParquetFloor02", "SFX/Parquet_Floor_Mono_02.WAV", false, true);
+	LoadAudio("ParquetFloor03", "SFX/Parquet_Floor_Mono_03.WAV", false, true);
+	LoadAudio("ParquetFloor04", "SFX/Parquet_Floor_Mono_04.WAV", false, true);
+	LoadAudio("ParquetFloor05", "SFX/Parquet_Floor_Mono_05.WAV", false, true);
 }

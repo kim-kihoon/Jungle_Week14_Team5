@@ -45,6 +45,8 @@ local CAMERA_BOB_SMOOTH = 8.0
 local CAMERA_BOB_FORWARD_AMOUNT = 0.010
 local CAMERA_BOB_SIDE_AMOUNT = 0.010
 local CAMERA_BOB_UP_AMOUNT = 0.015
+local FOOTSTEP_PHASE_HALF = math.pi
+local TWO_PI = math.pi * 2.0
 
 local function clamp01(value)
     if value < 0.0 then
@@ -92,22 +94,51 @@ local function set_camera_mesh_position(alpha, bob_x, bob_y, bob_z)
         lerp(CAMERA_DOWN_Z, CAMERA_READY_Z, alpha) + bob_z)
 end
 
-local function update_camera_hold_motion(self, dt)
+local function get_walk_bob_speed_factor(weight)
+    return lerp(0.45, 1.0, weight)
+end
+
+local function update_walk_bob(self, dt)
     local targetWeight = 0.0
     if self.Speed > self.SpeedThreshold then
         targetWeight = clamp01((self.Speed - self.SpeedThreshold) / 4.0)
     end
 
-    self.CameraBobWeight = lerp(self.CameraBobWeight, targetWeight, clamp01(dt * CAMERA_BOB_SMOOTH))
-    self.CameraBobTime = self.CameraBobTime + dt * CAMERA_BOB_RATE * lerp(0.45, 1.0, self.CameraBobWeight)
+    self.WalkBobWeight = lerp(self.WalkBobWeight, targetWeight, clamp01(dt * CAMERA_BOB_SMOOTH))
+    local speedFactor = get_walk_bob_speed_factor(self.WalkBobWeight)
+    self.WalkBobTime = self.WalkBobTime + dt * CAMERA_BOB_RATE * speedFactor
+end
 
-    local phase = self.CameraBobTime
-    local weight = self.CameraBobWeight
+local function update_camera_hold_motion(self)
+    local phase = self.WalkBobTime
+    local weight = self.WalkBobWeight
     local bobX = math.sin(phase * 2.0) * CAMERA_BOB_FORWARD_AMOUNT * weight
     local bobY = math.sin(phase) * CAMERA_BOB_SIDE_AMOUNT * weight
     local bobZ = math.abs(math.sin(phase)) * CAMERA_BOB_UP_AMOUNT * weight
 
     set_camera_mesh_position(1.0, bobX, bobY, bobZ)
+end
+
+local function get_pistol_walk_play_rate(self)
+    if self.PistolWalkLength == nil or self.PistolWalkLength <= 0.0 then
+        return 1.0
+    end
+
+    local speedFactor = get_walk_bob_speed_factor(self.WalkBobWeight)
+    return self.PistolWalkLength * CAMERA_BOB_RATE * speedFactor / TWO_PI
+end
+
+local function update_pistol_walk_play_rate(self)
+    if self.PistolWalkPlayer == nil or Anim.set_sequence_play_rate == nil then
+        return
+    end
+
+    if self.CurrentTool ~= TOOL_PISTOL or self.Speed <= self.SpeedThreshold then
+        Anim.set_sequence_play_rate(self.PistolWalkPlayer, 1.0)
+        return
+    end
+
+    Anim.set_sequence_play_rate(self.PistolWalkPlayer, get_pistol_walk_play_rate(self))
 end
 
 local function get_crosshair_aim_target(owner)
@@ -235,6 +266,44 @@ local function update_switch_to_camera(self, alpha)
     set_camera_mesh_position(alpha)
 end
 
+local function reset_footstep_tracking(self)
+    self.WalkFootstepPhaseIndex = nil
+end
+
+local function play_footstep()
+    if Anim.play_footstep_audio ~= nil then
+        Anim.play_footstep_audio()
+    end
+end
+
+local function update_walk_footsteps(self)
+    if self.WalkBobWeight <= 0.01 then
+        self.WalkFootstepPhaseIndex = nil
+        return
+    end
+
+    local phaseIndex = math.floor(self.WalkBobTime / FOOTSTEP_PHASE_HALF)
+    if self.WalkFootstepPhaseIndex ~= nil and phaseIndex ~= self.WalkFootstepPhaseIndex then
+        local delta = phaseIndex - self.WalkFootstepPhaseIndex
+        if delta < 0 then
+            delta = 1
+        end
+        for _ = 1, delta do
+            play_footstep()
+        end
+    end
+    self.WalkFootstepPhaseIndex = phaseIndex
+end
+
+local function update_footsteps(self)
+    if self.Speed <= self.SpeedThreshold then
+        reset_footstep_tracking(self)
+        return
+    end
+
+    update_walk_footsteps(self)
+end
+
 local function update_switch_to_pistol(self, alpha)
     Anim.set_crosshair_visible(false)
     alpha = smooth_step(alpha)
@@ -253,14 +322,18 @@ function init(self)
     self.SwitchTime = 0.0
     self.ActionPhase = ACTION_NONE
     self.ActionTime = 0.0
-    self.CameraBobTime = 0.0
-    self.CameraBobWeight = 0.0
+    self.WalkBobTime = 0.0
+    self.WalkBobWeight = 0.0
     self.PistolFireDuration = Anim.get_sequence_length(PISTOL_FIRE_PATH)
+    self.PistolWalkLength = Anim.get_sequence_length(PISTOL_WALK_PATH)
+    reset_footstep_tracking(self)
 
     local fps = Anim.create_state_machine("FPS")
+    local pistolWalkPlayer = Anim.create_sequence_player(PISTOL_WALK_PATH, 1.0, true)
+    self.PistolWalkPlayer = pistolWalkPlayer
 
     Anim.sm_add_state(fps, "PistolIdle", Anim.create_sequence_player(PISTOL_IDLE_PATH, 1.0, true))
-    Anim.sm_add_state(fps, "PistolWalk", Anim.create_sequence_player(PISTOL_WALK_PATH, 1.0, true))
+    Anim.sm_add_state(fps, "PistolWalk", pistolWalkPlayer)
     Anim.sm_add_state(fps, "PistolFire", Anim.create_sequence_player(PISTOL_FIRE_PATH, 1.0, false))
     Anim.sm_add_state(fps, "CameraHold", Anim.create_ref_pose())
 
@@ -326,6 +399,7 @@ function init(self)
 
     Anim.sm_set_initial_state(fps, "PistolIdle")
     Anim.set_root_node(fps)
+    self.FpsStateMachine = fps
     show_pistol()
 end
 
@@ -361,11 +435,18 @@ function update(self, dt)
             if Anim.is_left_mouse_pressed() then
                 Anim.request_photo_capture()
             end
-            update_camera_hold_motion(self, dt)
         end
+
+        update_walk_bob(self, dt)
+        update_pistol_walk_play_rate(self)
+        if self.CurrentTool == TOOL_CAMERA then
+            update_camera_hold_motion(self)
+        end
+        update_footsteps(self)
         return
     end
 
+    reset_footstep_tracking(self)
     self.SwitchTime = self.SwitchTime + dt
     local alpha = clamp01(self.SwitchTime / TOOL_SWITCH_DURATION)
 

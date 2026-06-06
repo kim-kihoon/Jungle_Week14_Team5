@@ -5179,6 +5179,16 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             }
         },
 
+        "GetCharacterMovement",
+        [](AActor& Actor) -> UCharacterMovementComponent*
+        {
+            if (ACharacter* Character = Cast<ACharacter>(&Actor))
+            {
+                return Character->GetCharacterMovement();
+            }
+            return Actor.GetComponentByClass<UCharacterMovementComponent>();
+        },
+
         "AddWorldOffset",
         [](AActor& Actor, sol::object OffsetObject)
         {
