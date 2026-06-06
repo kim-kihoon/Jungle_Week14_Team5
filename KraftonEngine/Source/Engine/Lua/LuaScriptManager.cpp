@@ -4959,6 +4959,50 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         {
             Camera.SetLetterboxEnabled(false);
         },
+        "SetPostProcessMaterial",
+        [](UCameraComponent& Camera, const sol::object& MaterialValue) -> bool
+        {
+            if (!MaterialValue.valid() || MaterialValue == sol::nil)
+            {
+                Camera.ClearPostProcessMaterial();
+                return true;
+            }
+            if (MaterialValue.is<UMaterial*>())
+            {
+                Camera.SetPostProcessMaterial(MaterialValue.as<UMaterial*>());
+                return true;
+            }
+            if (MaterialValue.get_type() == sol::type::string)
+            {
+                return Camera.SetPostProcessMaterialByPath(MaterialValue.as<FString>());
+            }
+            return false;
+        },
+        "GetPostProcessMaterial",
+        &UCameraComponent::GetPostProcessMaterial,
+        "ClearPostProcessMaterial",
+        &UCameraComponent::ClearPostProcessMaterial,
+        "SetPostProcessScalarParameter",
+        &UCameraComponent::SetPostProcessScalarParameter,
+        "SetPostProcessVectorParameter",
+        [](UCameraComponent& Camera, const FString& ParamName, const sol::object& Value) -> bool
+        {
+            FVector4 VectorValue;
+            if (LuaObjectToVector4(Value, VectorValue))
+            {
+                return Camera.SetPostProcessVectorParameter(ParamName, VectorValue);
+            }
+
+            FVector Vector3Value;
+            if (LuaObjectToVector(Value, Vector3Value))
+            {
+                return Camera.SetPostProcessVectorParameter(ParamName, FVector4(Vector3Value.X, Vector3Value.Y, Vector3Value.Z, 0.0f));
+            }
+
+            return false;
+        },
+        "SetPostProcessTextureParameter",
+        &UCameraComponent::SetPostProcessTextureParameter,
         "OnResize",
         &UCameraComponent::OnResize
     );
