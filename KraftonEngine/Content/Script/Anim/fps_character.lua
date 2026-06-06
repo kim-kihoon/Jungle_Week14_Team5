@@ -36,10 +36,10 @@ local ARMS_DOWN_PITCH = 65.0
 -- X is forward from the camera, Z moves it between lower-screen hidden and raised positions.
 local CAMERA_READY_X = 0.2
 local CAMERA_READY_Y = 0.0
-local CAMERA_READY_Z = 0.8
+local CAMERA_READY_Z = -0.2
 local CAMERA_DOWN_X = 0.5
 local CAMERA_DOWN_Y = 0.0
-local CAMERA_DOWN_Z = 0.0
+local CAMERA_DOWN_Z = -1.0
 local CAMERA_BOB_RATE = 7.5
 local CAMERA_BOB_SMOOTH = 8.0
 local CAMERA_BOB_FORWARD_AMOUNT = 0.010

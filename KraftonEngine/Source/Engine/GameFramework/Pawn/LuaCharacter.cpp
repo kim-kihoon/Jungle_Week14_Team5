@@ -6,6 +6,7 @@
 #include "Component/Camera/SpringArmComponent.h"
 #include "Component/Light/SpotLightComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 
 #include <cmath>
 
@@ -19,6 +20,11 @@ namespace
 	bool IsNearlyZeroVector(const FVector& Value)
 	{
 		return IsNearlyZero(Value.X) && IsNearlyZero(Value.Y) && IsNearlyZero(Value.Z);
+	}
+
+	bool IsHeldCameraMesh(UStaticMeshComponent* Component)
+	{
+		return Component && Component->GetStaticMeshPath() == FString("Content/Data/camera/camera_StaticMesh.uasset");
 	}
 }
 
@@ -87,6 +93,23 @@ void ALuaCharacter::ConfigureFirstPersonViewRig()
 		}
 		SpotLight->AttachToComponent(SpringArm);
 		SpotLight->SetRelativeLocation(DesiredRelativeLocation);
+	}
+
+	for (UActorComponent* Component : GetComponents())
+	{
+		UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Component);
+		if (!IsHeldCameraMesh(StaticMesh))
+		{
+			continue;
+		}
+
+		FVector DesiredRelativeLocation = StaticMesh->GetRelativeLocation();
+		if (StaticMesh->GetParent() != SpringArm && DesiredRelativeLocation.Z > 0.5f)
+		{
+			DesiredRelativeLocation = DesiredRelativeLocation - EyeOffset;
+		}
+		StaticMesh->AttachToComponent(SpringArm);
+		StaticMesh->SetRelativeLocation(DesiredRelativeLocation);
 	}
 }
 

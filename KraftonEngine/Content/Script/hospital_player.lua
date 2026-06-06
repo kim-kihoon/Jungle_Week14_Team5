@@ -20,8 +20,8 @@ local KEY_D = 0x44
 local INTERACT_DISTANCE = 3.5
 local INTERACT_DISTANCE_SQ = INTERACT_DISTANCE * INTERACT_DISTANCE
 local DOOR_OPEN_DURATION = 1.0
-local DOOR_OPEN_ANGLE_PLUS = 70.0
-local DOOR_OPEN_ANGLE_MINUS = -70.0
+local DOOR_OPEN_ANGLE_PLUS = 80.0
+local DOOR_OPEN_ANGLE_MINUS = -80.0
 local DOOR_CONTACT_SLOP = 0.08
 local DOOR_CONTACT_RAY_COUNT = 16
 local DOOR_APPROACH_DOT_THRESHOLD = 1.0e-6
@@ -431,14 +431,18 @@ local function AddDoor(actor, openYaw)
         end
     end
 
-    local closeYaw = GetActorYaw(actor)
-    local isOpen = INITIALLY_OPEN_NAMES[name] == true or math.abs(closeYaw - openYaw) < 20.0
-    local currentYaw = isOpen and openYaw or closeYaw
+    local sceneYaw = GetActorYaw(actor)
+    local isSceneOpen = math.abs(sceneYaw) > 45.0
+    local bUseSceneYawAsOpen = isSceneOpen or math.abs(sceneYaw - openYaw) < 20.0
+    local isOpen = INITIALLY_OPEN_NAMES[name] == true or bUseSceneYawAsOpen
+    local closeYaw = isOpen and 0.0 or sceneYaw
+    local resolvedOpenYaw = bUseSceneYawAsOpen and sceneYaw or openYaw
+    local currentYaw = isOpen and resolvedOpenYaw or closeYaw
 
     table.insert(Doors, {
         Actor = actor,
         Name = name,
-        OpenYaw = openYaw,
+        OpenYaw = resolvedOpenYaw,
         CloseYaw = closeYaw,
         IsOpen = isOpen,
         CurrentYaw = currentYaw,
@@ -513,26 +517,58 @@ local function DistanceSquared2D(a, b)
     return dx * dx + dy * dy
 end
 
-local function FindNearestDoor(location)
-    local bestDoor = nil
-    local bestDistanceSq = INTERACT_DISTANCE_SQ
+local function FindDoorByActor(actor)
+    if actor == nil then
+        return nil
+    end
 
     for _, door in ipairs(Doors) do
-        if door.Actor ~= nil then
-            local ok, doorLocation = pcall(function()
-                return door.Actor:GetLocation()
-            end)
-            if ok and doorLocation ~= nil then
-                local distSq = DistanceSquared2D(location, doorLocation)
-                if distSq < bestDistanceSq then
-                    bestDistanceSq = distSq
-                    bestDoor = door
-                end
-            end
+        if door.Actor == actor then
+            return door
         end
     end
 
-    return bestDoor
+    return nil
+end
+
+local function FindTargetedDoor()
+    if World == nil or World.LineTraceObjects == nil or obj == nil then
+        return nil
+    end
+
+    local camera = nil
+    local okCamera = pcall(function()
+        camera = obj:GetCamera()
+    end)
+    if not okCamera or camera == nil then
+        return nil
+    end
+
+    local start = camera:GetLocation()
+    local direction = camera.Forward
+    if start == nil or direction == nil then
+        return nil
+    end
+
+    local endPos = start + direction * INTERACT_DISTANCE
+    local okHit, hit = pcall(function()
+        return World.LineTraceObjects(start, endPos, obj)
+    end)
+    if not okHit or hit == nil or hit.Hit ~= true or hit.Actor == nil then
+        return nil
+    end
+
+    local door = FindDoorByActor(hit.Actor)
+    if door == nil then
+        return nil
+    end
+
+    local distance = tonumber(hit.Distance)
+    if distance ~= nil and distance > INTERACT_DISTANCE then
+        return nil
+    end
+
+    return door
 end
 
 function BeginPlay()
@@ -574,9 +610,9 @@ function Tick(dt)
             return Input.GetKey(INTERACT_KEY)
         end)
         if ok and pressed and not bInteractWasDown then
-            local door = FindNearestDoor(location)
+            local door = FindTargetedDoor()
             if door == nil then
-                print("[Door] no door in range. count=" .. tostring(#Doors))
+                print("[Door] no targeted door in range. count=" .. tostring(#Doors))
             else
                 ToggleDoor(door)
             end
