@@ -808,17 +808,54 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 	if (bIsActiveViewport && FPhotoOverlay::IsVisible())
 	{
 		const float Padding = 16.0f;
-		const float PhotoWidth = (std::min)(R.Width * 0.28f, 320.0f);
-		const float PhotoHeight = PhotoWidth * 9.0f / 16.0f;
-		ImVec2 PhotoMin(R.X + Padding, R.Y + Padding);
-		ImVec2 PhotoMax(PhotoMin.x + PhotoWidth, PhotoMin.y + PhotoHeight);
+		const float FrameWidth = (std::min)(R.Width * 0.36f, 420.0f);
+		const float FrameHeight = FrameWidth / FPhotoOverlay::GetFrameAspectRatio();
+		ImVec2 FrameMin(R.X + Padding, R.Y + Padding);
+		ImVec2 FrameMax(FrameMin.x + FrameWidth, FrameMin.y + FrameHeight);
 		DrawList->AddRectFilled(
-			ImVec2(PhotoMin.x - 4.0f, PhotoMin.y - 4.0f),
-			ImVec2(PhotoMax.x + 4.0f, PhotoMax.y + 4.0f),
-			IM_COL32(0, 0, 0, 90),
+			ImVec2(FrameMin.x + 4.0f, FrameMin.y + 5.0f),
+			ImVec2(FrameMax.x + 5.0f, FrameMax.y + 6.0f),
+			IM_COL32(0, 0, 0, 100),
 			2.0f);
-		DrawList->AddImage((ImTextureID)FPhotoOverlay::GetSRV(), PhotoMin, PhotoMax);
-		DrawList->AddRect(PhotoMin, PhotoMax, IM_COL32(255, 255, 255, 230), 0.0f, 0, 2.0f);
+
+		ID3D11ShaderResourceView* FrameSRV = FPhotoOverlay::GetFrameSRV();
+		if (FrameSRV)
+		{
+			DrawList->AddImage((ImTextureID)FrameSRV, FrameMin, FrameMax);
+
+			const ImVec2 InnerMin(
+				FrameMin.x + FrameWidth * (58.0f / 1672.0f),
+				FrameMin.y + FrameHeight * (103.0f / 941.0f));
+			const ImVec2 InnerMax(
+				FrameMin.x + FrameWidth * (1614.0f / 1672.0f),
+				FrameMin.y + FrameHeight * (801.0f / 941.0f));
+			const float TargetAspect = (InnerMax.x - InnerMin.x) / (InnerMax.y - InnerMin.y);
+			const float CaptureAspect = FPhotoOverlay::GetCaptureAspectRatio();
+			ImVec2 UVMin(0.0f, 0.0f);
+			ImVec2 UVMax(1.0f, 1.0f);
+			if (CaptureAspect > TargetAspect)
+			{
+				const float VisibleWidth = TargetAspect / CaptureAspect;
+				UVMin.x = (1.0f - VisibleWidth) * 0.5f;
+				UVMax.x = 1.0f - UVMin.x;
+			}
+			else if (CaptureAspect < TargetAspect)
+			{
+				const float VisibleHeight = CaptureAspect / TargetAspect;
+				UVMin.y = (1.0f - VisibleHeight) * 0.5f;
+				UVMax.y = 1.0f - UVMin.y;
+			}
+			DrawList->AddImage((ImTextureID)FPhotoOverlay::GetSRV(), InnerMin, InnerMax, UVMin, UVMax);
+		}
+		else
+		{
+			const float PhotoWidth = (std::min)(R.Width * 0.28f, 320.0f);
+			const float PhotoHeight = PhotoWidth * 9.0f / 16.0f;
+			ImVec2 PhotoMin(R.X + Padding, R.Y + Padding);
+			ImVec2 PhotoMax(PhotoMin.x + PhotoWidth, PhotoMin.y + PhotoHeight);
+			DrawList->AddImage((ImTextureID)FPhotoOverlay::GetSRV(), PhotoMin, PhotoMax);
+			DrawList->AddRect(PhotoMin, PhotoMax, IM_COL32(255, 255, 255, 230), 0.0f, 0, 2.0f);
+		}
 		FPhotoOverlay::Tick();
 	}
 
