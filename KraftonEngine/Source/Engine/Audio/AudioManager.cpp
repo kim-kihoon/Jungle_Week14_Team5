@@ -182,6 +182,7 @@ bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoo
 
 	if (System->createSound(FullPath.c_str(), Mode, nullptr, &Sound) != FMOD_OK)
 	{
+		UE_LOG("[AudioManager] LoadAudio failed. Key=%s Path=%s", Key.c_str(), FullPath.c_str());
 		return false;
 	}
 
@@ -245,7 +246,7 @@ void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch, con
 
 	if (Channel)
 	{
-		Channel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
+		Channel->setVolume(std::clamp(Volume, 0.0f, AudioMaxChannelGain));
 		Channel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
 		if (Settings3D)
 		{
@@ -270,7 +271,7 @@ void FAudioManager::PlayAudioFadeOut(const FString& Key, float Volume, float Fad
 		return;
 	}
 
-	const float ClampedVolume = std::clamp(Volume, 0.0f, 1.0f);
+	const float ClampedVolume = std::clamp(Volume, 0.0f, AudioMaxChannelGain);
 	Channel->setVolume(ClampedVolume);
 	Channel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
 	if (Settings3D)
@@ -310,7 +311,7 @@ void FAudioManager::PlayBGM(const FString& Key, float Volume)
 
 	if (BGMChannel)
 	{
-		BGMChannel->setVolume(Volume);
+		BGMChannel->setVolume(std::clamp(Volume, 0.0f, AudioMaxChannelGain));
 	}
 }
 
@@ -334,7 +335,7 @@ void FAudioManager::PlayLoop(const FString& Key, const FString& LoopName, float 
 	const bool bUse3D = Settings3D && Settings3D->bEnabled;
 	if (FMOD::Channel* ExistingChannel = FindPlayingLoopChannel(LoopName))
 	{
-		ExistingChannel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
+		ExistingChannel->setVolume(std::clamp(Volume, 0.0f, AudioMaxChannelGain));
 		ExistingChannel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
 		if (Settings3D)
 		{
@@ -349,7 +350,7 @@ void FAudioManager::PlayLoop(const FString& Key, const FString& LoopName, float 
 	if (Channel)
 	{
 		Channel->setMode(FMOD_LOOP_NORMAL);
-		Channel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
+		Channel->setVolume(std::clamp(Volume, 0.0f, AudioMaxChannelGain));
 		Channel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
 		if (Settings3D)
 		{
@@ -392,7 +393,7 @@ void FAudioManager::SetLoopVolume(const FString& LoopName, float Volume)
 {
 	if (FMOD::Channel* Channel = FindPlayingLoopChannel(LoopName))
 	{
-		Channel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
+		Channel->setVolume(std::clamp(Volume, 0.0f, AudioMaxChannelGain));
 	}
 }
 
@@ -464,4 +465,12 @@ void FAudioManager::LoadDefaultAudios()
 	LoadAudio("PhotoOut", "Camera/PhotoOut.mp3", false);
 	LoadAudio("PistolFire", "Pistol/pistolFire.mp3", false);
 	LoadAudio("Tinnitus", "Pistol/tinnitus.mp3", false);
+	LoadAudio("DoorOpen", "SFX/door-open.mp3", false, true);
+	LoadAudio("HeavyDoorOpen", "SFX/heavy-door-open.mp3", false, true);
+	LoadAudio("DoorClose", "SFX/door-close.mp3", false, true);
+	LoadAudio("ParquetFloor01", "SFX/Parquet_Floor_Mono_01.WAV", false, true);
+	LoadAudio("ParquetFloor02", "SFX/Parquet_Floor_Mono_02.WAV", false, true);
+	LoadAudio("ParquetFloor03", "SFX/Parquet_Floor_Mono_03.WAV", false, true);
+	LoadAudio("ParquetFloor04", "SFX/Parquet_Floor_Mono_04.WAV", false, true);
+	LoadAudio("ParquetFloor05", "SFX/Parquet_Floor_Mono_05.WAV", false, true);
 }

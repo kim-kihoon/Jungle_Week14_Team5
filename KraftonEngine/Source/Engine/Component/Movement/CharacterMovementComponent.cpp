@@ -5,6 +5,7 @@
 #include "Component/SceneComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Core/Logging/Log.h"
 #include "Core/Types/PropertyTypes.h"
 #include "Core/TickFunction.h"
 #include "GameFramework/AActor.h"
@@ -18,6 +19,11 @@
 
 #include <algorithm>
 #include <cmath>
+
+namespace
+{
+	constexpr float CharacterFloorClearance = 0.05f;
+}
 
 UCharacterMovementComponent::UCharacterMovementComponent()
 {
@@ -276,7 +282,7 @@ void UCharacterMovementComponent::TickWalking(float DeltaTime, const FVector& Ro
 
 	// Floor stick — capsule 중심 = floor.Z + HalfHeight.
 	FVector NewLoc = Updated->GetWorldLocation();
-	NewLoc.Z = Floor.WorldHitLocation.Z + GetCapsuleHalfHeight();
+	NewLoc.Z = Floor.WorldHitLocation.Z + GetCapsuleHalfHeight() + CharacterFloorClearance;
 	Updated->SetWorldLocation(NewLoc);
 }
 
@@ -307,7 +313,7 @@ void UCharacterMovementComponent::TickFalling(float DeltaTime, const FVector& Ro
 	// raycast 가 hit 했다는 건 capsule bottom 이 floor 위 (또는 약간 안) 에 있다는 뜻.
 	// hit 위치를 floor 표면으로 보고 그 위에 stick.
 	FVector LandLoc = Updated->GetWorldLocation();
-	LandLoc.Z = Floor.WorldHitLocation.Z + GetCapsuleHalfHeight();
+	LandLoc.Z = Floor.WorldHitLocation.Z + GetCapsuleHalfHeight() + CharacterFloorClearance;
 	Updated->SetWorldLocation(LandLoc);
 	Velocity.Z = 0.0f;
 	SetMovementMode(EMovementMode::Walking);
@@ -378,6 +384,14 @@ bool UCharacterMovementComponent::SafeMoveUpdatedComponent(const FVector& Delta,
         return true;
     }
 
+    const bool bHorizontalMove = std::abs(Delta.Z) <= 1.0e-4f;
+    const bool bFloorOrCeilingHit = std::abs(Hit.ImpactNormal.Z) >= 0.65f;
+    if (bHorizontalMove && bFloorOrCeilingHit)
+    {
+        Updated->SetWorldLocation(End);
+        return true;
+    }
+
     if (OutHit)
     {
         *OutHit = Hit;
@@ -385,7 +399,63 @@ bool UCharacterMovementComponent::SafeMoveUpdatedComponent(const FVector& Delta,
 
     const FVector MoveDir = Delta.Normalized();
     const float SafeDistance = (std::max)(0.0f, Hit.Distance - SweepPullbackDistance);
-    Updated->SetWorldLocation(Start + MoveDir * SafeDistance);
+    const FVector SafeLocation = Start + MoveDir * SafeDistance;
+    Updated->SetWorldLocation(SafeLocation);
+
+    FVector RemainingDelta = Delta - MoveDir * SafeDistance;
+    const float RemainingIntoSurface = RemainingDelta.Dot(Hit.ImpactNormal);
+    if (RemainingIntoSurface < 0.0f)
+    {
+        FVector SlideDelta = RemainingDelta - Hit.ImpactNormal * RemainingIntoSurface;
+        if (bHorizontalMove)
+        {
+            SlideDelta.Z = 0.0f;
+        }
+
+        if (SlideDelta.Length() > 1.0e-5f)
+        {
+            const FVector SlideStart = Updated->GetWorldLocation();
+            const FVector SlideEnd = SlideStart + SlideDelta;
+            FHitResult SlideHit;
+            if (!World->PhysicsSweep(SlideStart, SlideEnd, Rot, Shape, SlideHit, TraceChannel, Owner))
+            {
+                Updated->SetWorldLocation(SlideEnd);
+            }
+            else
+            {
+                const bool bSlideFloorOrCeilingHit = std::abs(SlideHit.ImpactNormal.Z) >= 0.65f;
+                if (bHorizontalMove && bSlideFloorOrCeilingHit)
+                {
+                    Updated->SetWorldLocation(SlideEnd);
+                }
+                else
+                {
+                    const FVector SlideDir = SlideDelta.Normalized();
+                    const float SlideSafeDistance = (std::max)(0.0f, SlideHit.Distance - SweepPullbackDistance);
+                    Updated->SetWorldLocation(SlideStart + SlideDir * SlideSafeDistance);
+                }
+            }
+        }
+    }
+
+    static int32 MoveHitLogCooldown = 0;
+    if (MoveHitLogCooldown-- <= 0)
+    {
+        MoveHitLogCooldown = 20;
+        UE_LOG(
+            "[PlayerMoveHit] hitActor=%s hitComponent=%s start=(%.3f, %.3f, %.3f) end=(%.3f, %.3f, %.3f) hit=(%.3f, %.3f, %.3f) normal=(%.3f, %.3f, %.3f) dist=%.4f safe=%.4f radius=%.3f half=%.3f",
+            Hit.HitActor ? Hit.HitActor->GetName().c_str() : "None",
+            Hit.HitComponent ? Hit.HitComponent->GetName().c_str() : "None",
+            Start.X, Start.Y, Start.Z,
+            End.X, End.Y, End.Z,
+            Hit.WorldHitLocation.X, Hit.WorldHitLocation.Y, Hit.WorldHitLocation.Z,
+            Hit.ImpactNormal.X, Hit.ImpactNormal.Y, Hit.ImpactNormal.Z,
+            Hit.Distance,
+            SafeDistance,
+            Radius,
+            HalfHeight
+        );
+    }
 
     if (UPrimitiveComponent* MovingPrimitive = Cast<UPrimitiveComponent>(Updated))
     {

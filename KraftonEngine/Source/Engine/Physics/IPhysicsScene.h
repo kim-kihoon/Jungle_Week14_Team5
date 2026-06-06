@@ -36,6 +36,8 @@ public:
 	// 컴포넌트의 SimulatePhysics/ObjectType/Response 등이 변경된 경우 호출.
 	// backend actor 단위로 unregister + register 한다. compound shape의 다른 컴포넌트도 함께 재등록된다.
 	virtual void RebuildBody(UPrimitiveComponent* Comp) = 0;
+	// 컴포넌트 transform 변경 후 PhysX body pose만 갱신 (unregister/register 없음).
+	virtual void SyncComponentTransform(UPrimitiveComponent* Comp) {}
 
 	// --- 시뮬레이션 ---
 	virtual void Tick(float DeltaTime) = 0;

@@ -4,17 +4,128 @@
 #include "Component/Shape/CapsuleComponent.h"
 #include "Component/Script/LuaScriptComponent.h"
 #include "Component/Camera/SpringArmComponent.h"
+#include "Component/Light/SpotLightComponent.h"
+#include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
+
+#include <cmath>
+
+namespace
+{
+	bool IsNearlyZero(float Value)
+	{
+		return std::abs(Value) <= 1.0e-4f;
+	}
+
+	bool IsNearlyZeroVector(const FVector& Value)
+	{
+		return IsNearlyZero(Value.X) && IsNearlyZero(Value.Y) && IsNearlyZero(Value.Z);
+	}
+
+	bool IsHeldCameraMesh(UStaticMeshComponent* Component)
+	{
+		return Component && Component->GetStaticMeshPath() == FString("Content/Data/camera/camera_StaticMesh.uasset");
+	}
+}
+
+void ALuaCharacter::ConfigureFirstPersonViewRig()
+{
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationRoll = false;
+	bUseControllerRotationYaw = true;
+
+	if (!CapsuleComponent || !SpringArm)
+	{
+		return;
+	}
+
+	SpringArm->AttachToComponent(CapsuleComponent);
+
+	const FVector SpringArmRelativeLocation = SpringArm->GetRelativeLocation();
+	const FVector ArmOffset = FVector(-SpringArm->TargetArmLength, 0.0f, 0.0f);
+	const FVector CameraRelativeLocation = Camera ? Camera->GetRelativeLocation() : FVector(0.0f, 0.0f, 0.0f);
+
+	FVector EyeOffset = SpringArmRelativeLocation + SpringArm->TargetOffset + ArmOffset + SpringArm->SocketOffset + CameraRelativeLocation;
+	if (IsNearlyZeroVector(EyeOffset) || EyeOffset.Z < 0.5f)
+	{
+		EyeOffset = FVector(0.0f, 0.0f, 0.75f);
+	}
+
+	SpringArm->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+	SpringArm->SetRelativeRotation(FVector(0.0f, 0.0f, 0.0f));
+	SpringArm->TargetArmLength = 0.0f;
+	SpringArm->TargetOffset = EyeOffset;
+	SpringArm->SocketOffset = FVector(0.0f, 0.0f, 0.0f);
+	SpringArm->bEnableCameraLag = false;
+	SpringArm->bEnableCameraRotationLag = false;
+	SpringArm->bDoCollisionTest = false;
+	SpringArm->bUsePawnControlRotation = true;
+	SpringArm->bInheritPitch = true;
+	SpringArm->bInheritYaw = true;
+	SpringArm->bInheritRoll = false;
+	SpringArm->ResetLagState();
+
+	if (Camera)
+	{
+		Camera->AttachToComponent(SpringArm);
+		Camera->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+		Camera->SetRelativeRotation(FVector(0.0f, 0.0f, 0.0f));
+	}
+
+	if (USkeletalMeshComponent* MeshComponent = Mesh.Get())
+	{
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		FVector DesiredRelativeLocation = MeshComponent->GetRelativeLocation();
+		if (MeshComponent->GetParent() != SpringArm && DesiredRelativeLocation.Z > 0.5f)
+		{
+			DesiredRelativeLocation = DesiredRelativeLocation - EyeOffset;
+		}
+		MeshComponent->AttachToComponent(SpringArm);
+		MeshComponent->SetRelativeLocation(DesiredRelativeLocation);
+	}
+
+	if (USpotLightComponent* SpotLight = GetComponentByClass<USpotLightComponent>())
+	{
+		FVector DesiredRelativeLocation = SpotLight->GetRelativeLocation();
+		if (SpotLight->GetParent() != SpringArm && DesiredRelativeLocation.Z > 0.5f)
+		{
+			DesiredRelativeLocation = DesiredRelativeLocation - EyeOffset;
+		}
+		SpotLight->AttachToComponent(SpringArm);
+		SpotLight->SetRelativeLocation(DesiredRelativeLocation);
+	}
+
+	for (UActorComponent* Component : GetComponents())
+	{
+		UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Component);
+		if (!IsHeldCameraMesh(StaticMesh))
+		{
+			continue;
+		}
+
+		FVector DesiredRelativeLocation = StaticMesh->GetRelativeLocation();
+		if (StaticMesh->GetParent() != SpringArm && DesiredRelativeLocation.Z > 0.5f)
+		{
+			DesiredRelativeLocation = DesiredRelativeLocation - EyeOffset;
+		}
+		StaticMesh->AttachToComponent(SpringArm);
+		StaticMesh->SetRelativeLocation(DesiredRelativeLocation);
+	}
+}
+
 void ALuaCharacter::InitDefaultComponents(const FString& SkeletalMeshFileName, const FString& ScriptFile)
 {
 	Super::InitDefaultComponents(SkeletalMeshFileName);
 
-	// 3인칭 카메라 체인 — Capsule → SpringArm → Camera. lag 적용해 부드럽게 따라옴.
+	// 1인칭 view pivot. 위치는 눈높이에 고정하고 control rotation은 회전으로만 적용한다.
 	SpringArm = AddComponent<USpringArmComponent>();
 	SpringArm->AttachToComponent(CapsuleComponent);
-	SpringArm->TargetArmLength       = 10.0f;
-	SpringArm->SocketOffset          = FVector(0.0f, 0.0f, 3.0f);
-	SpringArm->bEnableCameraLag      = true;
-	SpringArm->bEnableCameraRotationLag = true;
+	SpringArm->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+	SpringArm->TargetArmLength       = 0.0f;
+	SpringArm->SocketOffset          = FVector(0.0f, 0.0f, 0.0f);
+	SpringArm->TargetOffset          = FVector(0.0f, 0.0f, 0.75f);
+	SpringArm->bEnableCameraLag      = false;
+	SpringArm->bEnableCameraRotationLag = false;
 
 	// mouse look 이 capsule rotation 안 건드리고 카메라만 회전 — UE ThirdPerson 패턴.
 	// ACharacter::Tick 이 APawn::ControlRotation 누적 → SpringArm 이 이걸 inherit.
@@ -31,6 +142,8 @@ void ALuaCharacter::InitDefaultComponents(const FString& SkeletalMeshFileName, c
 	{
 		LuaScriptComponent->SetScriptFile(ScriptFile);
 	}
+
+	ConfigureFirstPersonViewRig();
 }
 
 void ALuaCharacter::PostDuplicate()
@@ -39,4 +152,5 @@ void ALuaCharacter::PostDuplicate()
 	LuaScriptComponent = GetComponentByClass<ULuaScriptComponent>();
 	SpringArm          = GetComponentByClass<USpringArmComponent>();
 	Camera             = GetComponentByClass<UCameraComponent>();
+	ConfigureFirstPersonViewRig();
 }

@@ -15,6 +15,9 @@ struct FAudio3DPlaySettings
 	float MaxDistance = 500.0f;
 };
 
+// FMOD channel gain — 1.0 = unity, values above 1 amplify (may clip).
+inline constexpr float AudioMaxChannelGain = 10.0f;
+
 class FAudioManager : public TSingleton<FAudioManager>
 {
 	friend class TSingleton<FAudioManager>;

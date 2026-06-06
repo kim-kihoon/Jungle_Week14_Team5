@@ -13,7 +13,7 @@ class UCameraComponent;
 //   - ULuaAnimInstance     : Mesh 의 anim instance — pose 평가/FSM/notify
 // 둘 다 lua 라도 environment 가 분리돼 있어 변수 충돌 없음.
 //
-// 3인칭 카메라: Capsule(Root) → SpringArm → Camera 체인. SpringArm 이 lag 적용.
+// 1인칭 카메라: Capsule(Root) → SpringArm(view pivot) → Camera 체인.
 // Possess 시 APawn::PossessedBy 가 Camera 를 자동 ActiveCamera 로 잡음.
 
 #include "Source/Engine/GameFramework/Pawn/LuaCharacter.generated.h"
@@ -42,6 +42,8 @@ public:
 	UCameraComponent* GetCamera()             const { return Camera; }
 
 protected:
+	void ConfigureFirstPersonViewRig();
+
 	TWeakObjectPtr<ULuaScriptComponent> LuaScriptComponent = nullptr;
 	TWeakObjectPtr<USpringArmComponent> SpringArm          = nullptr;
 	TWeakObjectPtr<UCameraComponent>    Camera             = nullptr;

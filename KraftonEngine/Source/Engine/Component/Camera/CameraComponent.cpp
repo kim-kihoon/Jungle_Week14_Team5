@@ -1,4 +1,5 @@
 #include "Component/Camera/CameraComponent.h"
+#include "Math/Rotator.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "GameFramework/AActor.h"
 #include "GameFramework/World.h"
@@ -143,11 +144,34 @@ bool UCameraComponent::SetPostProcessTextureParameter(const FString& ParamName, 
 	return IsValid(PostProcessMaterial) && PostProcessMaterial->SetTextureParameter(ParamName, Texture);
 }
 
+void UCameraComponent::SetViewBob(float RollDegrees, float PitchDegrees, float LocalOffsetZ)
+{
+	ViewBobRollDegrees = RollDegrees;
+	ViewBobPitchDegrees = PitchDegrees;
+	ViewBobLocalOffsetZ = LocalOffsetZ;
+}
+
+void UCameraComponent::ClearViewBob()
+{
+	ViewBobRollDegrees = 0.0f;
+	ViewBobPitchDegrees = 0.0f;
+	ViewBobLocalOffsetZ = 0.0f;
+}
+
 void UCameraComponent::GetCameraView(float /*DeltaTime*/, FMinimalViewInfo& OutPOV) const
 {
 	UpdateWorldMatrix();
 	OutPOV.Location    = GetWorldLocation();
 	OutPOV.Rotation    = GetWorldMatrix().ToRotator();
+
+	if (std::fabs(ViewBobRollDegrees) > 1.0e-6f || std::fabs(ViewBobPitchDegrees) > 1.0e-6f || std::fabs(ViewBobLocalOffsetZ) > 1.0e-6f)
+	{
+		OutPOV.Rotation.Roll += ViewBobRollDegrees;
+		OutPOV.Rotation.Pitch += ViewBobPitchDegrees;
+		OutPOV.Rotation = OutPOV.Rotation.GetNormalized();
+		OutPOV.Location = OutPOV.Location + OutPOV.Rotation.ToMatrix().TransformVector(FVector(0.0f, 0.0f, ViewBobLocalOffsetZ));
+	}
+
 	OutPOV.FOV         = CameraState.FOV;
 	OutPOV.AspectRatio = CameraState.AspectRatio;
 	OutPOV.OrthoWidth  = CameraState.OrthoWidth;
