@@ -4971,7 +4971,7 @@
               "Mass": 1.0,
               "MaterialSlots": [
                 "Content/Material/Auto/arms.uasset",
-                "Content/Material/Auto/Material.uasset"
+                "Content/Material/Auto/Armpist1.uasset"
               ],
               "ObjectName": "USkeletalMeshComponent_5",
               "ObjectType": 0,

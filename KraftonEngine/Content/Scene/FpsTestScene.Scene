@@ -691,7 +691,7 @@
               "FrontStandUpAnimationPath" : "None",
               "FullBodyLaunchImpulseMagnitude" : 900.000000,
               "Mass" : 1.000000,
-              "MaterialSlots" : ["Content/Material/Auto/arms.uasset", "Content/Material/Auto/Material.uasset"],
+              "MaterialSlots" : ["Content/Material/Auto/arms.uasset", "Content/Material/Auto/Armpist1.uasset"],
               "ObjectName" : "USkeletalMeshComponent_5",
               "ObjectType" : 0,
               "PartialEscalationThreshold" : 0.800000,
