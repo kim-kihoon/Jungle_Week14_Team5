@@ -1,6 +1,7 @@
 ﻿#include "UI/PhotoOverlay.h"
 
 #include "Component/Primitive/PhotoPolaroidComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 #include "GameFramework/AActor.h"
 #include "GameFramework/World.h"
 #include "Math/Matrix.h"
@@ -21,6 +22,12 @@ namespace
 	constexpr float PhotoEjectSeconds = 0.65f;
 	constexpr float PhotoVisibleSeconds = 4.8f;
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
+	constexpr const char* HeldCameraMeshPath = "Content/Data/camera/camera_StaticMesh.uasset";
+	constexpr const char* HeldCameraMeshFileName = "camera_StaticMesh.uasset";
+	constexpr float HeldCameraPhotoForwardOffset = 0.06f;
+	constexpr float HeldCameraPhotoRightOffset = 0.0f;
+	constexpr float HeldCameraPhotoBaseUpOffset = 0.0f;
+	constexpr float HeldCameraPhotoEjectUpDistance = 0.19f;
 
 	bool bCaptureRequested = false;
 	float VisibleSecondsRemaining = 0.0f;
@@ -37,6 +44,7 @@ namespace
 	TWeakObjectPtr<UWorld> PendingCaptureWorld;
 	TWeakObjectPtr<AActor> PhotoActor;
 	TWeakObjectPtr<UPhotoPolaroidComponent> PhotoComponent;
+	TWeakObjectPtr<UStaticMeshComponent> HeldCameraMeshComponent;
 
 	std::filesystem::path ToProjectPath(const FString& Path)
 	{
@@ -57,6 +65,60 @@ namespace
 	{
 		const float InvAlpha = 1.0f - Clamp01(Alpha);
 		return 1.0f - InvAlpha * InvAlpha * InvAlpha;
+	}
+
+	bool IsHeldCameraMesh(UStaticMeshComponent* Component)
+	{
+		if (!Component)
+		{
+			return false;
+		}
+
+		const FString& StaticMeshPath = Component->GetStaticMeshPath();
+		return
+			StaticMeshPath == HeldCameraMeshPath ||
+			StaticMeshPath.find(HeldCameraMeshPath) != FString::npos ||
+			StaticMeshPath.find(HeldCameraMeshFileName) != FString::npos;
+	}
+
+	UStaticMeshComponent* FindHeldCameraMeshComponent(UWorld* World)
+	{
+		if (!World)
+		{
+			return nullptr;
+		}
+
+		for (AActor* Actor : World->GetActors())
+		{
+			if (!Actor || Actor == PhotoActor.Get())
+			{
+				continue;
+			}
+
+			for (UActorComponent* ActorComponent : Actor->GetComponents())
+			{
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(ActorComponent);
+				if (IsHeldCameraMesh(StaticMeshComponent))
+				{
+					return StaticMeshComponent;
+				}
+			}
+		}
+
+		return nullptr;
+	}
+
+	UStaticMeshComponent* GetHeldCameraMeshComponent(UWorld* World)
+	{
+		UStaticMeshComponent* Component = HeldCameraMeshComponent.Get();
+		if (Component && Component->GetOwner() && Component->GetOwner()->GetWorld() == World && IsHeldCameraMesh(Component))
+		{
+			return Component;
+		}
+
+		Component = FindHeldCameraMeshComponent(World);
+		HeldCameraMeshComponent = Component;
+		return Component;
 	}
 
 	void DestroyPhotoActor()
@@ -125,13 +187,25 @@ namespace
 
 		const float EjectAlpha = Clamp01(DisplayTime / PhotoEjectSeconds);
 		const float EjectEase = EaseOutCubic(EjectAlpha);
-		const FVector Forward = POV.Rotation.GetForwardVector();
-		const FVector Right = POV.Rotation.GetRightVector();
-		const FVector Up = POV.Rotation.GetUpVector();
-		const FVector Location =
+		FVector Forward = POV.Rotation.GetForwardVector();
+		FVector Right = POV.Rotation.GetRightVector();
+		FVector Up = POV.Rotation.GetUpVector();
+		FVector Location =
 			POV.Location +
 			Forward * 0.225f +
 			Up * (-0.22f + 0.22f * EjectEase);
+
+		if (UStaticMeshComponent* HeldCameraMesh = GetHeldCameraMeshComponent(World))
+		{
+			Forward = HeldCameraMesh->GetForwardVector();
+			Right = HeldCameraMesh->GetRightVector();
+			Up = HeldCameraMesh->GetUpVector();
+			Location =
+				HeldCameraMesh->GetWorldLocation() +
+				Forward * HeldCameraPhotoForwardOffset +
+				Right * HeldCameraPhotoRightOffset +
+				Up * (HeldCameraPhotoBaseUpOffset + HeldCameraPhotoEjectUpDistance * EjectEase);
+		}
 
 		FMatrix PhotoRotationMatrix;
 		PhotoRotationMatrix.SetAxes(Forward, Right, Up);
