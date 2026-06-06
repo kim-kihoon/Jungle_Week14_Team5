@@ -1,7 +1,7 @@
 local OffscreenAnimation = {}
 
 OffscreenAnimation.Name = "OffscreenAnimation"
-OffscreenAnimation.AnimationPath = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Walk.uasset"
+OffscreenAnimation.AnimationPath = "Content/Data/Samba Dancing/YeoulDance.uasset"
 
 local function get_skeletal_mesh(actor)
     if actor == nil or actor.GetSkeletalMeshComponent == nil then
