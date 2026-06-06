@@ -87,6 +87,46 @@ function AnomalyManager:_GetCandidates()
     return candidates
 end
 
+function AnomalyManager:_FindRuleByName(ruleName)
+    if ruleName == nil then
+        return nil
+    end
+
+    for _, rule in ipairs(self.Rules) do
+        if get_rule_name(rule) == ruleName then
+            return rule
+        end
+    end
+
+    return nil
+end
+
+function AnomalyManager:_ActivateRule(target, rule)
+    local context = self:_BuildContext(target, rule)
+
+    local ok, message = safe_call(rule, "Spawn", context)
+    if not ok then
+        self.LastError = "Spawn failed: " .. get_rule_name(rule) .. " target=" .. target.Name .. " reason=" .. tostring(message)
+        return false
+    end
+
+    local hadActiveTag = target:HasTag(self.Tags.ActiveTarget)
+    if not hadActiveTag then
+        target:AddTag(self.Tags.ActiveTarget)
+    end
+
+    self.Active = {
+        Target = target,
+        Rule = rule,
+        Context = context,
+        AddedActiveTag = not hadActiveTag,
+        bCleared = false
+    }
+
+    print("[AnomalyManager] Active anomaly=" .. get_rule_name(rule) .. " target=" .. target.Name)
+    return true
+end
+
 function AnomalyManager:HasActiveAnomaly()
     return self.Active ~= nil and is_valid_actor(self.Active.Target)
 end
@@ -103,6 +143,10 @@ function AnomalyManager:GetActiveRuleName()
         return nil
     end
     return get_rule_name(self.Active.Rule)
+end
+
+function AnomalyManager:GetLastError()
+    return self.LastError
 end
 
 function AnomalyManager:DespawnCurrent(reason)
@@ -146,30 +190,43 @@ function AnomalyManager:SelectAndSpawn()
 
     local target = candidates[math.random(1, #candidates)]
     local rule = self.Rules[math.random(1, #self.Rules)]
-    local context = self:_BuildContext(target, rule)
-
-    local ok, message = safe_call(rule, "Spawn", context)
-    if not ok then
-        self.LastError = "Spawn failed: " .. get_rule_name(rule) .. " target=" .. target.Name .. " reason=" .. tostring(message)
+    if not self:_ActivateRule(target, rule) then
         print("[AnomalyManager] " .. self.LastError)
         return false
     end
 
-    local hadActiveTag = target:HasTag(self.Tags.ActiveTarget)
-    if not hadActiveTag then
-        target:AddTag(self.Tags.ActiveTarget)
+    return true
+end
+
+function AnomalyManager:SelectAndSpawnRule(ruleName)
+    seed_random_once()
+    self:DespawnCurrent("SelectAndSpawnRule")
+    self.LastError = nil
+
+    local rule = self:_FindRuleByName(ruleName)
+    if rule == nil then
+        self.LastError = "Anomaly rule not found: " .. tostring(ruleName)
+        print("[AnomalyManager] " .. self.LastError)
+        return false
     end
 
-    self.Active = {
-        Target = target,
-        Rule = rule,
-        Context = context,
-        AddedActiveTag = not hadActiveTag,
-        bCleared = false
-    }
+    local candidates = self:_GetCandidates()
+    if #candidates <= 0 then
+        self.LastError = "AnomalyCandidate tag actor not found"
+        print("[AnomalyManager] " .. self.LastError)
+        return false
+    end
 
-    print("[AnomalyManager] Active anomaly=" .. get_rule_name(rule) .. " target=" .. target.Name)
-    return true
+    local startIndex = math.random(1, #candidates)
+    for offset = 0, #candidates - 1 do
+        local index = ((startIndex + offset - 1) % #candidates) + 1
+        if self:_ActivateRule(candidates[index], rule) then
+            return true
+        end
+    end
+
+    print("[AnomalyManager] " .. self.LastError)
+    return false
 end
 
 function AnomalyManager:Tick(dt)

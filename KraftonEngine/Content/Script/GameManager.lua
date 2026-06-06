@@ -395,4 +395,17 @@ function GameManager:GetActiveAnomalyRuleName()
     return AnomalyManager:GetActiveRuleName()
 end
 
+function GameManager:GetLastAnomalyError()
+    return AnomalyManager:GetLastError()
+end
+
+function GameManager:DebugSpawnAnomalyRule(ruleName)
+    if self.state ~= self.State.Playing then
+        print("[GameManager] DebugSpawnAnomalyRule ignored: game is not playing")
+        return false
+    end
+
+    return AnomalyManager:SelectAndSpawnRule(ruleName)
+end
+
 return GameManager

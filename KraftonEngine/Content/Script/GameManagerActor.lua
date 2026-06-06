@@ -1,4 +1,5 @@
 local GameManager = require("GameManager")
+local DebugManager = require("DebugManager")
 
 local function initialize_cymbal_monkey()
     if World == nil or World.FindActorByName == nil then
@@ -52,5 +53,6 @@ function EndPlay()
 end
 
 function Tick(dt)
+    DebugManager:Tick(dt)
     GameManager:Tick(dt)
 end
