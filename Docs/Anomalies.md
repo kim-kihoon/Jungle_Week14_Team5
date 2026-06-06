@@ -142,6 +142,8 @@ GameManager:AdvanceAnomalyLoop()
 
 `AnomalyManager:Reset()`은 현재 활성 이상현상이 있으면 규칙의 `Despawn(context)`을 호출해서 태그, 그림자, 애니메이션 상태를 복구한다. `GameManager`는 이때 루프 정지 상태도 함께 정리한다.
 
+새 이상현상을 로드하는 `AnomalyManager:SelectAndSpawn()`과 `AnomalyManager:SelectAndSpawnRule(ruleName)`도 시작 시 기존 활성 이상현상을 `Despawn`한다. 따라서 총격으로 클리어된 이상현상은 다음 루프 진입이나 디버그 규칙 전환 시 복구된 뒤 새 이상현상이 적용된다.
+
 ## Anomaly Rule 인터페이스
 
 모든 규칙은 같은 인터페이스를 사용한다.

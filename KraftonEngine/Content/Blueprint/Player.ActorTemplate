@@ -1,6 +1,6 @@
 {
   "Actor" : {
-    "ClassName" : "ALuaCharacter",
+    "ClassName" : "AHospitalPlayerActor",
     "Name" : "Player",
     "NonSceneComponents" : [{
         "ClassName" : "UCharacterMovementComponent",

@@ -43,6 +43,8 @@ public:
 	// 런타임 동적 변경 — 값 갱신 후 PushToScene 으로 렌더 측에 즉시 반영.
 	void SetIntensity(float V) { Intensity = V; PushToScene(); }
 	void SetLightColor(const FVector4& V) { LightColor = V; PushToScene(); }
+	void SetVisible(bool bInVisible) { bVisible = bInVisible; PushToScene(); }
+	void SetCastShadows(bool bInCastShadows) { bCastShadows = bInCastShadows; PushToScene(); }
 
 	virtual ELightComponentType GetLightType() const { return ELightComponentType::Unknown; }
 	// CSM/포인트 큐브맵 등 그림자 시점 매트릭스 빌드. Directional 은 viewer POV 의 frustum
