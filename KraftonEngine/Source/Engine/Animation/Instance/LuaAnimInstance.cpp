@@ -27,6 +27,7 @@
 #include "Object/Object.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Serialization/Archive.h"
+#include "UI/CrosshairOverlay.h"
 #include "UI/PhotoOverlay.h"
 
 #include <Windows.h>
@@ -192,6 +193,8 @@ void ULuaAnimInstance::ReloadScript()
 
 void ULuaAnimInstance::ClearGraph()
 {
+	FCrosshairOverlay::SetVisible(false);
+
 	// 이전 graph 에 걸려 있던 transition 람다가 새 Lua runtime 을 보지 않도록 세대를 먼저 넘긴다.
 	++LuaRuntimeGeneration;
 
@@ -528,6 +531,11 @@ void ULuaAnimInstance::InstallBindings()
 		{
 			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
 			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("PhotoInvisible"));
+		});
+	Anim.set_function("set_crosshair_visible",
+		[](bool bVisible)
+		{
+			FCrosshairOverlay::SetVisible(bVisible);
 		});
 
 	Anim.set_function("get_owner_actor",

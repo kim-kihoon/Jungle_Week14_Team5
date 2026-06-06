@@ -169,6 +169,7 @@ local function report_anomaly_shot_from_camera()
 end
 
 local function show_pistol()
+    Anim.set_crosshair_visible(true)
     Anim.set_owner_mesh_pitch(ARMS_READY_PITCH)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -177,6 +178,7 @@ local function show_pistol()
 end
 
 local function show_camera()
+    Anim.set_crosshair_visible(false)
     Anim.set_owner_mesh_pitch(ARMS_DOWN_PITCH)
     Anim.set_owner_mesh_visibility(false)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, false)
@@ -185,6 +187,7 @@ local function show_camera()
 end
 
 local function update_switch_to_camera(self, alpha)
+    Anim.set_crosshair_visible(false)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -194,6 +197,7 @@ local function update_switch_to_camera(self, alpha)
 end
 
 local function update_switch_to_pistol(self, alpha)
+    Anim.set_crosshair_visible(false)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
