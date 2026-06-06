@@ -248,6 +248,10 @@ function AnomalyManager:Tick(dt)
         return
     end
 
+    if active.bCleared then
+        return
+    end
+
     active.Context.DeltaTime = dt
     safe_call(active.Rule, "Tick", active.Context)
 
@@ -259,8 +263,21 @@ function AnomalyManager:Tick(dt)
     end)
 
     if ok and cleared then
-        active.bCleared = true
+        self:OnClear(active, "RuleCleared")
     end
+end
+
+function AnomalyManager:OnClear(active, reason)
+    if active == nil or active.bCleared then
+        return false
+    end
+
+    active.bCleared = true
+    if active.Context ~= nil and active.Context.State ~= nil then
+        active.Context.State.bCleared = true
+        active.Context.ClearReason = reason or "Clear"
+    end
+    return true
 end
 
 function AnomalyManager:ReportShot(actor)
@@ -283,9 +300,7 @@ function AnomalyManager:ReportShot(actor)
         return false
     end
 
-    active.bCleared = true
-    active.Context.State.bCleared = true
-    return true
+    return self:OnClear(active, "Shot")
 end
 
 function AnomalyManager:Reset()

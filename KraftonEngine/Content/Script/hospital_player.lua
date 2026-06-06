@@ -1,4 +1,6 @@
--- Hospital.Scene player warp: y > 27.132 and x < -3 -> offset by fixed delta (rotation unchanged).
+-- Hospital.Scene 플레이어 루프: 지정 위치에 들어오면 고정 오프셋으로 워프한다.
+
+local GameManager = require("GameManager")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
@@ -30,6 +32,7 @@ function Tick(dt)
 
     if bInZone and bCanWarp then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
+        GameManager:AdvanceAnomalyLoop()
         bCanWarp = false
     elseif not bInZone then
         bCanWarp = true
