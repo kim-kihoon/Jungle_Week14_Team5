@@ -20,7 +20,6 @@
 namespace
 {
 	constexpr float PhotoEjectSeconds = 0.65f;
-	constexpr float PhotoVisibleSeconds = 4.8f;
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
 	constexpr const char* HeldCameraMeshPath = "Content/Data/camera/camera_StaticMesh.uasset";
 	constexpr const char* HeldCameraMeshFileName = "camera_StaticMesh.uasset";
@@ -30,7 +29,6 @@ namespace
 	constexpr float HeldCameraPhotoEjectUpDistance = 0.19f;
 
 	bool bCaptureRequested = false;
-	float VisibleSecondsRemaining = 0.0f;
 	float DisplayTime = 0.0f;
 	float DevelopTime = 0.0f;
 	uint32 CapturedWidth = 0;
@@ -288,7 +286,6 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	Context->CopyResource(CapturedTexture, SourceTexture);
 	Context->Release();
 	RestoreHiddenActors();
-	VisibleSecondsRemaining = PhotoVisibleSeconds;
 	DisplayTime = 0.0f;
 	DevelopTime = 0.0f;
 	SpawnPhotoActor(PendingCaptureWorld.Get());
@@ -297,26 +294,17 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 
 void FPhotoOverlay::Tick(float DeltaTime)
 {
-	if (VisibleSecondsRemaining > 0.0f)
+	if (PhotoActor.Get() && PhotoComponent.Get())
 	{
-		VisibleSecondsRemaining -= DeltaTime;
-		if (VisibleSecondsRemaining < 0.0f)
-		{
-			VisibleSecondsRemaining = 0.0f;
-		}
 		DisplayTime += DeltaTime;
 		DevelopTime = DisplayTime > PhotoEjectSeconds ? DisplayTime - PhotoEjectSeconds : 0.0f;
 		UpdatePhotoActorTransform();
-	}
-	else
-	{
-		DestroyPhotoActor();
 	}
 }
 
 bool FPhotoOverlay::IsVisible()
 {
-	return VisibleSecondsRemaining > 0.0f && CapturedSRV;
+	return PhotoActor.Get() && CapturedSRV;
 }
 
 ID3D11ShaderResourceView* FPhotoOverlay::GetSRV()
