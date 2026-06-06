@@ -15,9 +15,11 @@ public:
 	static void CapturePendingFromViewport(ID3D11Texture2D* SourceTexture);
 	static void Tick(float DeltaTime);
 	static bool IsVisible();
+	static bool IsFlashVisible();
 	static ID3D11ShaderResourceView* GetSRV();
 	static ID3D11ShaderResourceView* GetFrameSRV();
 	static float GetDisplayTime();
+	static float GetFlashTime();
 	static float GetDevelopTime();
 	static float GetEjectSeconds();
 	static float GetCaptureAspectRatio();

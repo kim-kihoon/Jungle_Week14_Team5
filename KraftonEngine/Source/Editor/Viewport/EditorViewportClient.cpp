@@ -819,9 +819,9 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 
 	if (bIsActiveViewport)
 	{
-		if (FPhotoOverlay::IsVisible() && FPhotoOverlay::GetDisplayTime() < 0.2f)
+		if (FPhotoOverlay::IsFlashVisible())
 		{
-			const float FlashAlpha = 1.0f - Clamp01(FPhotoOverlay::GetDisplayTime() / 0.2f);
+			const float FlashAlpha = 1.0f - Clamp01(FPhotoOverlay::GetFlashTime() / 0.2f);
 			DrawList->AddRectFilled(Min, Max, IM_COL32(255, 255, 255, AlphaByte(FlashAlpha * 0.9f)));
 		}
 	}
