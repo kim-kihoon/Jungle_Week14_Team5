@@ -127,6 +127,7 @@ void FLevelViewportLayout::Initialize(UEditorEngine* InEditor, FWindowsWindow* I
 
 	// Play/Stop 툴바 초기화
 	PlayToolbar.Initialize(InEditor, InRenderer.GetFD3DDevice().GetDevice());
+	CameraPreviewWidget.Initialize(InEditor, InRenderer.GetFD3DDevice().GetDevice());
 
 	// LevelViewportClient 생성 (단일 뷰포트)
 	auto* LevelVC = new FLevelEditorViewportClient();
@@ -190,6 +191,7 @@ void FLevelViewportLayout::Release()
 	LevelViewportClients.clear();
 
 	ReleaseLayoutIcons();
+	CameraPreviewWidget.Release();
 	PlayToolbar.Release();
 }
 
@@ -992,8 +994,20 @@ void FLevelViewportLayout::RenderViewportUI(float DeltaTime)
 			}
 		}
 
+		FRect ActiveViewportRect = {};
+		if (ActiveViewportClient)
+		{
+			ActiveViewportRect = ActiveViewportClient->GetViewportScreenRect();
+		}
+		CameraPreviewWidget.UpdateSelection(SelectionManager);
+		CameraPreviewWidget.UpdateLayout(
+			ActiveViewportRect,
+			Window ? static_cast<float>(Window->GetWidth()) : ContentSize.x,
+			Window ? static_cast<float>(Window->GetHeight()) : ContentSize.y);
+		CameraPreviewWidget.RenderOverlay();
+
 		// 입력 처리
-		if (ImGui::IsWindowHovered())
+		if (ImGui::IsWindowHovered() && !CameraPreviewWidget.IsOverlayHovered())
 		{
 			ImVec2 MousePos = ImGui::GetIO().MousePos;
 			FPoint MP = { MousePos.x, MousePos.y };
@@ -1076,6 +1090,10 @@ void FLevelViewportLayout::RenderViewportUI(float DeltaTime)
 	}
 
 	RenderViewportPlaceActorPopup();
+	if (Editor && ActiveViewportClient)
+	{
+		Editor->GetRmlUiManager().RenderViewportOverlay(ActiveViewportClient);
+	}
 
 	ImGui::End();
 	ImGui::PopStyleVar();
@@ -1785,6 +1803,33 @@ void FLevelViewportLayout::RenderViewportPlaceActorPopup()
 			}
 		}
 
+		ImGui::EndMenu();
+	}
+
+	if (ImGui::BeginMenu("Place UI"))
+	{
+		FEditorRmlUiManager& RmlUiManager = Editor->GetRmlUiManager();
+		if (ImGui::MenuItem("New UI Document"))
+		{
+			RmlUiManager.CreateNewDocument();
+		}
+		ImGui::Separator();
+		if (ImGui::MenuItem("Add Button"))
+		{
+			RmlUiManager.AddElement(ERmlUiElementType::Button);
+		}
+		if (ImGui::MenuItem("Add Image"))
+		{
+			RmlUiManager.AddElement(ERmlUiElementType::Image);
+		}
+		if (ImGui::MenuItem("Add Text"))
+		{
+			RmlUiManager.AddElement(ERmlUiElementType::Text);
+		}
+		if (ImGui::MenuItem("Add Panel"))
+		{
+			RmlUiManager.AddElement(ERmlUiElementType::Panel);
+		}
 		ImGui::EndMenu();
 	}
 

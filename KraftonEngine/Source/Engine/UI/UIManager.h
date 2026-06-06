@@ -16,6 +16,7 @@
 #include <chrono>
 
 class APlayerController;
+class UWorld;
 class UUserWidget;
 struct FFrameContext;
 struct FPassContext;
@@ -112,6 +113,7 @@ public:
 
 	void Render(const FPassContext& Ctx);
 	bool HasViewportWidgets() const { return !ViewportWidgets.empty(); }
+	bool DispatchTaggedActorClick(const FString& TargetTag, const FString& FunctionName);
 	const char* GetReferencerName() const override { return "UUIManager"; }
 	void AddReferencedObjects(FReferenceCollector& Collector) override;
 
@@ -142,4 +144,5 @@ private:
 	Rml::Context* RmlContext = nullptr;
 	bool bRmlInitialized = false;
 	bool bDispatchingRmlEvents = false;
+	UWorld* DispatchWorld = nullptr;
 };

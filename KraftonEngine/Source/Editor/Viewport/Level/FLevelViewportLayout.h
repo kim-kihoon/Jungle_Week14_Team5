@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "Core/Types/CoreTypes.h"
+#include "Editor/UI/Panel/EditorCameraPreviewWidget.h"
 #include "Editor/UI/Panel/EditorPlayToolbarWidget.h"
 #include "Slate/SWindow.h"
 #include <d3d11.h>
@@ -100,6 +101,8 @@ public:
 
 	void SetActiveViewport(FLevelEditorViewportClient* InClient);
 	FLevelEditorViewportClient* GetActiveViewport() const { return ActiveViewportClient; }
+	FEditorCameraPreviewWidget* GetCameraPreviewWidget() { return &CameraPreviewWidget; }
+	const FEditorCameraPreviewWidget* GetCameraPreviewWidget() const { return &CameraPreviewWidget; }
 
 	void ResetViewport(UWorld* InWorld);
 	void DestroyAllCameras();
@@ -181,6 +184,7 @@ private:
 
 	// 뷰포트 상단 Play/Stop 툴바
 	FEditorPlayToolbarWidget PlayToolbar;
+	FEditorCameraPreviewWidget CameraPreviewWidget;
 	FViewportContextMenuState ContextMenuState;
 	bool bHasSavedWorldAxisVisibility = false;
 	bool SavedWorldAxisVisibility[MaxViewportSlots] = {};

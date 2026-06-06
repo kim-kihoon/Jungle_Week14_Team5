@@ -2,6 +2,7 @@
 #include "Editor/EditorEngine.h"
 #include "Editor/Viewport/Level/LevelEditorViewportClient.h"
 #include "Editor/Viewport/EditorPreviewViewportClient.h"
+#include "Editor/UI/Panel/EditorCameraPreviewWidget.h"
 #include "Render/Pipeline/Renderer.h"
 #include "Render/Scene/FScene.h"
 #include "Viewport/Viewport.h"
@@ -98,6 +99,15 @@ void FEditorRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 
 		SCOPE_STAT_CAT("RenderViewport", "2_Render");
 		RenderViewport(ViewportClient, Renderer);
+	}
+
+	if (FEditorCameraPreviewWidget* CameraPreviewWidget = Editor->GetCameraPreviewWidget())
+	{
+		if (CameraPreviewWidget->IsRenderable())
+		{
+			SCOPE_STAT_CAT("RenderCameraPreviewViewport", "2_Render");
+			RenderCameraPreviewViewport(CameraPreviewWidget, Renderer);
+		}
 	}
 
 	TArray<IEditorPreviewViewportClient*> PreviewViewportClients;
@@ -362,6 +372,78 @@ void FEditorRenderPipeline::CollectCommands(FLevelEditorViewportClient* VC, UWor
 		SCOPE_STAT_CAT("BuildCommands", "3_Collect");
 		Builder.BuildCommands(Frame, &Scene, Output);
 	}
+}
+
+void FEditorRenderPipeline::RenderCameraPreviewViewport(FEditorCameraPreviewWidget* Widget, FRenderer& Renderer)
+{
+	if (!Widget || !Widget->IsRenderable())
+	{
+		return;
+	}
+
+	FViewport* VP = Widget->GetViewport();
+	UCameraComponent* Camera = Widget->GetCameraComponent();
+	UWorld* World = Editor ? Editor->GetWorld() : nullptr;
+	if (!VP || !Camera || !World)
+	{
+		return;
+	}
+
+	ID3D11DeviceContext* Ctx = Renderer.GetFD3DDevice().GetDeviceContext();
+	if (!Ctx)
+	{
+		return;
+	}
+
+	if (VP->ApplyPendingResize())
+	{
+		// The preview uses the selected CameraComponent POV, so resizing only updates RT resources.
+	}
+
+	const float ClearColor[4] = { 0.02f, 0.025f, 0.03f, 1.0f };
+	VP->BeginRender(Ctx, ClearColor);
+
+	FMinimalViewInfo POV;
+	Camera->GetCameraView(0.0f, POV);
+	POV.AspectRatio = Widget->GetPreviewAspectRatio();
+
+	Frame.ClearViewportResources();
+	Frame.SetViewportInfo(VP);
+	Frame.SetCameraInfo(POV);
+	Frame.WorldType = World->GetWorldType();
+	Frame.LODContext = World->PrepareLODContext();
+
+	FViewportRenderOptions Options;
+	if (FLevelEditorViewportClient* ActiveVC = Editor->GetActiveViewport())
+	{
+		Options = ActiveVC->GetRenderOptions();
+	}
+	Options.ViewportType = ELevelViewportType::Perspective;
+	Options.ShowFlags.bGrid = false;
+	Options.ShowFlags.bWorldAxis = false;
+	Options.ShowFlags.bGizmo = false;
+	Options.ShowFlags.bBillboardText = false;
+	Options.ShowFlags.bBoundingVolume = false;
+	Options.ShowFlags.bDebugDraw = false;
+	Options.ShowFlags.bOctree = false;
+	Options.ShowFlags.bCollision = false;
+	Options.ShowFlags.bShowCollisionShape = false;
+	Options.ShowFlags.bShowShadowFrustum = false;
+	Options.ShowFlags.bEditorIcons = false;
+	Options.ShowFlags.bSelectionOutline = false;
+	Frame.SetRenderOptions(Options);
+
+	FScene& Scene = World->GetScene();
+	Scene.ClearFrameData();
+
+	FCollectOutput Output;
+	FDrawCommandBuilder& Builder = Renderer.GetBuilder();
+	Builder.BeginCollect(Frame);
+
+	Collector.Collect(World, Frame, Output);
+	Builder.BuildCommands(Frame, &Scene, Output);
+
+	Renderer.Render(Frame, World, Scene);
 }
 
 void FEditorRenderPipeline::RenderPreviewViewport(IEditorPreviewViewportClient* VC, FRenderer& Renderer)

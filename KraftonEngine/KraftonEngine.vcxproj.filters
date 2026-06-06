@@ -67,6 +67,9 @@
     <Filter Include="Source\Editor\UI">
       <UniqueIdentifier>{d23c3ab5-7e26-ff59-be61-b2a81e9921c0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Editor\UI\Rml">
+      <UniqueIdentifier>{a8b19f8a-b8b7-4d70-a65e-f3a3397ce603}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Editor\UI\Asset">
       <UniqueIdentifier>{d344f4cc-4bcb-0c8d-e15c-1006350dcba6}</UniqueIdentifier>
     </Filter>
@@ -956,6 +959,9 @@
     <ClCompile Include="Source\Editor\UI\Panel\EditorControlWidget.cpp">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.cpp">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Editor\UI\Panel\EditorMaterialInspector.cpp">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClCompile>
@@ -985,6 +991,9 @@
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\Panel\EditorWorldSettingsWidget.cpp">
       <Filter>Source\Editor\UI\Panel</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Rml\RmlUiEditorManager.cpp">
+      <Filter>Source\Editor\UI\Rml</Filter>
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\Toolbar\ViewportToolbar.cpp">
       <Filter>Source\Editor\UI\Toolbar</Filter>
@@ -2262,6 +2271,9 @@
     <ClInclude Include="Source\Editor\UI\Panel\EditorControlWidget.h">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.h">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Editor\UI\Panel\EditorMaterialInspector.h">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClInclude>
@@ -2291,6 +2303,9 @@
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Panel\EditorWorldSettingsWidget.h">
       <Filter>Source\Editor\UI\Panel</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Rml\RmlUiEditorManager.h">
+      <Filter>Source\Editor\UI\Rml</Filter>
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Toolbar\ViewportToolbar.h">
       <Filter>Source\Editor\UI\Toolbar</Filter>

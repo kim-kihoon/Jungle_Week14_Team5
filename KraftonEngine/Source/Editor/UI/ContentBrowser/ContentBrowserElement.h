@@ -73,6 +73,17 @@ protected:
 	uint32 GetAccentColor() const override { return IM_COL32(120, 185, 240, 255); }
 };
 
+class RmlDocumentElement final : public ContentBrowserElement
+{
+public:
+	void OnDoubleLeftClicked(ContentBrowserContext& Context) override;
+	const char* GetDragItemType() override { return "RmlDocumentContentItem"; }
+
+protected:
+	const char* GetTypeLabel() const override { return "RML UI"; }
+	uint32 GetAccentColor() const override { return IM_COL32(235, 160, 70, 255); }
+};
+
 class ObjectElement final : public ContentBrowserElement
 {
 public:

@@ -46,54 +46,54 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Game|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Game|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Demo|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -446,6 +446,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Editor\UI\Dialog\FbxImportOptionsDialog.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorConsoleWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorControlWidget.cpp" />
+    <ClCompile Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorMaterialInspector.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorPlayToolbarWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorProjectSettingsWidget.cpp" />
@@ -456,6 +457,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Editor\UI\Panel\EditorStatWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorViewportWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorWorldSettingsWidget.cpp" />
+    <ClCompile Include="Source\Editor\UI\Rml\RmlUiEditorManager.cpp" />
     <ClCompile Include="Source\Editor\UI\Toolbar\ViewportToolbar.cpp" />
     <ClCompile Include="Source\Editor\UI\Util\BasicReflectionPropertyRenderer.cpp" />
     <ClCompile Include="Source\Editor\UI\Util\EditorDragSource.cpp" />
@@ -884,6 +886,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClInclude Include="Source\Editor\UI\Dialog\FbxImportOptionsDialog.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorConsoleWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorControlWidget.h" />
+    <ClInclude Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorMaterialInspector.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorPlayToolbarWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorProjectSettingsWidget.h" />
@@ -894,6 +897,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClInclude Include="Source\Editor\UI\Panel\EditorStatWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorViewportWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorWorldSettingsWidget.h" />
+    <ClInclude Include="Source\Editor\UI\Rml\RmlUiEditorManager.h" />
     <ClInclude Include="Source\Editor\UI\Toolbar\ViewportToolbar.h" />
     <ClInclude Include="Source\Editor\UI\Util\BasicReflectionPropertyRenderer.h" />
     <ClInclude Include="Source\Editor\UI\Util\EditorDragSource.h" />

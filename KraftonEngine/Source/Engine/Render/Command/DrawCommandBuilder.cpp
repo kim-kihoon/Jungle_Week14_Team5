@@ -95,6 +95,8 @@ void FDrawCommandBuilder::BeginCollect(const FFrameContext& Frame)
 	CollectClothOverlayLODIndex = Frame.RenderOptions.ClothOverlayLODIndex;
 	CollectClothOverlayIndex = Frame.RenderOptions.ClothOverlayIndex;
 	CollectClothMaxDistanceOverlayAlpha = Frame.RenderOptions.ClothMaxDistanceOverlayAlpha;
+	bCollectEditorIcons = Frame.RenderOptions.ShowFlags.bEditorIcons;
+	bCollectSelectionOutline = Frame.RenderOptions.ShowFlags.bSelectionOutline;
 	CollectCameraPosition = Frame.CameraPosition;
 
 	bHasSelectionMaskCommands = false;
@@ -274,9 +276,10 @@ static bool IsEditorHelperProxy(const FPrimitiveSceneProxy& Proxy)
 		Proxy.HasProxyFlag(EPrimitiveProxyFlags::FontBatched);
 }
 
-static bool ShouldSuppressPassForViewMode(EViewMode ViewMode, ERenderPass Pass)
+static bool ShouldSuppressPassForViewMode(EViewMode ViewMode, ERenderPass Pass, bool bEditorIcons)
 {
-	return ViewModeUtils::SuppressesEditorOverlays(ViewMode) && Pass == ERenderPass::EditorIcon;
+	return (!bEditorIcons && Pass == ERenderPass::EditorIcon) ||
+		(ViewModeUtils::SuppressesEditorOverlays(ViewMode) && Pass == ERenderPass::EditorIcon);
 }
 
 static FShader* GetViewModeMeshShader(bool bUseSkeletalVertexFactory)
@@ -673,7 +676,7 @@ void FDrawCommandBuilder::BuildProxyCommands(const FFrameContext& Frame, FScene&
 		else
 			BuildMeshCommands(Scene, Proxy);
 
-		if (Proxy->IsSelected())
+		if (bCollectSelectionOutline && Proxy->IsSelected())
 			BuildSelectionCommands(Proxy, bShowBoundingVolume, Scene);
 	}
 }
@@ -737,7 +740,7 @@ void FDrawCommandBuilder::BuildMeshCommands(FScene& Scene, const FPrimitiveScene
 	{
 		if (Section.IndexCount == 0) continue;
 		const ERenderPass P = SectionRenderPass(Section);
-		if (ShouldSuppressPassForViewMode(CollectViewMode, P)) continue;
+		if (ShouldSuppressPassForViewMode(CollectViewMode, P, bCollectEditorIcons)) continue;
 		if ((int)P < (int)ERenderPass::MAX) bPassSeen[(int)P] = true;
 		if (P == ERenderPass::Opaque) bAnyOpaque = true;
 	}
@@ -746,7 +749,7 @@ void FDrawCommandBuilder::BuildMeshCommands(FScene& Scene, const FPrimitiveScene
 	// 위 사전스캔에서 안 잡힌다. 프록시 단위 GetRenderPass()로 보강 — 기존 per-proxy 라우팅을 복원해
 	// BuildCommandForProxy 안에서 PrepareDrawBuffer 가 실제 섹션을 채우게 한다(정적 멀티슬롯엔 무영향: 중복 표시).
 	const ERenderPass ProxyPass = Proxy->GetRenderPass();
-	if ((int)ProxyPass < (int)ERenderPass::MAX && !ShouldSuppressPassForViewMode(CollectViewMode, ProxyPass))
+	if ((int)ProxyPass < (int)ERenderPass::MAX && !ShouldSuppressPassForViewMode(CollectViewMode, ProxyPass, bCollectEditorIcons))
 	{
 		bPassSeen[(int)ProxyPass] = true;
 	}

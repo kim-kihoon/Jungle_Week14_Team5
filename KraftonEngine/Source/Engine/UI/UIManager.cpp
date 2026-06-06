@@ -1,8 +1,15 @@
 #include "UI/UIManager.h"
 
 #include "Core/Logging/Log.h"
+#include "Component/Script/LuaBlueprintComponent.h"
+#include "Component/Script/LuaScriptComponent.h"
+#include "Core/Types/PropertyTypes.h"
+#include "GameFramework/AActor.h"
+#include "GameFramework/GameMode/GameplayStatics.h"
 #include "Input/InputSystem.h"
 #include "Object/Object.h"
+#include "Object/FName.h"
+#include "Object/Reflection/UClass.h"
 #include "Platform/Paths.h"
 #include "Render/Command/DrawCommandList.h"
 #include "Render/Device/D3DDevice.h"
@@ -22,6 +29,7 @@
 #include <RmlUi/Core.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <memory>
@@ -77,6 +85,61 @@ namespace
 	{
 		return FPaths::ToUtf8(Path.generic_wstring());
 	}
+
+	bool InvokeActorClickFunction(AActor* Actor, const FString& FunctionName)
+	{
+		if (!Actor || FunctionName.empty())
+		{
+			return false;
+		}
+
+		if (UClass* Class = Actor->GetClass())
+		{
+			const FFunction* Function = Class->FindFunctionByName(FunctionName.c_str(), true);
+			if (Function)
+			{
+				if (Function->GetParameterCount() == 0 && !Function->HasReturnValue())
+				{
+					return Actor->ProcessEvent(Function, nullptr, nullptr);
+				}
+
+				UE_LOG(
+					"[RmlUi] UI click function '%s' on actor '%s' has parameters or return value; skipped C++ reflection call.",
+					FunctionName.c_str(),
+					Actor->GetName().c_str()
+				);
+			}
+		}
+
+		if (ULuaScriptComponent* LuaScript = Actor->GetComponentByClass<ULuaScriptComponent>())
+		{
+			if (LuaScript->CallFunction(FunctionName))
+			{
+				return true;
+			}
+		}
+
+		if (ULuaBlueprintComponent* LuaBlueprint = Actor->GetComponentByClass<ULuaBlueprintComponent>())
+		{
+			if (LuaBlueprint->CallFunction(FunctionName))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool ContainsAsciiInsensitive(FString Text, const FString& Needle)
+	{
+		auto ToLower = [](FString Value)
+		{
+			std::transform(Value.begin(), Value.end(), Value.begin(),
+				[](unsigned char C) { return static_cast<char>(std::tolower(C)); });
+			return Value;
+		};
+		return ToLower(Text).find(ToLower(Needle)) != FString::npos;
+	}
 }
 
 double FRmlSystemInterface::GetElapsedTime()
@@ -93,6 +156,16 @@ void FRmlSystemInterface::JoinPath(Rml::String& TranslatedPath, const Rml::Strin
 	{
 		TranslatedPath = ToRmlPath(ResourcePath);
 		return;
+	}
+
+	if (!ResourcePath.empty())
+	{
+		const std::wstring FirstPart = ResourcePath.begin()->wstring();
+		if (FirstPart == L"Content" || FirstPart == L"Shaders" || FirstPart == L"ThirdParty")
+		{
+			TranslatedPath = ToRmlPath(ToProjectPath(Path));
+			return;
+		}
 	}
 
 	std::filesystem::path BasePath(FPaths::ToWide(DocumentPath));
@@ -571,10 +644,42 @@ void UUIManager::Initialize(ID3D11Device* InDevice)
 		UE_LOG("[RmlUi] Failed to create GameViewport context.");
 	}
 
-	const std::filesystem::path FontPath = ToProjectPath("Content/Font/Maplestory Bold.ttf");
-	if (!Rml::LoadFontFace(ToRmlPath(FontPath), "Maplestory", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Bold))
+	const std::filesystem::path NormalFontPath = ToProjectPath("Content/Font/Maplestory Light.ttf");
+	if (!Rml::LoadFontFace(ToRmlPath(NormalFontPath), "Maplestory", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal))
+	{
+		UE_LOG("[RmlUi] Failed to load font: Content/Font/Maplestory Light.ttf");
+	}
+
+	const std::filesystem::path BoldFontPath = ToProjectPath("Content/Font/Maplestory Bold.ttf");
+	if (!Rml::LoadFontFace(ToRmlPath(BoldFontPath), "Maplestory", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Bold))
 	{
 		UE_LOG("[RmlUi] Failed to load font: Content/Font/Maplestory Bold.ttf");
+	}
+
+	const std::filesystem::path FontRoot = ToProjectPath("Content/Font");
+	std::error_code Ec;
+	for (const std::filesystem::directory_entry& Entry : std::filesystem::directory_iterator(FontRoot, Ec))
+	{
+		if (Ec || !Entry.is_regular_file())
+		{
+			continue;
+		}
+
+		const std::filesystem::path Path = Entry.path();
+		const FString Extension = FPaths::ToUtf8(Path.extension().generic_wstring());
+		if (!ContainsAsciiInsensitive(Extension, ".ttf") && !ContainsAsciiInsensitive(Extension, ".otf"))
+		{
+			continue;
+		}
+
+		const FString Family = FPaths::ToUtf8(Path.stem().generic_wstring());
+		const Rml::Style::FontWeight Weight = ContainsAsciiInsensitive(Family, "bold")
+			? Rml::Style::FontWeight::Bold
+			: Rml::Style::FontWeight::Normal;
+		if (!Rml::LoadFontFace(ToRmlPath(Path), Family, Rml::Style::FontStyle::Normal, Weight))
+		{
+			UE_LOG("[RmlUi] Failed to load font: %s", ToRmlPath(Path).c_str());
+		}
 	}
 }
 
@@ -808,6 +913,40 @@ void UUIManager::CloseDocument(UUserWidget* Widget)
 	Widget->ClearDocument();
 }
 
+bool UUIManager::DispatchTaggedActorClick(const FString& TargetTag, const FString& FunctionName)
+{
+	if (TargetTag.empty() || FunctionName.empty())
+	{
+		return false;
+	}
+
+	if (!DispatchWorld)
+	{
+		UE_LOG("[RmlUi] UI click '%s' skipped: no dispatch world for target tag '%s'.", FunctionName.c_str(), TargetTag.c_str());
+		return false;
+	}
+
+	AActor* TargetActor = FGameplayStatics::FindFirstActorByTag(DispatchWorld, FName(TargetTag));
+	if (!TargetActor)
+	{
+		UE_LOG("[RmlUi] UI click target tag not found: %s", TargetTag.c_str());
+		return false;
+	}
+
+	if (!InvokeActorClickFunction(TargetActor, FunctionName))
+	{
+		UE_LOG(
+			"[RmlUi] UI click function '%s' not found or failed on actor '%s' with tag '%s'.",
+			FunctionName.c_str(),
+			TargetActor->GetName().c_str(),
+			TargetTag.c_str()
+		);
+		return false;
+	}
+
+	return true;
+}
+
 void UUIManager::Render(const FPassContext& Ctx)
 {
 	CompactInvalidWidgets();
@@ -821,7 +960,11 @@ void UUIManager::Render(const FPassContext& Ctx)
 		static_cast<int>(Ctx.Frame.ViewportHeight)
 	});
 
+	UWorld* PreviousDispatchWorld = DispatchWorld;
+	DispatchWorld = Ctx.World;
 	ProcessInput(Ctx.Frame);
+	DispatchWorld = PreviousDispatchWorld;
+
 	FlushDeferredViewportRemovals();
 	if (ViewportWidgets.empty())
 	{

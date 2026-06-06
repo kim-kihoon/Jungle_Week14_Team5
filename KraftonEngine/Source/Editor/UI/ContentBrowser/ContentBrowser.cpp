@@ -435,6 +435,10 @@ void FEditorContentBrowserWidget::RefreshContent()
 		{
 			Element = std::make_shared<ActorTemplateElement>();
 		}
+		else if (Extension == ".rml" || Extension == ".html" || Extension == ".htm")
+		{
+			Element = std::make_shared<RmlDocumentElement>();
+		}
 		else if (Extension == ".obj")
 		{
 			Element = std::make_shared<ObjectElement>();

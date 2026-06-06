@@ -30,6 +30,7 @@
 #include "Lua/LuaDebugManager.h"
 #include "Object/GarbageCollection.h"
 #include "Audio/AudioManager.h"
+#include "Profiling/Time/Timer.h"
 #include <filesystem>
 
 #include "Mesh/Skeletal/SkeletalMesh.h"
@@ -41,6 +42,22 @@ FString BuildScenePathFromStem(const FString& InStem)
 	std::filesystem::path ScenePath = std::filesystem::path(FSceneSaveManager::GetSceneDirectory())
 		/ (FPaths::ToWide(InStem) + FSceneSaveManager::SceneExtension);
 	return FPaths::ToUtf8(ScenePath.wstring());
+}
+
+FString ResolveSceneFilePathFromNameOrPath(const FString& InNameOrPath)
+{
+	std::filesystem::path Input(FPaths::ToWide(InNameOrPath));
+	if (Input.is_absolute() && std::filesystem::exists(Input))
+	{
+		return InNameOrPath;
+	}
+
+	std::filesystem::path Resolved = std::filesystem::path(FSceneSaveManager::GetSceneDirectory()) / Input;
+	if (!Resolved.has_extension())
+	{
+		Resolved += FSceneSaveManager::SceneExtension;
+	}
+	return FPaths::ToUtf8(Resolved.wstring());
 }
 
 FString GetFileStem(const FString& InPath)
@@ -100,6 +117,7 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
 	// Selection & Gizmo
 	SelectionManager.Init();
 	SelectionManager.SetWorld(GetWorld());
+	RmlUiManager.Initialize(this, &SelectionManager);
 
 	// 뷰포트 레이아웃 초기화 + 저장된 설정 복원
 	ViewportLayout.Initialize(this, Window, Renderer, &SelectionManager);
@@ -126,6 +144,7 @@ void UEditorEngine::Shutdown()
 	FProjectSettings::Get().SaveToFile(FProjectSettings::GetDefaultPath());
 	FEditorSettings::Get().SaveToFile(FEditorSettings::GetDefaultSettingsPath());
 	CloseScene();
+	RmlUiManager.Shutdown();
 	SelectionManager.Shutdown();
 
 	// UI/viewport release 전에 마지막 프레임에서 남은 RTV/SRV/DSV/ImGui 바인딩을 먼저 끊는다.
@@ -140,6 +159,14 @@ void UEditorEngine::Shutdown()
 	// 엔진 공통 해제 (Renderer, D3D 등)
 	Renderer.GetFD3DDevice().ReleaseImmediateContextBindings(false);
 	UEngine::Shutdown();
+}
+
+void UEditorEngine::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	UEngine::AddReferencedObjects(Collector);
+	SelectionManager.AddReferencedObjects(Collector);
+	RmlUiManager.AddReferencedObjects(Collector);
+	MainPanel.AddReferencedObjects(Collector);
 }
 
 void UEditorEngine::OnWindowResized(uint32 Width, uint32 Height)
@@ -260,7 +287,8 @@ void UEditorEngine::ApplyTransformSettingsToGizmo()
 
 	const FGizmoToolSettings& Settings = FEditorSettings::Get().LevelViewportSettings[0].Gizmo;
 	const bool bForceLocalForScale = Gizmo->GetMode() == EGizmoMode::Scale;
-	Gizmo->SetWorldSpace(bForceLocalForScale ? false : (Settings.CoordSystem == EEditorCoordSystem::World));
+	const bool bForceLocalForRmlUi = RmlUiManager.HasSelectedElement();
+	Gizmo->SetWorldSpace((bForceLocalForScale || bForceLocalForRmlUi) ? false : (Settings.CoordSystem == EEditorCoordSystem::World));
 	// 에디터 설정의 좌표계/스냅 값을 매 프레임 Gizmo 상태와 동기화한다.
 	Gizmo->SetSnapSettings(
 		Settings.bEnableTranslationSnap, Settings.TranslationSnapSize,
@@ -293,11 +321,94 @@ void UEditorEngine::RequestEndPlayMap()
 	bRequestEndPlayMapQueued = true;
 }
 
-void UEditorEngine::RequestTransitionToScene(const FString& /*InScenePath*/)
+void UEditorEngine::RequestTransitionToScene(const FString& InScenePath)
 {
-	// PIE 중이면 세션 종료(에디터 복귀)로 매핑. PIE 가 아닌 상태(에디터 직접)에서 호출되면
-	// 아무 의미 없으므로 no-op.
-	RequestEndPlayMap();
+	if (!IsPlayingInEditor())
+	{
+		return;
+	}
+
+	const FString FilePath = ResolveSceneFilePathFromNameOrPath(InScenePath);
+	if (FilePath.empty())
+	{
+		return;
+	}
+
+	UUIManager::Get().ClearViewport();
+	FLuaScriptManager::FireWorldReset();
+	SelectionManager.ClearSelection();
+	SelectionManager.SetWorld(nullptr);
+
+	DestroyWorldContext(FName("PIE"));
+
+	FWorldContext LoadContext;
+	FPerspectiveCameraData CameraData;
+	const EWorldType PIEType = EWorldType::PIE;
+	FSceneSaveManager::LoadSceneFromJSON(FilePath, LoadContext, CameraData, &PIEType);
+	if (!LoadContext.World)
+	{
+		UE_LOG("[EditorEngine] PIE TransitionToScene failed: %s", FilePath.c_str());
+		RequestEndPlayMap();
+		return;
+	}
+
+	LoadContext.WorldType = EWorldType::PIE;
+	LoadContext.ContextHandle = FName("PIE");
+	LoadContext.ContextName = "PIE";
+	LoadContext.World->SetWorldType(EWorldType::PIE);
+
+	UClass* GMClass = nullptr;
+	const FString& SceneGMName = LoadContext.World->GetWorldSettings().GameModeClassName;
+	if (!SceneGMName.empty())
+	{
+		UClass* Found = UClass::FindByName(SceneGMName.c_str());
+		if (Found && Found->IsA(AGameModeBase::StaticClass()))
+		{
+			GMClass = Found;
+		}
+	}
+	if (!GMClass)
+	{
+		GMClass = AGameModeBase::ResolveClassFromProjectSettings(AGameModeBase::StaticClass());
+	}
+	LoadContext.World->SetGameModeClass(GMClass);
+
+	WorldList.push_back(LoadContext);
+	SetActiveWorld(FName("PIE"));
+
+	if (IRenderPipeline* Pipeline = GetRenderPipeline())
+	{
+		Pipeline->OnSceneCleared();
+	}
+
+	if (FLevelEditorViewportClient* ActiveVC = ViewportLayout.GetActiveViewport())
+	{
+		LoadContext.World->SetEditorPOVProvider(ActiveVC);
+	}
+
+	SelectionManager.ClearSelection();
+	SelectionManager.SetWorld(LoadContext.World);
+
+	if (UGameViewportClient* PIEViewportClient = GetGameViewportClient())
+	{
+		if (Window)
+		{
+			PIEViewportClient->SetOwnerWindow(Window->GetHWND());
+		}
+		if (FLevelEditorViewportClient* ActiveVC = ViewportLayout.GetActiveViewport())
+		{
+			PIEViewportClient->SetViewport(ActiveVC->GetViewport());
+			PIEViewportClient->SetCursorClipRect(ActiveVC->GetViewportScreenRect());
+		}
+		PIEViewportClient->ResetInputState();
+	}
+	SyncGameViewportPIEControlState(PIEControlMode == EPIEControlMode::Possessed);
+
+	LoadContext.World->BeginPlay();
+	if (FTimer* T = GetTimer())
+	{
+		T->Initialize();
+	}
 }
 
 void UEditorEngine::StartQueuedPlaySessionRequest()
@@ -437,6 +548,8 @@ void UEditorEngine::EndPlayMap()
 	// 파괴된 컴포넌트를 재개하려 할 수 있으므로 세션 종료를 디버그 pause 취소로 처리한다.
 	FLuaDebugManager::AbortPauseForPlaySessionEnd();
 	FSlateApplication::Get().ClearInputOwner();
+	SelectionManager.ClearSelection();
+	SelectionManager.SetWorld(nullptr);
 
 	// 활성 월드를 PIE 시작 전 핸들로 복원.
 	const FName PrevHandle = PlayInEditorSessionInfo->PreviousActiveWorldHandle;
