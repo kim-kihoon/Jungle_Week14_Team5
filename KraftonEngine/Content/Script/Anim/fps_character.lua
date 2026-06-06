@@ -110,6 +110,27 @@ local function update_camera_hold_motion(self, dt)
     set_camera_mesh_position(1.0, bobX, bobY, bobZ)
 end
 
+local function get_crosshair_aim_target(owner)
+    if World == nil or World.LineTraceObjects == nil or owner == nil then
+        return nil
+    end
+
+    local camera = owner:GetCamera()
+    if camera == nil then
+        return nil
+    end
+
+    local start = camera:GetLocation()
+    local direction = camera.Forward
+    local fallbackTarget = start + direction * CAMERA_TRACE_DISTANCE
+    local hit = World.LineTraceObjects(start, fallbackTarget, owner)
+    if hit ~= nil and hit.Hit and hit.Location ~= nil then
+        return hit.Location
+    end
+
+    return fallbackTarget
+end
+
 local function spawn_projectile_from_muzzle()
     if World == nil or World.SpawnActorTemplate == nil then
         return nil
@@ -123,6 +144,7 @@ local function spawn_projectile_from_muzzle()
     local rotation = Anim.get_socket_rotation(MUZZLE_SOCKET)
     local forward = Anim.get_socket_forward(MUZZLE_SOCKET)
     local spawnLocation = location + forward * PROJECTILE_SPAWN_OFFSET
+    local owner = Anim.get_owner_actor()
 
     local projectile = World.SpawnActorTemplate(
         PROJECTILE_TEMPLATE_PATH,
@@ -132,7 +154,15 @@ local function spawn_projectile_from_muzzle()
     if projectile ~= nil then
         local movement = projectile:GetProjectileMovementComponent()
         if movement ~= nil then
-            movement:SetIgnoredActor(Anim.get_owner_actor())
+            movement:SetIgnoredActor(owner)
+
+            local aimTarget = get_crosshair_aim_target(owner)
+            if aimTarget ~= nil then
+                local aimDirection = Math.Normalize(aimTarget - spawnLocation)
+                if aimDirection:Length() > 0.0001 then
+                    movement:SetVelocity(aimDirection)
+                end
+            end
         end
     end
 
