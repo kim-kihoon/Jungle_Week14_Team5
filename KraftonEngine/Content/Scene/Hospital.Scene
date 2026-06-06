@@ -5053,7 +5053,7 @@
                   "Letterbox.Thickness": 0.12,
                   "Letterbox.bEnabled": false,
                   "ObjectName": "UCameraComponent_1",
-                  "PostProcessMaterialPath": "None",
+                  "PostProcessMaterialPath": "Content/Material/PostProcess/HorrorPostProcess.uasset",
                   "RelativeTransform.Location": [
                     0.0,
                     0.0,
