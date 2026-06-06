@@ -55,10 +55,24 @@ void UAudioComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (bPlaying && bLoop)
+	if (!bPlaying || !bLoop)
+	{
+		return;
+	}
+
+	FAudioManager::Get().SetLoopPitch(GetLoopName(), Pitch);
+	if (bSpatialize)
+	{
+		FAudioManager::Get().SetLoop3DAttributes(
+			GetLoopName(),
+			GetWorldLocation(),
+			MinDistance,
+			std::max(MaxDistance, MinDistance));
+		FAudioManager::Get().SetLoopVolume(GetLoopName(), Clamp01(Volume));
+	}
+	else
 	{
 		FAudioManager::Get().SetLoopVolume(GetLoopName(), ComputeAttenuatedVolume());
-		FAudioManager::Get().SetLoopPitch(GetLoopName(), Pitch);
 	}
 }
 
@@ -69,15 +83,25 @@ void UAudioComponent::Play()
 		return;
 	}
 
-	const float AttenuatedVolume = ComputeAttenuatedVolume();
+	FAudio3DPlaySettings Settings3D;
+	if (bSpatialize)
+	{
+		Settings3D.bEnabled = true;
+		Settings3D.Position = GetWorldLocation();
+		Settings3D.MinDistance = MinDistance;
+		Settings3D.MaxDistance = std::max(MaxDistance, MinDistance);
+	}
+
+	const float PlayVolume = bSpatialize ? Clamp01(Volume) : ComputeAttenuatedVolume();
+	const FAudio3DPlaySettings* Settings3DPtr = bSpatialize ? &Settings3D : nullptr;
 	if (bLoop)
 	{
-		FAudioManager::Get().PlayLoop(GetAudioKey(), GetLoopName(), AttenuatedVolume, Pitch);
+		FAudioManager::Get().PlayLoop(GetAudioKey(), GetLoopName(), PlayVolume, Pitch, Settings3DPtr);
 		bPlaying = true;
 	}
 	else
 	{
-		FAudioManager::Get().PlayAudio(GetAudioKey(), AttenuatedVolume, Pitch);
+		FAudioManager::Get().PlayAudio(GetAudioKey(), PlayVolume, Pitch, Settings3DPtr);
 		bPlaying = false;
 	}
 }
@@ -96,7 +120,8 @@ void UAudioComponent::SetVolume(float InVolume)
 	Volume = Clamp01(InVolume);
 	if (bPlaying && bLoop)
 	{
-		FAudioManager::Get().SetLoopVolume(GetLoopName(), ComputeAttenuatedVolume());
+		const float LoopVolume = bSpatialize ? Volume : ComputeAttenuatedVolume();
+		FAudioManager::Get().SetLoopVolume(GetLoopName(), LoopVolume);
 	}
 }
 
@@ -112,7 +137,7 @@ bool UAudioComponent::EnsureLoaded()
 		return false;
 	}
 
-	bLoaded = FAudioManager::Get().LoadAudio(GetAudioKey(), SoundPath, bLoop);
+	bLoaded = FAudioManager::Get().LoadAudio(GetAudioKey(), SoundPath, bLoop, bSpatialize);
 	if (!bLoaded)
 	{
 		UE_LOG("[AudioComponent] Failed to load audio. Component=%s Path=%s",

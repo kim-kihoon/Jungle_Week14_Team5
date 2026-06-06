@@ -1,7 +1,42 @@
 ﻿#include "AudioManager.h"
 #include "Core/Logging/Log.h"
+#include "GameFramework/Camera/PlayerCameraManager.h"
+#include "GameFramework/GameMode/PlayerController.h"
+#include "GameFramework/World.h"
+#include "Math/Rotator.h"
 #include "Platform/Paths.h"
+#include "Render/Types/MinimalViewInfo.h"
 #include <algorithm>
+
+namespace
+{
+	bool TryGetListenerPOV(UWorld* World, FMinimalViewInfo& OutPOV)
+	{
+		if (!World)
+		{
+			return false;
+		}
+
+		APlayerController* PlayerController = World->GetFirstPlayerController();
+		if (!PlayerController)
+		{
+			return false;
+		}
+
+		APlayerCameraManager* CameraManager = PlayerController->GetPlayerCameraManager();
+		if (!CameraManager)
+		{
+			return false;
+		}
+
+		if (CameraManager->GetCameraCachePOV(OutPOV))
+		{
+			return true;
+		}
+
+		return CameraManager->GetCameraView(OutPOV);
+	}
+}
 
 bool FAudioManager::Initialize()
 {
@@ -68,7 +103,45 @@ void FAudioManager::Tick()
 	}
 }
 
-bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoop)
+FMOD_VECTOR FAudioManager::ToFmodVector(const FVector& Value)
+{
+	// Engine: +X forward, +Y right, +Z up (left-handed).
+	// FMOD (left-handed): +X right, +Y up, +Z forward.
+	FMOD_VECTOR Out{};
+	Out.x = Value.Y;
+	Out.y = Value.Z;
+	Out.z = Value.X;
+	return Out;
+}
+
+void FAudioManager::SetListener(const FVector& Position, const FVector& Forward, const FVector& Up)
+{
+	if (!System)
+	{
+		return;
+	}
+
+	const FMOD_VECTOR FmodPosition = ToFmodVector(Position);
+	const FMOD_VECTOR FmodForward = ToFmodVector(Forward);
+	const FMOD_VECTOR FmodUp = ToFmodVector(Up);
+	const FMOD_VECTOR ZeroVelocity{0.0f, 0.0f, 0.0f};
+
+	System->set3DListenerAttributes(0, &FmodPosition, &ZeroVelocity, &FmodForward, &FmodUp);
+}
+
+bool FAudioManager::UpdateListenerFromWorld(UWorld* World)
+{
+	FMinimalViewInfo POV;
+	if (!TryGetListenerPOV(World, POV))
+	{
+		return false;
+	}
+
+	SetListener(POV.Location, POV.Rotation.GetForwardVector(), POV.Rotation.GetUpVector());
+	return true;
+}
+
+bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoop, bool b3D)
 {
 	if (!System)
 	{
@@ -78,7 +151,11 @@ bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoo
 	FString FullPath = FPaths::ToUtf8(FPaths::Combine(FPaths::AudioDir(), FPaths::ToWide(Path)));
 
 	FMOD::Sound* Sound = nullptr;
-	const FMOD_MODE Mode = FMOD_DEFAULT | (bLoop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
+	FMOD_MODE Mode = FMOD_DEFAULT | (bLoop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
+	if (b3D)
+	{
+		Mode |= FMOD_3D;
+	}
 
 	if (System->createSound(FullPath.c_str(), Mode, nullptr, &Sound) != FMOD_OK)
 	{
@@ -94,7 +171,23 @@ bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoo
 	return true;
 }
 
-void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch)
+void FAudioManager::Apply3DSettingsToChannel(FMOD::Channel* Channel, const FAudio3DPlaySettings& Settings3D) const
+{
+	if (!Channel || !Settings3D.bEnabled)
+	{
+		return;
+	}
+
+	const FMOD_VECTOR Position = ToFmodVector(Settings3D.Position);
+	const FMOD_VECTOR ZeroVelocity{0.0f, 0.0f, 0.0f};
+	const float MinDistance = std::max(Settings3D.MinDistance, 0.0f);
+	const float MaxDistance = std::max(Settings3D.MaxDistance, MinDistance);
+
+	Channel->set3DAttributes(&Position, &ZeroVelocity);
+	Channel->set3DMinMaxDistance(MinDistance, MaxDistance);
+}
+
+void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch, const FAudio3DPlaySettings* Settings3D)
 {
 	if (!System || !Audios.contains(Key))
 	{
@@ -108,6 +201,10 @@ void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch)
 	{
 		Channel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
 		Channel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
+		if (Settings3D)
+		{
+			Apply3DSettingsToChannel(Channel, *Settings3D);
+		}
 	}
 }
 
@@ -136,17 +233,22 @@ void FAudioManager::StopBGM()
 	}
 }
 
-void FAudioManager::PlayLoop(const FString& Key, const FString& LoopName, float Volume, float Pitch)
+void FAudioManager::PlayLoop(const FString& Key, const FString& LoopName, float Volume, float Pitch, const FAudio3DPlaySettings* Settings3D)
 {
 	if (!System || !Audios.contains(Key) || LoopName.empty())
 	{
 		return;
 	}
 
+	const bool bUse3D = Settings3D && Settings3D->bEnabled;
 	if (FMOD::Channel* ExistingChannel = FindPlayingLoopChannel(LoopName))
 	{
 		ExistingChannel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
 		ExistingChannel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
+		if (Settings3D)
+		{
+			Apply3DSettingsToChannel(ExistingChannel, *Settings3D);
+		}
 		return;
 	}
 
@@ -158,7 +260,14 @@ void FAudioManager::PlayLoop(const FString& Key, const FString& LoopName, float 
 		Channel->setMode(FMOD_LOOP_NORMAL);
 		Channel->setVolume(std::clamp(Volume, 0.0f, 1.0f));
 		Channel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
-		LoopChannels[LoopName] = Channel;
+		if (Settings3D)
+		{
+			Apply3DSettingsToChannel(Channel, *Settings3D);
+		}
+
+		FLoopChannelEntry& Entry = LoopChannels[LoopName];
+		Entry.Channel = Channel;
+		Entry.b3D = bUse3D;
 	}
 }
 
@@ -169,9 +278,9 @@ void FAudioManager::StopLoop(const FString& LoopName)
 		return;
 	}
 
-	if (LoopChannels[LoopName])
+	if (LoopChannels[LoopName].Channel)
 	{
-		LoopChannels[LoopName]->stop();
+		LoopChannels[LoopName].Channel->stop();
 	}
 	LoopChannels.erase(LoopName);
 }
@@ -180,9 +289,9 @@ void FAudioManager::StopAllLoops()
 {
 	for (auto& Pair : LoopChannels)
 	{
-		if (Pair.second)
+		if (Pair.second.Channel)
 		{
-			Pair.second->stop();
+			Pair.second.Channel->stop();
 		}
 	}
 	LoopChannels.clear();
@@ -204,24 +313,47 @@ void FAudioManager::SetLoopPitch(const FString& LoopName, float Pitch)
 	}
 }
 
+void FAudioManager::SetLoop3DAttributes(const FString& LoopName, const FVector& Position, float MinDistance, float MaxDistance)
+{
+	bool bIs3D = false;
+	FMOD::Channel* Channel = FindPlayingLoopChannel(LoopName, &bIs3D);
+	if (!Channel || !bIs3D)
+	{
+		return;
+	}
+
+	FAudio3DPlaySettings Settings3D;
+	Settings3D.bEnabled = true;
+	Settings3D.Position = Position;
+	Settings3D.MinDistance = MinDistance;
+	Settings3D.MaxDistance = MaxDistance;
+	Apply3DSettingsToChannel(Channel, Settings3D);
+}
+
 bool FAudioManager::IsLoopPlaying(const FString& LoopName)
 {
 	return FindPlayingLoopChannel(LoopName) != nullptr;
 }
 
-FMOD::Channel* FAudioManager::FindPlayingLoopChannel(const FString& LoopName)
+FMOD::Channel* FAudioManager::FindPlayingLoopChannel(const FString& LoopName, bool* bOut3D)
 {
 	if (!LoopChannels.contains(LoopName))
 	{
 		return nullptr;
 	}
 
-	FMOD::Channel* Channel = LoopChannels[LoopName];
+	FLoopChannelEntry& Entry = LoopChannels[LoopName];
+	FMOD::Channel* Channel = Entry.Channel;
 	bool bIsPlaying = false;
 	if (!Channel || Channel->isPlaying(&bIsPlaying) != FMOD_OK || !bIsPlaying)
 	{
 		LoopChannels.erase(LoopName);
 		return nullptr;
+	}
+
+	if (bOut3D)
+	{
+		*bOut3D = Entry.b3D;
 	}
 
 	return Channel;
