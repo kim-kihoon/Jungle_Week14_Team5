@@ -22,6 +22,7 @@ private:
 	void RebuildMesh(ID3D11Device* Device) const;
 
 	mutable FMeshBuffer MeshBufferStorage;
+	mutable FConstantBuffer PhotoDevelopCB;
 	UMaterial* FrameMaterial = nullptr;
 	UMaterial* PhotoMaterial = nullptr;
 	float CachedDisplayTime = -1.0f;

@@ -11,37 +11,18 @@
 namespace
 {
 	constexpr float FrameAspect = 1672.0f / 941.0f;
-	constexpr float PhotoForwardOffset = 0.002f;
+	constexpr float PhotoForwardOffset = -0.004f;
+	constexpr float PhotoDevelopSeconds = 1.0f;
+
+	struct FPhotoDevelopConstants
+	{
+		float DevelopAlpha = 0.0f;
+		float Padding[3] = {};
+	};
 
 	float Clamp01(float Value)
 	{
 		return (std::max)(0.0f, (std::min)(1.0f, Value));
-	}
-
-	FVector4 PhotoTint(float DevelopTime)
-	{
-		if (DevelopTime < 0.2f)
-		{
-			return FVector4(1.0f, 1.0f, 1.0f, 0.98f);
-		}
-		if (DevelopTime < 0.6f)
-		{
-			const float Alpha = Clamp01((DevelopTime - 0.2f) / 0.4f);
-			const float Gray = 0.50f + Alpha * 0.22f;
-			return FVector4(Gray, Gray, Gray, 0.45f + Alpha * 0.25f);
-		}
-		if (DevelopTime < 1.0f)
-		{
-			const float Alpha = Clamp01((DevelopTime - 0.6f) / 0.4f);
-			const float Value = 0.72f + Alpha * 0.28f;
-			return FVector4(Value, Value, Value, 0.70f + Alpha * 0.20f);
-		}
-		if (DevelopTime < 1.3f)
-		{
-			const float Alpha = Clamp01((DevelopTime - 1.0f) / 0.3f);
-			return FVector4(0.75f + Alpha * 0.25f, 0.75f + Alpha * 0.25f, 0.75f + Alpha * 0.25f, 0.90f + Alpha * 0.10f);
-		}
-		return FVector4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	void AddQuad(
@@ -74,6 +55,7 @@ FPhotoPolaroidSceneProxy::FPhotoPolaroidSceneProxy(UPhotoPolaroidComponent* InCo
 
 FPhotoPolaroidSceneProxy::~FPhotoPolaroidSceneProxy()
 {
+	PhotoDevelopCB.Release();
 	MeshBufferStorage.Release();
 	if (FrameMaterial)
 	{
@@ -129,11 +111,13 @@ void FPhotoPolaroidSceneProxy::UpdateMaterial()
 			EBlendState::AlphaBlend,
 			EDepthStencilState::DepthReadOnly,
 			ERasterizerState::SolidNoCull,
-			FShaderManager::Get().GetOrCreate(EShaderPath::Billboard));
+			FShaderManager::Get().GetOrCreate(EShaderPath::PhotoDevelop));
 	}
 
 	FrameMaterial->SetCachedSRV(EMaterialTextureSlot::Diffuse, Comp->GetFrameSRV());
 	PhotoMaterial->SetCachedSRV(EMaterialTextureSlot::Diffuse, Comp->GetPhotoSRV());
+	FPhotoDevelopConstants& DevelopConstants = PhotoMaterial->BindPerShaderCB<FPhotoDevelopConstants>(&PhotoDevelopCB, ECBSlot::PerShader0);
+	DevelopConstants.DevelopAlpha = Clamp01(Comp->GetDevelopTime() / PhotoDevelopSeconds);
 
 	SectionDraws.clear();
 	if (FrameMaterial && PhotoMaterial)
@@ -143,6 +127,7 @@ void FPhotoPolaroidSceneProxy::UpdateMaterial()
 		FrameSection.FirstIndex = 0;
 		FrameSection.IndexCount = 6;
 		FrameSection.PassOverride = ERenderPass::Transparent;
+		FrameSection.SortPriority = 0;
 		SectionDraws.push_back(FrameSection);
 
 		FMeshSectionDraw PhotoSection;
@@ -150,6 +135,7 @@ void FPhotoPolaroidSceneProxy::UpdateMaterial()
 		PhotoSection.FirstIndex = 6;
 		PhotoSection.IndexCount = 6;
 		PhotoSection.PassOverride = ERenderPass::Transparent;
+		PhotoSection.SortPriority = 1;
 		SectionDraws.push_back(PhotoSection);
 	}
 }
@@ -194,9 +180,6 @@ void FPhotoPolaroidSceneProxy::RebuildMesh(ID3D11Device* Device) const
 		return;
 	}
 
-	UPhotoPolaroidComponent* Comp = GetPhotoComponent();
-	const float DevelopTime = Comp ? Comp->GetDevelopTime() : 0.0f;
-
 	const float FrameHeight = 1.0f;
 	const float FrameWidth = FrameHeight * FrameAspect;
 	const float FullTop = FrameHeight * 0.5f;
@@ -210,7 +193,7 @@ void FPhotoPolaroidSceneProxy::RebuildMesh(ID3D11Device* Device) const
 
 	TMeshData<FVertexPNCT> MeshData;
 	AddQuad(MeshData.Vertices, MeshData.Indices, 0.0f, FullLeft, FullTop, FullRight, FullBottom, FVector4(1.0f, 1.0f, 1.0f, 1.0f));
-	AddQuad(MeshData.Vertices, MeshData.Indices, PhotoForwardOffset, PhotoLeft, PhotoTop, PhotoRight, PhotoBottom, PhotoTint(DevelopTime));
+	AddQuad(MeshData.Vertices, MeshData.Indices, PhotoForwardOffset, PhotoLeft, PhotoTop, PhotoRight, PhotoBottom, FVector4(1.0f, 1.0f, 1.0f, 1.0f));
 
 	MeshBufferStorage.Create(Device, MeshData);
 }

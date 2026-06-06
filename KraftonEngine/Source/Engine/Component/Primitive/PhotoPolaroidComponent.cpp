@@ -19,13 +19,12 @@ void UPhotoPolaroidComponent::SetTextures(ID3D11ShaderResourceView* InPhotoSRV, 
 void UPhotoPolaroidComponent::SetDisplayTime(float InDisplayTime)
 {
 	DisplayTime = InDisplayTime;
-	MarkProxyDirty(EDirtyFlag::Mesh);
 }
 
 void UPhotoPolaroidComponent::SetDevelopTime(float InDevelopTime)
 {
 	DevelopTime = InDevelopTime;
-	MarkProxyDirty(EDirtyFlag::Mesh);
+	MarkProxyDirty(EDirtyFlag::Material);
 }
 
 void UPhotoPolaroidComponent::UpdateWorldAABB() const

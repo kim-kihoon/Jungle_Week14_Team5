@@ -534,7 +534,7 @@ void FDrawCommandBuilder::BuildCommandForProxy(FScene& Scene, const FPrimitiveSc
 			SectionDistSq = ToCamSec.Dot(ToCamSec);
 		}
 		const float OverlaySortDistSq = bClothOverlayOnTransparentSection ? 0.0f : SectionDistSq;
-		Cmd.BuildSortKey(0, OverlaySortDistSq);
+		Cmd.BuildSortKey(Section.SortPriority, OverlaySortDistSq);
 
 		if (bClothMaxDistanceOverlay)
 		{
