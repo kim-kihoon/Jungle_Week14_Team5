@@ -4125,7 +4125,7 @@
           "AttachSocketName" : "Name_None",
           "CachedEditRotator" : [-0.000000, -179.999893, 0.000000],
           "CapsuleHalfHeight" : 0.500000,
-          "CapsuleRadius" : 0.320000,
+          "CapsuleRadius" : 0.213333,
           "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
           "CollisionEnabled" : 3,
           "Mass" : 1.000000,

@@ -20,6 +20,11 @@ local KEY_D = 0x44
 local INTERACT_DISTANCE = 3.5
 local INTERACT_DISTANCE_SQ = INTERACT_DISTANCE * INTERACT_DISTANCE
 local DOOR_OPEN_DURATION = 1.0
+local DOOR_OPEN_ANGLE_PLUS = 70.0
+local DOOR_OPEN_ANGLE_MINUS = -70.0
+local DOOR_CONTACT_SLOP = 0.08
+local DOOR_CONTACT_RAY_COUNT = 16
+local DOOR_APPROACH_DOT_THRESHOLD = 1.0e-6
 
 local OPEN_PLUS_NAMES = {
     AStaticMeshActor_2 = true,
@@ -201,6 +206,158 @@ local function SmoothStep(alpha)
     return alpha * alpha * (3.0 - 2.0 * alpha)
 end
 
+local function SyncPlayerPhysics()
+    if obj == nil then
+        return
+    end
+
+    local okRoot, root = pcall(function()
+        return obj:GetRootPrimitiveComponent()
+    end)
+    if okRoot and root ~= nil then
+        pcall(function()
+            root:SyncPhysicsTransform()
+        end)
+    end
+end
+
+local function GetPlayerCapsuleRadius()
+    local okCapsule, capsule = pcall(function()
+        return obj:GetCapsuleComponent()
+    end)
+    if okCapsule and capsule ~= nil then
+        local okRadius, radius = pcall(function()
+            return capsule:GetScaledCapsuleRadius()
+        end)
+        if okRadius and radius ~= nil and radius > 0.0 then
+            return radius
+        end
+    end
+    return 0.213333
+end
+
+local function GetPlayerDoorContact(doorActor)
+    if World == nil or World.LineTraceObjects == nil or obj == nil or doorActor == nil then
+        return false, nil, nil
+    end
+
+    local okPlayerLoc, playerLoc = pcall(function()
+        return obj:GetLocation()
+    end)
+    if not okPlayerLoc or playerLoc == nil then
+        return false, nil, nil
+    end
+
+    local radius = GetPlayerCapsuleRadius()
+    local probeDistance = radius + DOOR_CONTACT_SLOP
+    local twoPi = math.pi * 2.0
+    local bestDistance = probeDistance + 1.0
+    local bestLocation = nil
+    local bestNormal = nil
+
+    for rayIndex = 0, DOOR_CONTACT_RAY_COUNT - 1 do
+        local angle = (rayIndex / DOOR_CONTACT_RAY_COUNT) * twoPi
+        local dirX = math.cos(angle)
+        local dirY = math.sin(angle)
+        local endPos = Vec3(
+            playerLoc.X + dirX * probeDistance,
+            playerLoc.Y + dirY * probeDistance,
+            playerLoc.Z
+        )
+
+        local okHit, hit = pcall(function()
+            return World.LineTraceObjects(playerLoc, endPos, obj)
+        end)
+        if okHit and hit ~= nil and hit.Hit == true and hit.Actor == doorActor then
+            local hitDistance = tonumber(hit.Distance) or probeDistance
+            if hitDistance <= probeDistance and hitDistance < bestDistance then
+                bestDistance = hitDistance
+                bestLocation = hit.Location
+                bestNormal = hit.Normal
+            end
+        end
+    end
+
+    if bestLocation == nil or bestNormal == nil then
+        return false, nil, nil
+    end
+
+    return true, bestLocation, bestNormal
+end
+
+-- Door panel velocity at the contact point (rigid rotation about hinge).
+-- Push only when that velocity points into the player along the contact normal.
+local function IsDoorApproachingPlayer(doorActor, yawDelta, contactLocation, contactNormal)
+    if doorActor == nil or contactLocation == nil or contactNormal == nil then
+        return false
+    end
+    if math.abs(yawDelta) < 0.001 then
+        return false
+    end
+
+    local okDoorLoc, doorLoc = pcall(function()
+        return doorActor:GetLocation()
+    end)
+    if not okDoorLoc or doorLoc == nil then
+        return false
+    end
+
+    local rx = contactLocation.X - doorLoc.X
+    local ry = contactLocation.Y - doorLoc.Y
+    local yawDeltaRad = math.rad(yawDelta)
+    local velX = -yawDeltaRad * ry
+    local velY = yawDeltaRad * rx
+    local approachDot = velX * contactNormal.X + velY * contactNormal.Y
+
+    return approachDot > DOOR_APPROACH_DOT_THRESHOLD
+end
+
+-- Static door bodies teleport in PhysX and do not push kinematic player capsules.
+-- Once contact begins during a swing, keep pushing until that swing finishes.
+local function PushPlayerFromDoorHinge(doorActor, prevYaw, newYaw)
+    if obj == nil or doorActor == nil then
+        return
+    end
+
+    local yawDelta = newYaw - prevYaw
+    if math.abs(yawDelta) < 0.001 then
+        return
+    end
+
+    local okPlayerLoc, playerLoc = pcall(function()
+        return obj:GetLocation()
+    end)
+    local okDoorLoc, doorLoc = pcall(function()
+        return doorActor:GetLocation()
+    end)
+    if not okPlayerLoc or not okDoorLoc or playerLoc == nil or doorLoc == nil then
+        return
+    end
+
+    local dx = playerLoc.X - doorLoc.X
+    local dy = playerLoc.Y - doorLoc.Y
+    if dx * dx + dy * dy < 0.0001 then
+        return
+    end
+
+    local rad = math.rad(yawDelta)
+    local cosA = math.cos(rad)
+    local sinA = math.sin(rad)
+    local newDx = dx * cosA - dy * sinA
+    local newDy = dx * sinA + dy * cosA
+    local pushX = newDx - dx
+    local pushY = newDy - dy
+
+    if pushX * pushX + pushY * pushY < 1.0e-8 then
+        return
+    end
+
+    pcall(function()
+        obj:AddWorldOffset(Vec3(pushX, pushY, 0.0))
+    end)
+    SyncPlayerPhysics()
+end
+
 local function UpdateDoors(dt)
     local deltaTime = tonumber(dt) or 0.0
     if deltaTime <= 0.0 then
@@ -211,9 +368,29 @@ local function UpdateDoors(dt)
         if door.Elapsed < DOOR_OPEN_DURATION then
             door.Elapsed = math.min(door.Elapsed + deltaTime, DOOR_OPEN_DURATION)
             local alpha = SmoothStep(door.Elapsed / DOOR_OPEN_DURATION)
+            local prevYaw = door.CurrentYaw
             local nextYaw = door.StartYaw + (door.TargetYaw - door.StartYaw) * alpha
             if SetDoorYaw(door, nextYaw) then
                 SyncDoorPhysics(door.Actor)
+
+                local yawDelta = nextYaw - prevYaw
+                local touching, contactLocation, contactNormal = GetPlayerDoorContact(door.Actor)
+                local approaching = touching and IsDoorApproachingPlayer(
+                    door.Actor, yawDelta, contactLocation, contactNormal
+                )
+
+                if touching and approaching then
+                    door.bPushPlayer = true
+                elseif not approaching then
+                    door.bPushPlayer = false
+                end
+                if door.bPushPlayer and approaching then
+                    PushPlayerFromDoorHinge(door.Actor, prevYaw, nextYaw)
+                end
+            end
+
+            if door.Elapsed >= DOOR_OPEN_DURATION then
+                door.bPushPlayer = false
             end
         end
     end
@@ -231,6 +408,7 @@ local function ToggleDoor(door)
     door.StartYaw = door.CurrentYaw
     door.TargetYaw = targetYaw
     door.Elapsed = 0.0
+    door.bPushPlayer = false
 
     SetDoorYaw(door, door.StartYaw)
     SyncDoorPhysics(door.Actor)
@@ -267,6 +445,7 @@ local function AddDoor(actor, openYaw)
         TargetYaw = currentYaw,
         StartYaw = currentYaw,
         Elapsed = DOOR_OPEN_DURATION,
+        bPushPlayer = false,
     })
     DoorStateByName[name] = isOpen
 end
@@ -309,14 +488,14 @@ local function InitDoors()
     Doors = {}
     DoorStateByName = {}
 
-    AddDoorsByTag("DoorOpenPlus", 90.0)
-    AddDoorsByTag("DoorOpenMinus", -90.0)
+    AddDoorsByTag("DoorOpenPlus", DOOR_OPEN_ANGLE_PLUS)
+    AddDoorsByTag("DoorOpenMinus", DOOR_OPEN_ANGLE_MINUS)
 
     for name, _ in pairs(OPEN_PLUS_NAMES) do
-        AddDoorByName(name, 90.0)
+        AddDoorByName(name, DOOR_OPEN_ANGLE_PLUS)
     end
     for name, _ in pairs(OPEN_MINUS_NAMES) do
-        AddDoorByName(name, -90.0)
+        AddDoorByName(name, DOOR_OPEN_ANGLE_MINUS)
     end
 
     for _, door in ipairs(Doors) do
