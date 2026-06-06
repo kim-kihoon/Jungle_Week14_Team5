@@ -56,6 +56,7 @@ private:
 	// BuildDynamicDrawCommands 서브 메서드
 	void BuildEditorLineCommands(EViewMode ViewMode);
 	void BuildPostProcessCommands(const FFrameContext& Frame, const FScene* Scene);
+	void BuildCameraPostProcessMaterialCommand(const FFrameContext& Frame, const FDrawCommandRenderState& BaseState);
 	void BuildFontCommands(EViewMode ViewMode);
 
 	// 공통 헬퍼

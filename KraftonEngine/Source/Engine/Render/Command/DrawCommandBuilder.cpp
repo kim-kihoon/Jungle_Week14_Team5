@@ -228,6 +228,41 @@ FShader* FDrawCommandBuilder::ResolveSectionShader(UMaterial* Mat, EVertexFactor
 // ============================================================
 // ApplyMaterialRenderState — Material 렌더 상태 오버라이드 (Wireframe 우선)
 // ============================================================
+void FDrawCommandBuilder::BuildCameraPostProcessMaterialCommand(const FFrameContext& Frame, const FDrawCommandRenderState& BaseState)
+{
+	UMaterial* Material = Frame.CameraPostProcessMaterial;
+	if (!IsValid(Material) || Material->GetDomain() != EMaterialDomain::PostProcess)
+	{
+		return;
+	}
+	if (!Frame.SceneColorCopyTexture || !Frame.ViewportRenderTexture || !Frame.SceneColorCopySRV)
+	{
+		return;
+	}
+
+	FShader* Shader = Material->HasCustomShader() ? Material->GetCustomShader() : Material->GetShader();
+	if (!Shader || !Shader->IsValid())
+	{
+		return;
+	}
+
+	Material->FlushDirtyBuffers(CachedDevice, CachedContext);
+
+	FDrawCommand& Cmd = DrawCommandList.AddCommand();
+	Cmd.InitFullscreenTriangle(Shader, ERenderPass::PostProcess, BaseState);
+	ApplyMaterialRenderState(Cmd.RenderState, Material, BaseState);
+	Cmd.Bindings.PerShaderCB[0] = Material->GetGPUBufferBySlot(ECBSlot::PerShader0);
+	Cmd.Bindings.PerShaderCB[1] = Material->GetGPUBufferBySlot(ECBSlot::PerShader1);
+
+	const ID3D11ShaderResourceView* const* MaterialSRVs = Material->GetCachedSRVs();
+	for (int Slot = 0; Slot < (int)EMaterialTextureSlot::Max; ++Slot)
+	{
+		Cmd.Bindings.SRVs[Slot] = const_cast<ID3D11ShaderResourceView*>(MaterialSRVs[Slot]);
+	}
+
+	Cmd.SortKey = (static_cast<uint64>(ERenderPass::PostProcess) & 0x1F) << 59;
+}
+
 void FDrawCommandBuilder::ApplyMaterialRenderState(FDrawCommandRenderState& OutState, const UMaterial* Mat, const FDrawCommandRenderState& BaseState)
 {
 	OutState.Blend = Mat->GetBlendState();
@@ -499,7 +534,7 @@ void FDrawCommandBuilder::BuildCommandForProxy(FScene& Scene, const FPrimitiveSc
 			SectionDistSq = ToCamSec.Dot(ToCamSec);
 		}
 		const float OverlaySortDistSq = bClothOverlayOnTransparentSection ? 0.0f : SectionDistSq;
-		Cmd.BuildSortKey(0, OverlaySortDistSq);
+		Cmd.BuildSortKey(Section.SortPriority, OverlaySortDistSq);
 
 		if (bClothMaxDistanceOverlay)
 		{
@@ -1025,6 +1060,11 @@ void FDrawCommandBuilder::BuildPostProcessCommands(const FFrameContext& Frame, c
 				Cmd.BuildSortKey(0);
 			}
 		}
+	}
+
+	if (!bPureDebugView)
+	{
+		BuildCameraPostProcessMaterialCommand(Frame, PPRS);
 	}
 
 	// Outline (UserBits=1 → HeightFog 뒤)

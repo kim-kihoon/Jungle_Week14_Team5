@@ -132,9 +132,9 @@ struct FDrawCommand
 		return Key;
 	}
 
-	// Transparent 전용: Pass(5) | DepthBucket(28) | ShaderHash(16) | UserBits(15)
+	// Transparent 전용: Pass(5) | DepthBucket(28) | UserBits(15) | ShaderHash(16)
 	// DepthBucket = MAX_28BIT - quantize(CameraDistSquared) — 멀수록 작은 키 → 먼저 그림 (back-to-front).
-	// 같은 깊이 버킷 내에선 Shader로 묶어 상태 전환 최소화.
+	// 같은 깊이 버킷 안에서 UserBits를 ShaderHash보다 먼저 둬서 겹친 transparent section의 순서를 강제할 수 있다.
 	static uint64 ComputeTransparentSortKey(ERenderPass InPass, const FShader* InShader,
 		float CameraDistSquared, uint16 UserBits = 0)
 	{
@@ -157,8 +157,8 @@ struct FDrawCommand
 		uint64 Key = 0;
 		Key |= (static_cast<uint64>(InPass) & 0x1F) << 59;                // [63:59] Pass (5비트)
 		Key |= (static_cast<uint64>(Bucket) & 0x0FFFFFFFull) << 31;        // [58:31] DepthBucket (역양자화)
-		Key |= (static_cast<uint64>(PtrHash16(InShader))) << 15;           // [30:15] ShaderHash
-		Key |= (static_cast<uint64>(UserBits) & 0x7FFF);                   // [14:0]  UserBits (15비트)
+		Key |= (static_cast<uint64>(UserBits) & 0x7FFF) << 16;             // [30:16] UserBits (15비트)
+		Key |= static_cast<uint64>(PtrHash16(InShader));                   // [15:0]  ShaderHash
 		return Key;
 	}
 };

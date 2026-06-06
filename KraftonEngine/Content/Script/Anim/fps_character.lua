@@ -312,6 +312,9 @@ function update(self, dt)
                 spawn_projectile_from_muzzle()
             end
         elseif self.CurrentTool == TOOL_CAMERA then
+            if Anim.is_left_mouse_pressed() then
+                Anim.request_photo_capture()
+            end
             update_camera_hold_motion(self, dt)
         end
         return

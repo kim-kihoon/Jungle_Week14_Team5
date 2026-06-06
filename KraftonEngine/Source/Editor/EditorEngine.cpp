@@ -31,6 +31,7 @@
 #include "Object/GarbageCollection.h"
 #include "Audio/AudioManager.h"
 #include "Profiling/Time/Timer.h"
+#include "UI/PhotoOverlay.h"
 #include <filesystem>
 
 #include "Mesh/Skeletal/SkeletalMesh.h"
@@ -206,6 +207,7 @@ void UEditorEngine::Tick(float DeltaTime)
 
 	FAudioManager::Get().Tick();
 	WorldTick(DeltaTime);
+	FPhotoOverlay::Tick(DeltaTime);
 	FGarbageCollector::Get().TryCollectGarbage();
 	Render(DeltaTime);
 	SelectionManager.Tick();

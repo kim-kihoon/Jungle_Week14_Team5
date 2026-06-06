@@ -27,11 +27,26 @@ UWorld* FEditorViewportClient::GetWorld() const
 #include "Editor/EditorEngine.h"
 #include "GameFramework/AActor.h"
 #include "Viewport/GameViewportClient.h"
+#include "UI/PhotoOverlay.h"
 #include "ImGui/imgui.h"
 #include "Component/Light/LightComponentBase.h"
 
+#include <algorithm>
+
 namespace
 {
+	float Clamp01(float Value)
+	{
+		if (Value < 0.0f) return 0.0f;
+		if (Value > 1.0f) return 1.0f;
+		return Value;
+	}
+
+	int32 AlphaByte(float Alpha)
+	{
+		return static_cast<int32>(Clamp01(Alpha) * 255.0f);
+	}
+
 	bool IsActorNameInUse(UWorld* World, const FString& CandidateName)
 	{
 		if (!World)
@@ -795,7 +810,21 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 	ImVec2 Min(R.X, R.Y);
 	ImVec2 Max(R.X + R.Width, R.Y + R.Height);
 
+	if (bIsActiveViewport)
+	{
+		FPhotoOverlay::CapturePendingFromViewport(Viewport->GetRTTexture());
+	}
+
 	DrawList->AddImage((ImTextureID)Viewport->GetSRV(), Min, Max);
+
+	if (bIsActiveViewport)
+	{
+		if (FPhotoOverlay::IsVisible() && FPhotoOverlay::GetDisplayTime() < 0.2f)
+		{
+			const float FlashAlpha = 1.0f - Clamp01(FPhotoOverlay::GetDisplayTime() / 0.2f);
+			DrawList->AddRectFilled(Min, Max, IM_COL32(255, 255, 255, AlphaByte(FlashAlpha * 0.9f)));
+		}
+	}
 
 	// 활성 뷰포트 테두리 강조
 	if (bIsActiveViewport)

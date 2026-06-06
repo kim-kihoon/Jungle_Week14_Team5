@@ -12,6 +12,7 @@
 #include <d3d11.h>
 
 class UCameraComponent;
+class UMaterial;
 class FViewport;
 class FGPUOcclusionCulling;
 struct FMinimalViewInfo;
@@ -90,6 +91,7 @@ struct FFrameContext
 	FCameraFadeState CameraFade;
 	FCameraVignetteState CameraVignette;
 	FCameraLetterboxState CameraLetterbox;
+	UMaterial* CameraPostProcessMaterial = nullptr;
 
 	// Derived helpers
 	bool IsFixedOrtho() const

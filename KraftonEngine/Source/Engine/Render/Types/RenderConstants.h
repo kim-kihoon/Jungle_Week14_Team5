@@ -373,6 +373,10 @@ struct FMeshSectionDraw
 	// 섹션 패스 override — MAX면 머티리얼 GetRenderPass() 사용(기본). 빌보드 등이 EditorIcon 등으로 강제.
 	ERenderPass PassOverride = ERenderPass::MAX;
 
+	// 같은 transparent depth bucket 안에서 shader hash보다 먼저 적용되는 per-section draw order.
+	// 기본 0이면 기존 동작과 동일하고, 겹쳐 그리는 특수 proxy에서만 명시적으로 사용한다.
+	uint16 SortPriority = 0;
+
 	// Transparent 섹션별 depth 정렬용. true면 SortWorldPos로 카메라 거리를 계산하고,
 	// false면(기본) BuildCommandForProxy가 proxy 위치로 fallback — 비입자 proxy는 동작 변화 없음.
 	bool    bHasSortPos  = false;

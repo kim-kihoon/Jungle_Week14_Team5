@@ -57,6 +57,7 @@ void FShaderManager::Initialize(ID3D11Device* InDevice)
 	GetOrCreate(EShaderPath::OverlayFont, StartupError);
 	GetOrCreate(EShaderPath::SubUV, StartupError);
 	GetOrCreate(EShaderPath::Billboard, StartupError);
+	GetOrCreate(EShaderPath::PhotoDevelop, StartupError);
 	GetOrCreate(EShaderPath::HeightFog, StartupError);
 	GetOrCreate(EShaderPath::DoFSetup, StartupError);
 	GetOrCreate(EShaderPath::DoFBackgroundBlur, StartupError);

@@ -27,6 +27,7 @@
 #include "Object/Object.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Serialization/Archive.h"
+#include "UI/PhotoOverlay.h"
 
 #include <Windows.h>
 
@@ -522,6 +523,12 @@ void ULuaAnimInstance::InstallBindings()
 		[]() -> bool { return FLuaScriptManager::GetLuaInputSnapshot().WasPressed(VK_RBUTTON); });
 	Anim.set_function("is_key_pressed",
 		[](int VK) -> bool { return FLuaScriptManager::GetLuaInputSnapshot().WasPressed(VK); });
+	Anim.set_function("request_photo_capture",
+		[this]()
+		{
+			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
+			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("Fake"));
+		});
 
 	Anim.set_function("get_owner_actor",
 		[this]() -> AActor*
