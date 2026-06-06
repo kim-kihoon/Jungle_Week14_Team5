@@ -136,6 +136,8 @@ public:
 
 	UFUNCTION(Callable, Exec, Category="Collision")
 	void SetCollisionEnabled(ECollisionEnabled InEnabled);
+	UFUNCTION(Callable, Category="Collision")
+	void SyncPhysicsTransform();
 	UFUNCTION(Pure, Category="Collision")
 	ECollisionEnabled GetCollisionEnabled() const { return CollisionEnabled; }
 	UFUNCTION(Pure, Category="Collision")

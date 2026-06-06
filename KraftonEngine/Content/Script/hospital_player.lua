@@ -120,6 +120,127 @@ local function ActorName(actor)
     return name
 end
 
+local function GetActorYaw(actor)
+    if actor == nil then
+        return 0.0
+    end
+
+    local okRoot, root = pcall(function()
+        return actor:GetRootPrimitiveComponent()
+    end)
+    if okRoot and root ~= nil then
+        local okRot, rotation = pcall(function()
+            return root:GetRotation()
+        end)
+        if okRot and rotation ~= nil and rotation.Z ~= nil then
+            return rotation.Z
+        end
+    end
+
+    local okRot, rotation = pcall(function()
+        return actor.Rotation
+    end)
+    if okRot and rotation ~= nil and rotation.Z ~= nil then
+        return rotation.Z
+    end
+
+    return 0.0
+end
+
+local function SyncDoorPhysics(actor)
+    if actor == nil then
+        return
+    end
+
+    local ok, root = pcall(function()
+        return actor:GetRootPrimitiveComponent()
+    end)
+    if not ok or root == nil then
+        return
+    end
+
+    pcall(function()
+        root:SyncPhysicsTransform()
+    end)
+end
+
+local function SetDoorYaw(door, yaw)
+    if door == nil or door.Actor == nil then
+        return false
+    end
+
+    local rotation = Vec3(0.0, 0.0, yaw)
+    local actor = door.Actor
+
+    local ok = pcall(function()
+        actor.Rotation = rotation
+    end)
+    if not ok then
+        ok = pcall(function()
+            actor:SetRotation(rotation)
+        end)
+    end
+
+    local okRoot, root = pcall(function()
+        return actor:GetRootPrimitiveComponent()
+    end)
+    if okRoot and root ~= nil then
+        pcall(function()
+            root:SetRotation(rotation)
+        end)
+    end
+
+    if ok then
+        door.CurrentYaw = yaw
+    end
+    return ok
+end
+
+local function SmoothStep(alpha)
+    alpha = math.max(0.0, math.min(alpha, 1.0))
+    return alpha * alpha * (3.0 - 2.0 * alpha)
+end
+
+local function UpdateDoors(dt)
+    local deltaTime = tonumber(dt) or 0.0
+    if deltaTime <= 0.0 then
+        return
+    end
+
+    for _, door in ipairs(Doors) do
+        if door.Elapsed < DOOR_OPEN_DURATION then
+            door.Elapsed = math.min(door.Elapsed + deltaTime, DOOR_OPEN_DURATION)
+            local alpha = SmoothStep(door.Elapsed / DOOR_OPEN_DURATION)
+            local nextYaw = door.StartYaw + (door.TargetYaw - door.StartYaw) * alpha
+            if SetDoorYaw(door, nextYaw) then
+                SyncDoorPhysics(door.Actor)
+            end
+        end
+    end
+end
+
+local function ToggleDoor(door)
+    if door == nil or door.Actor == nil then
+        return
+    end
+
+    door.IsOpen = not door.IsOpen
+    DoorStateByName[door.Name] = door.IsOpen
+
+    local targetYaw = door.IsOpen and door.OpenYaw or door.CloseYaw
+    door.StartYaw = door.CurrentYaw
+    door.TargetYaw = targetYaw
+    door.Elapsed = 0.0
+
+    SetDoorYaw(door, door.StartYaw)
+    SyncDoorPhysics(door.Actor)
+
+    print("[Door] toggle " .. tostring(door.Name)
+        .. " open=" .. tostring(door.IsOpen)
+        .. " startYaw=" .. tostring(door.StartYaw)
+        .. " targetYaw=" .. tostring(targetYaw))
+end
+
 local function AddDoor(actor, openYaw)
     if actor == nil then
         return
@@ -132,24 +253,19 @@ local function AddDoor(actor, openYaw)
         end
     end
 
-    local yaw = 0.0
-    local ok, rotation = pcall(function()
-        return actor:GetRotation()
-    end)
-    if ok and rotation ~= nil and rotation.Z ~= nil then
-        yaw = rotation.Z
-    end
-    local isOpen = INITIALLY_OPEN_NAMES[name] == true or math.abs(yaw - openYaw) < 20.0
+    local closeYaw = GetActorYaw(actor)
+    local isOpen = INITIALLY_OPEN_NAMES[name] == true or math.abs(closeYaw - openYaw) < 20.0
+    local currentYaw = isOpen and openYaw or closeYaw
 
     table.insert(Doors, {
         Actor = actor,
         Name = name,
         OpenYaw = openYaw,
-        CloseYaw = 0.0,
+        CloseYaw = closeYaw,
         IsOpen = isOpen,
-        CurrentYaw = isOpen and openYaw or 0.0,
-        TargetYaw = isOpen and openYaw or 0.0,
-        StartYaw = isOpen and openYaw or 0.0,
+        CurrentYaw = currentYaw,
+        TargetYaw = currentYaw,
+        StartYaw = currentYaw,
         Elapsed = DOOR_OPEN_DURATION,
     })
     DoorStateByName[name] = isOpen
@@ -163,10 +279,7 @@ local function AddDoorsByTag(tag, openYaw)
     local ok, found = pcall(function()
         return World.FindActorsByTag(tag)
     end)
-    if not ok then
-        return
-    end
-    if found == nil then
+    if not ok or found == nil then
         return
     end
 
@@ -183,12 +296,16 @@ local function AddDoorByName(name, openYaw)
     local ok, actor = pcall(function()
         return World.FindActorByName(name)
     end)
-    if ok then
+    if ok and actor ~= nil then
         AddDoor(actor, openYaw)
     end
 end
 
 local function InitDoors()
+    if bDoorsInitialized then
+        return
+    end
+
     Doors = {}
     DoorStateByName = {}
 
@@ -200,6 +317,11 @@ local function InitDoors()
     end
     for name, _ in pairs(OPEN_MINUS_NAMES) do
         AddDoorByName(name, -90.0)
+    end
+
+    for _, door in ipairs(Doors) do
+        SetDoorYaw(door, door.CurrentYaw)
+        SyncDoorPhysics(door.Actor)
     end
 
     bDoorsInitialized = true
@@ -234,71 +356,10 @@ local function FindNearestDoor(location)
     return bestDoor
 end
 
-local function RefreshDoorCollision(actor)
-    if actor == nil then
-        return
-    end
-
-    local ok, root = pcall(function()
-        return actor:GetRootPrimitiveComponent()
-    end)
-    if ok and root ~= nil then
-        pcall(function()
-            root:SetCollisionEnabled(3)
-        end)
-    end
-end
-
-local function SetDoorYaw(door, yaw)
-    if door == nil or door.Actor == nil then
-        return false
-    end
-
-    local ok = pcall(function()
-        door.Actor.Rotation = Vec3(0.0, 0.0, yaw)
-    end)
-    if ok then
-        door.CurrentYaw = yaw
-    end
-    return ok
-end
-
-local function SmoothStep(alpha)
-    alpha = math.max(0.0, math.min(alpha, 1.0))
-    return alpha * alpha * (3.0 - 2.0 * alpha)
-end
-
-local function UpdateDoors(dt)
-    for _, door in ipairs(Doors) do
-        if door.Elapsed < DOOR_OPEN_DURATION then
-            door.Elapsed = math.min(door.Elapsed + dt, DOOR_OPEN_DURATION)
-            local alpha = SmoothStep(door.Elapsed / DOOR_OPEN_DURATION)
-            local nextYaw = door.StartYaw + (door.TargetYaw - door.StartYaw) * alpha
-            if SetDoorYaw(door, nextYaw) then
-                RefreshDoorCollision(door.Actor)
-            end
-        end
-    end
-end
-
-local function ToggleDoor(door)
-    if door == nil or door.Actor == nil then
-        return
-    end
-
-    door.IsOpen = not door.IsOpen
-    DoorStateByName[door.Name] = door.IsOpen
-
-    local targetYaw = door.IsOpen and door.OpenYaw or door.CloseYaw
-    door.StartYaw = door.CurrentYaw
-    door.TargetYaw = targetYaw
-    door.Elapsed = 0.0
-    print("[Door] toggle " .. tostring(door.Name) .. " open=" .. tostring(door.IsOpen) .. " targetYaw=" .. tostring(targetYaw))
-end
-
 function BeginPlay()
     bCanWarp = true
     bDoorsInitialized = false
+    bInteractWasDown = false
 end
 
 function EndPlay()
@@ -314,6 +375,8 @@ function Tick(dt)
         return
     end
 
+    InitDoors()
+
     local location = obj:GetLocation()
     local bInZone = IsInTriggerZone(location)
 
@@ -327,22 +390,17 @@ function Tick(dt)
         bCanWarp = true
     end
 
-    if not bDoorsInitialized then
-        pcall(InitDoors)
-    end
-
     if Input ~= nil and Input.GetKey ~= nil then
         local ok, pressed = pcall(function()
             return Input.GetKey(INTERACT_KEY)
         end)
         if ok and pressed and not bInteractWasDown then
-            pcall(function()
-                local door = FindNearestDoor(location)
-                if door == nil then
-                    print("[Door] no door in range. count=" .. tostring(#Doors))
-                end
+            local door = FindNearestDoor(location)
+            if door == nil then
+                print("[Door] no door in range. count=" .. tostring(#Doors))
+            else
                 ToggleDoor(door)
-            end)
+            end
         end
         bInteractWasDown = ok and pressed == true
     end

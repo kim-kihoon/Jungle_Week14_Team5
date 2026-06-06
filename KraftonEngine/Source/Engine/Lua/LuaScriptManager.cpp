@@ -4723,6 +4723,14 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
                 Component->SetCollisionEnabled(static_cast<ECollisionEnabled>(std::clamp(Mode, 0, 3)));
             }
         },
+        "SyncPhysicsTransform",
+        [](UPrimitiveComponent* Component)
+        {
+            if (IsValid(Component))
+            {
+                Component->SyncPhysicsTransform();
+            }
+        },
         "GetGenerateOverlapEvents",
         [](UPrimitiveComponent* Component) -> bool
         {
