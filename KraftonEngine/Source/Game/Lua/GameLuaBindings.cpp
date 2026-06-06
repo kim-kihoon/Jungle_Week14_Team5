@@ -4,6 +4,7 @@
 
 #include "Engine/Runtime/Engine.h"
 #include "Engine/Runtime/EngineInitHooks.h"
+#include "Game/Player/HospitalPlayerActor.h"
 #include "Lua/LuaScriptManager.h"
 
 // ============================================================
@@ -19,7 +20,20 @@
 // ============================================================
 void RegisterGameLuaBindings(sol::state& Lua)
 {
-	(void)Lua;
+	sol::table HospitalPlayer = Lua.create_table();
+	HospitalPlayer["play_pistol_fire_effect"] = [](AActor* Owner)
+	{
+		AHospitalPlayerActor* Player = Cast<AHospitalPlayerActor>(Owner);
+		if (!Player)
+		{
+			return false;
+		}
+
+		Player->PlayPistolFireEffect();
+		return true;
+	};
+
+	Lua["HospitalPlayer"] = HospitalPlayer;
 }
 
 // 자기-등록 — Editor / Game 측이 RegisterGameLuaBindings 함수명을 모르고도

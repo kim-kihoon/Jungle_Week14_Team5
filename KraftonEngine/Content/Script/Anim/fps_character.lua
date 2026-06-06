@@ -173,6 +173,11 @@ end
 local function start_pistol_fire_action(self)
     self.ActionTime = 0.0
     self.ActionPhase = ACTION_PISTOL_FIRE
+    local owner = Anim.get_owner_actor()
+
+    if HospitalPlayer ~= nil and HospitalPlayer.play_pistol_fire_effect ~= nil then
+        HospitalPlayer.play_pistol_fire_effect(owner)
+    end
 
     if Anim.play_pistol_fire_audio ~= nil then
         Anim.play_pistol_fire_audio()

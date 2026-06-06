@@ -403,6 +403,9 @@
     <Filter Include="Source\Game\Lua">
       <UniqueIdentifier>{a904550b-6c67-d00d-ee77-c5aaf7b88e71}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Game\Player">
+      <UniqueIdentifier>{265864b1-8f39-40a1-863d-0cb43306b38f}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\ObjViewer">
       <UniqueIdentifier>{3e63d691-bd37-40d8-2cea-c874f8e3a95b}</UniqueIdentifier>
     </Filter>
@@ -2108,6 +2111,9 @@
     <ClCompile Include="Source\Game\Lua\GameLuaBindings.cpp">
       <Filter>Source\Game\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Game\Player\HospitalPlayerActor.cpp">
+      <Filter>Source\Game\Player</Filter>
+    </ClCompile>
     <ClCompile Include="Source\ObjViewer\ObjViewerEngine.cpp">
       <Filter>Source\ObjViewer</Filter>
     </ClCompile>
@@ -3719,6 +3725,9 @@
     </ClInclude>
     <ClInclude Include="Source\Game\Lua\GameLuaBindings.h">
       <Filter>Source\Game\Lua</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Player\HospitalPlayerActor.h">
+      <Filter>Source\Game\Player</Filter>
     </ClInclude>
     <ClInclude Include="Source\ObjViewer\ObjViewerEngine.h">
       <Filter>Source\ObjViewer</Filter>

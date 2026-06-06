@@ -2,6 +2,8 @@
 
 #include "Engine/Runtime/ActorPlacementRegistry.h"
 #include "Engine/Runtime/EngineInitHooks.h"
+#include "Game/Player/HospitalPlayerActor.h"
+#include "GameFramework/World.h"
 
 // ============================================================
 // 게임-특화 액터를 Editor 의 "Place Actor" 메뉴에 등록 — 현재는 비어 있음.
@@ -12,6 +14,25 @@
 // ============================================================
 void RegisterGameActorPlacements()
 {
+	FActorPlacementRegistry::Get().RegisterEntry("Hospital Player", [](UWorld* World, const FVector& Location) -> AActor*
+	{
+		if (!World)
+		{
+			return nullptr;
+		}
+
+		AHospitalPlayerActor* Actor = World->SpawnActor<AHospitalPlayerActor>();
+		if (!Actor)
+		{
+			return nullptr;
+		}
+
+		Actor->InitDefaultComponents(
+			"Content/Data/Samba Dancing (10).fbx",
+			FString());
+		Actor->SetActorLocation(Location);
+		return Actor;
+	});
 }
 
 // 자기-등록 — Editor / Game 측이 함수명을 모르고도 FEngineInitHooks::RunAll() 로 호출됨.
