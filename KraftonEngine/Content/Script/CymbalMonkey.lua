@@ -1,8 +1,8 @@
 local GameManager = require("GameManager")
 
-local PRESSURE_ENTRY_STRIKE = 1
-local PRESSURE_WARNING = 2
-local PRESSURE_FINAL_WARNING = 3
+local PRESSURE_ENTRY_STRIKE = GameManager.Pressure and GameManager.Pressure.EntryStrike or 1
+local PRESSURE_WARNING = GameManager.Pressure and GameManager.Pressure.Warning or 2
+local PRESSURE_FINAL_WARNING = GameManager.Pressure and GameManager.Pressure.FinalWarning or 3
 local PRESSURE_MIN = PRESSURE_ENTRY_STRIKE
 local PRESSURE_MAX = PRESSURE_FINAL_WARNING
 
@@ -31,13 +31,13 @@ local ENTRY_TIME_RATE_MAX = 0.9
 
 local Mesh = nil
 local CurrentPressure = PRESSURE_ENTRY_STRIKE
-local ManualPressure = nil
 local CurrentState = STATE_NONE
 local CurrentEntryInterval = ENTRY_INTERVAL_MAX
 local EntryCoroutine = nil
 local EntryCoroutineGeneration = 0
 local bAnimationPlaying = false
 local bMissingMeshLogged = false
+local PressureChangedHandle = nil
 
 local function clamp(value, minimum, maximum)
     value = tonumber(value) or minimum
@@ -98,26 +98,6 @@ local function get_remaining_ratio()
 
     local remainingTime = tonumber(GameManager:GetRemainingTime()) or timeLimit
     return clamp(remainingTime / timeLimit, 0.0, 1.0)
-end
-
-local function get_pressure_from_time()
-    local remainingRatio = get_remaining_ratio()
-
-    if remainingRatio <= FINAL_WARNING_REMAINING_RATIO then
-        return PRESSURE_FINAL_WARNING
-    end
-    if remainingRatio <= WARNING_REMAINING_RATIO then
-        return PRESSURE_WARNING
-    end
-    return PRESSURE_ENTRY_STRIKE
-end
-
-local function resolve_pressure()
-    local pressure = normalize_pressure(ManualPressure)
-    if pressure ~= nil then
-        return pressure
-    end
-    return get_pressure_from_time()
 end
 
 local function calculate_entry_interval()
@@ -364,28 +344,65 @@ local function enter_pressure(pressure)
     return false
 end
 
-function SetPressureStage(pressure)
-    pressure = normalize_pressure(pressure)
-    if pressure == nil then
-        print("[CymbalMonkey] Unknown pressure: " .. tostring(pressure))
-        return false
+local function get_game_manager_pressure()
+    if GameManager.GetPressureStage ~= nil then
+        return normalize_pressure(GameManager:GetPressureStage()) or PRESSURE_ENTRY_STRIKE
     end
+    return PRESSURE_ENTRY_STRIKE
+end
 
-    ManualPressure = pressure
+local function handle_pressure_changed(pressure)
+    pressure = normalize_pressure(pressure) or PRESSURE_ENTRY_STRIKE
+
     if GameManager:IsPlaying() then
-        return enter_pressure(pressure)
+        enter_pressure(pressure)
+        return
     end
 
     CurrentPressure = pressure
-    return true
+end
+
+local function register_pressure_listener()
+    if PressureChangedHandle ~= nil then
+        GameManager:RemoveListener("PressureChanged", PressureChangedHandle)
+        PressureChangedHandle = nil
+    end
+
+    if GameManager.OnPressureChanged ~= nil then
+        PressureChangedHandle = GameManager:OnPressureChanged(function(pressure)
+            handle_pressure_changed(pressure)
+        end)
+    end
+end
+
+local function unregister_pressure_listener()
+    if PressureChangedHandle ~= nil then
+        GameManager:RemoveListener("PressureChanged", PressureChangedHandle)
+        PressureChangedHandle = nil
+    end
+end
+
+function SetPressureStage(pressure)
+    local rawPressure = pressure
+    pressure = normalize_pressure(pressure)
+    if pressure == nil then
+        print("[CymbalMonkey] Unknown pressure: " .. tostring(rawPressure))
+        return false
+    end
+
+    if GameManager.SetPressureStageOverride ~= nil then
+        return GameManager:SetPressureStageOverride(pressure)
+    end
+
+    return enter_pressure(pressure)
 end
 
 function ClearPressureStageOverride()
-    ManualPressure = nil
-    if GameManager:IsPlaying() then
-        return enter_pressure(resolve_pressure())
+    if GameManager.ClearPressureStageOverride ~= nil then
+        return GameManager:ClearPressureStageOverride()
     end
-    CurrentPressure = resolve_pressure()
+
+    CurrentPressure = get_game_manager_pressure()
     return true
 end
 
@@ -454,12 +471,34 @@ function GetCymbalState()
     return CurrentState
 end
 
-function BeginPlay()
+function InitializeFromGameManager()
     Mesh = nil
     bMissingMeshLogged = false
     cache_mesh()
 
-    CurrentPressure = resolve_pressure()
+    stop_animation()
+
+    CurrentPressure = get_game_manager_pressure()
+    CurrentState = STATE_NONE
+    CurrentEntryInterval = calculate_entry_interval()
+    bAnimationPlaying = false
+
+    if GameManager:IsPlaying() then
+        print("[CymbalMonkey] InitializeFromGameManager pressure=" .. tostring(CurrentPressure))
+        return enter_pressure(CurrentPressure)
+    end
+
+    print("[CymbalMonkey] InitializeFromGameManager ignored: GameManager is not playing")
+    return false
+end
+
+function BeginPlay()
+    Mesh = nil
+    bMissingMeshLogged = false
+    cache_mesh()
+    register_pressure_listener()
+
+    CurrentPressure = get_game_manager_pressure()
     CurrentState = STATE_NONE
     CurrentEntryInterval = calculate_entry_interval()
     bAnimationPlaying = false
@@ -471,9 +510,9 @@ function BeginPlay()
 end
 
 function EndPlay()
+    unregister_pressure_listener()
     stop_animation()
     Mesh = nil
-    ManualPressure = nil
     CurrentPressure = PRESSURE_ENTRY_STRIKE
     CurrentState = STATE_NONE
     CurrentEntryInterval = ENTRY_INTERVAL_MAX
@@ -486,7 +525,7 @@ function Tick(dt)
         return
     end
 
-    local nextPressure = resolve_pressure()
+    local nextPressure = get_game_manager_pressure()
     if nextPressure ~= CurrentPressure then
         enter_pressure(nextPressure)
         return

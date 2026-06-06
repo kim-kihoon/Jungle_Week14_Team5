@@ -23,33 +23,18 @@ namespace Rml { class ElementDocument; }
 class FWidgetClickEventListener final : public Rml::EventListener
 {
 public:
-	FWidgetClickEventListener(FString InElementId, sol::protected_function InCallback)
-		: ElementId(std::move(InElementId))
-		, Callback(std::move(InCallback))
-	{
-	}
+	FWidgetClickEventListener(FString InElementId, sol::protected_function InCallback);
+	FWidgetClickEventListener(FString InElementId, FString InTargetTag, FString InFunctionName);
 
-	void ProcessEvent(Rml::Event& /*Event*/) override
-	{
-		if (!Callback.valid())
-		{
-			return;
-		}
-
-		FScopedGarbageCollectionBlocker GCBlocker;
-		sol::protected_function_result Result = Callback();
-		if (!Result.valid())
-		{
-			sol::error Err = Result;
-			UE_LOG("[Lua] UI click callback error: %s", Err.what());
-		}
-	}
+	void ProcessEvent(Rml::Event& Event) override;
 
 	const FString& GetElementId() const { return ElementId; }
 
 private:
 	FString ElementId;
 	sol::protected_function Callback;
+	FString TargetTag;
+	FString FunctionName;
 };
 
 UCLASS()
@@ -123,6 +108,9 @@ public:
 	void MarkDocumentLoaded(Rml::ElementDocument* InDocument) { Document = InDocument; bDocumentLoaded = Document != nullptr; }
 	void MarkRemovedFromViewport() { bInViewport = false; }
 	void ClearDocument() { Document = nullptr; bDocumentLoaded = false; }
+
+private:
+	void RegisterDeclarativeEventListeners(Rml::Element* Root);
 
 private:
 	TWeakObjectPtr<APlayerController> OwningPlayer;

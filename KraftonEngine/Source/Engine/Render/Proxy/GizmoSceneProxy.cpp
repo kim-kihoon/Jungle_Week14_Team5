@@ -81,7 +81,7 @@ void FGizmoSceneProxy::UpdatePerViewport(const FFrameContext& Frame)
 		CameraPos, Frame.bIsOrtho, Frame.OrthoWidth);
 
 	FMatrix WorldMatrix = FMatrix::MakeScaleMatrix(FVector(PerViewScale, PerViewScale, PerViewScale))
-		* FMatrix::MakeRotationEuler(Gizmo->GetRelativeRotation().ToVector())
+		* Gizmo->GetRelativeQuat().ToMatrix()
 		* FMatrix::MakeTranslationMatrix(Gizmo->GetWorldLocation());
 
 	PerObjectConstants = FPerObjectConstants::FromWorldMatrix(WorldMatrix);

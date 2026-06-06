@@ -3,6 +3,38 @@
 #include "Object/Reflection/ObjectFactory.h"
 #include "UI/UIManager.h"
 
+FWidgetClickEventListener::FWidgetClickEventListener(FString InElementId, sol::protected_function InCallback)
+	: ElementId(std::move(InElementId))
+	, Callback(std::move(InCallback))
+{
+}
+
+FWidgetClickEventListener::FWidgetClickEventListener(FString InElementId, FString InTargetTag, FString InFunctionName)
+	: ElementId(std::move(InElementId))
+	, TargetTag(std::move(InTargetTag))
+	, FunctionName(std::move(InFunctionName))
+{
+}
+
+void FWidgetClickEventListener::ProcessEvent(Rml::Event& /*Event*/)
+{
+	if (Callback.valid())
+	{
+		FScopedGarbageCollectionBlocker GCBlocker;
+		sol::protected_function_result Result = Callback();
+		if (!Result.valid())
+		{
+			sol::error Err = Result;
+			UE_LOG("[Lua] UI click callback error: %s", Err.what());
+		}
+		return;
+	}
+
+	if (!TargetTag.empty() && !FunctionName.empty())
+	{
+		UUIManager::Get().DispatchTaggedActorClick(TargetTag, FunctionName);
+	}
+}
 
 void UUserWidget::BeginDestroy()
 {
@@ -70,6 +102,32 @@ void UUserWidget::RegisterEventListeners()
 		auto* Listener = new FWidgetClickEventListener(Binding.first, Binding.second);
 		Element->AddEventListener("click", Listener);
 		ClickListeners.push_back(Listener);
+	}
+
+	RegisterDeclarativeEventListeners(Document);
+}
+
+void UUserWidget::RegisterDeclarativeEventListeners(Rml::Element* Root)
+{
+	if (!Root)
+	{
+		return;
+	}
+
+	const Rml::String FunctionName = Root->GetAttribute<Rml::String>("data-on-click", "");
+	const Rml::String TargetTag = Root->GetAttribute<Rml::String>("data-target-tag", "");
+	const Rml::String ElementId = Root->GetId();
+	if (!FunctionName.empty() && !TargetTag.empty() && !ElementId.empty())
+	{
+		auto* Listener = new FWidgetClickEventListener(ElementId, TargetTag, FunctionName);
+		Root->AddEventListener("click", Listener);
+		ClickListeners.push_back(Listener);
+	}
+
+	const int ChildCount = Root->GetNumChildren();
+	for (int ChildIndex = 0; ChildIndex < ChildCount; ++ChildIndex)
+	{
+		RegisterDeclarativeEventListeners(Root->GetChild(ChildIndex));
 	}
 }
 

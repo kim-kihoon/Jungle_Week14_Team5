@@ -8,6 +8,7 @@
 #include "Render/Types/ShadowSettings.h"
 #include "Object/Object.h"
 #include <algorithm>
+#include <iterator>
 
 void FScene::EnqueueDirtyProxy(TArray<FPrimitiveSceneProxy*>& DirtyList, FPrimitiveSceneProxy* Proxy)
 {
@@ -158,10 +159,29 @@ FPrimitiveSceneProxy* FScene::AddPrimitive(UPrimitiveComponent* Component)
 // ============================================================
 void FScene::RemovePrimitive(FPrimitiveSceneProxy* Proxy)
 {
-	if (!Proxy || Proxy->ProxyId == UINT32_MAX) return;
+	if (!Proxy) return;
+
+	uint32 Slot = Proxy->ProxyId;
+	if (Slot >= static_cast<uint32>(Proxies.size()) || Proxies[Slot] != Proxy)
+	{
+		auto It = std::find(Proxies.begin(), Proxies.end(), Proxy);
+		if (It == Proxies.end())
+		{
+			if (Proxy->Scene == this)
+			{
+				Proxy->Scene = nullptr;
+				Proxy->ProxyId = UINT32_MAX;
+				Proxy->SelectedListIndex = UINT32_MAX;
+				Proxy->bQueuedForDirtyUpdate = false;
+			}
+			return;
+		}
+
+		Slot = static_cast<uint32>(std::distance(Proxies.begin(), It));
+	}
 
 	Proxy->Scene = nullptr;
-	uint32 Slot = Proxy->ProxyId;
+	Proxy->ProxyId = UINT32_MAX;
 
 	// 각 목록에서 제거
 	if (Proxy->bQueuedForDirtyUpdate)

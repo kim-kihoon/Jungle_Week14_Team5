@@ -53,6 +53,8 @@ struct FShowFlags
 	bool bGrid = true;
 	bool bWorldAxis = true;
 	bool bGizmo = true;
+	bool bEditorIcons = true;
+	bool bSelectionOutline = true;
 	bool bBillboardText = true;
 	bool bBoundingVolume = false;
 	bool bDebugDraw = true;

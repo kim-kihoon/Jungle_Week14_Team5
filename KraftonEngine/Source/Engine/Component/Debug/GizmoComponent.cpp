@@ -21,7 +21,7 @@ FPrimitiveSceneProxy* UGizmoComponent::CreateSceneProxy()
 
 void UGizmoComponent::CreateRenderState()
 {
-	if (SceneProxy) return;
+	if (SceneProxy || InnerProxy) return;
 
 	FScene* Scene = RegisteredScene;
 	if (!Scene && Owner && Owner->GetWorld())
@@ -34,11 +34,12 @@ void UGizmoComponent::CreateRenderState()
 	// Inner 프록시 (별도 등록)
 	InnerProxy = new FGizmoSceneProxy(this, true);
 	Scene->RegisterProxy(InnerProxy);
+	RenderStateScene = Scene;
 }
 
 void UGizmoComponent::DestroyRenderState()
 {
-	FScene* Scene = RegisteredScene;
+	FScene* Scene = RenderStateScene ? RenderStateScene : RegisteredScene;
 	if (!Scene && Owner && Owner->GetWorld())
 		Scene = &Owner->GetWorld()->GetScene();
 
@@ -47,6 +48,13 @@ void UGizmoComponent::DestroyRenderState()
 		if (InnerProxy) { Scene->RemovePrimitive(InnerProxy); InnerProxy = nullptr; }
 		if (SceneProxy) { Scene->RemovePrimitive(SceneProxy); SceneProxy = nullptr; }
 	}
+	else
+	{
+		InnerProxy = nullptr;
+		SceneProxy = nullptr;
+	}
+
+	RenderStateScene = nullptr;
 }
 
 #include <cmath>
@@ -624,7 +632,7 @@ void UGizmoComponent::UpdateGizmoTransform()
 	}
 	else
 	{
-		SetRelativeRotation(Target->GetWorldRotation());
+		SetRelativeRotation(Target->GetWorldQuat());
 	}
 
 	const FMeshData* DesiredMeshData = nullptr;

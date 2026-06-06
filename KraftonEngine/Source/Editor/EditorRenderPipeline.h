@@ -9,6 +9,7 @@ class UEditorEngine;
 class FViewport;
 class UCameraComponent;
 class FLevelEditorViewportClient;
+class FEditorCameraPreviewWidget;
 class IEditorPreviewViewportClient;
 struct FMinimalViewInfo;
 
@@ -31,6 +32,7 @@ private:
 	void BuildFrame(FLevelEditorViewportClient* VC, const FMinimalViewInfo& POV, FViewport* VP, UWorld* World);
 	void CollectCommands(FLevelEditorViewportClient* VC, UWorld* World, FRenderer& Renderer, FCollectOutput& Output);
 
+	void RenderCameraPreviewViewport(FEditorCameraPreviewWidget* Widget, FRenderer& Renderer);
 	void RenderPreviewViewport(IEditorPreviewViewportClient* PreviewVC, FRenderer& Renderer);
 
 	// 뷰포트별 GPUOcclusion 인스턴스 (lazy init)

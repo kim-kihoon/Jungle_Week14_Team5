@@ -5,6 +5,7 @@
 #include "Editor/Viewport/Level/FLevelViewportLayout.h"
 #include "Editor/Subsystem/OverlayStatSystem.h"
 #include "Editor/UI/EditorMainPanel.h"
+#include "Editor/UI/Rml/RmlUiEditorManager.h"
 #include "Editor/Settings/EditorSettings.h"
 #include "Editor/Selection/SelectionManager.h"
 #include "Editor/PIE/PIETypes.h"
@@ -21,6 +22,7 @@ class FOverlayStatSystem;
 class AActor;
 class UGameViewportClient;
 class IEditorPreviewViewportClient;
+class FEditorCameraPreviewWidget;
 struct FPerspectiveCameraData;
 
 UCLASS()
@@ -35,6 +37,7 @@ public:
 	void Init(FWindowsWindow* InWindow) override;
 	void Shutdown() override;
 	void Tick(float DeltaTime) override;
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
 	void OnWindowResized(uint32 Width, uint32 Height) override;
 
 	// Editor-specific API
@@ -74,6 +77,8 @@ public:
 	const FEditorSettings& GetSettings() const { return FEditorSettings::Get(); }
 
 	FSelectionManager& GetSelectionManager() { return SelectionManager; }
+	FEditorRmlUiManager& GetRmlUiManager() { return RmlUiManager; }
+	const FEditorRmlUiManager& GetRmlUiManager() const { return RmlUiManager; }
 
 	// 레이아웃에 위임
 	const TArray<FEditorViewportClient*>& GetAllViewportClients() const { return ViewportLayout.GetAllViewportClients(); }
@@ -82,6 +87,8 @@ public:
 
 	void SetActiveViewport(FLevelEditorViewportClient* InClient) { ViewportLayout.SetActiveViewport(InClient); }
 	FLevelEditorViewportClient* GetActiveViewport() const { return ViewportLayout.GetActiveViewport(); }
+	FEditorCameraPreviewWidget* GetCameraPreviewWidget() { return ViewportLayout.GetCameraPreviewWidget(); }
+	const FEditorCameraPreviewWidget* GetCameraPreviewWidget() const { return ViewportLayout.GetCameraPreviewWidget(); }
 
 	void CollectAssetEditorPreviewViewportClients(TArray<IEditorPreviewViewportClient*>& OutClients) const { MainPanel.CollectAssetEditorPreviewViewportClients(OutClients); }
 
@@ -143,6 +150,7 @@ private:
 	void RestoreViewportCamera(const FPerspectiveCameraData& CamData);
 
 	FSelectionManager SelectionManager;
+	FEditorRmlUiManager RmlUiManager;
 	FEditorMainPanel MainPanel;
 	FLevelViewportLayout ViewportLayout;
 	FOverlayStatSystem OverlayStatSystem;

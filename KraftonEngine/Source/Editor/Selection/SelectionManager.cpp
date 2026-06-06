@@ -557,8 +557,10 @@ void FSelectionManager::SetWorld(UWorld* InWorld)
     PruneInvalidSelection();
 
     // 기존 Scene에서 Gizmo 프록시 해제
-    if (Gizmo && IsValid(World.Get()))
+    if (Gizmo)
         Gizmo->DestroyRenderState();
+    if (Gizmo)
+        Gizmo->SetScene(nullptr);
 
     World = IsValid(InWorld) ? InWorld : nullptr;
 
