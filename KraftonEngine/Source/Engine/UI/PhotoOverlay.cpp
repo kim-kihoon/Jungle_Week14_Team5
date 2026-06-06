@@ -8,11 +8,12 @@
 
 namespace
 {
-	constexpr int32 PhotoVisibleFrames = 180;
+	constexpr float PhotoVisibleSeconds = 4.0f;
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
 
 	bool bCaptureRequested = false;
-	int32 VisibleFramesRemaining = 0;
+	float VisibleSecondsRemaining = 0.0f;
+	float DevelopTime = 0.0f;
 	uint32 CapturedWidth = 0;
 	uint32 CapturedHeight = 0;
 	ID3D11Texture2D* CapturedTexture = nullptr;
@@ -69,20 +70,26 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 
 	Context->CopyResource(CapturedTexture, SourceTexture);
 	Context->Release();
-	VisibleFramesRemaining = PhotoVisibleFrames;
+	VisibleSecondsRemaining = PhotoVisibleSeconds;
+	DevelopTime = 0.0f;
 }
 
-void FPhotoOverlay::Tick()
+void FPhotoOverlay::Tick(float DeltaTime)
 {
-	if (VisibleFramesRemaining > 0)
+	if (VisibleSecondsRemaining > 0.0f)
 	{
-		--VisibleFramesRemaining;
+		VisibleSecondsRemaining -= DeltaTime;
+		if (VisibleSecondsRemaining < 0.0f)
+		{
+			VisibleSecondsRemaining = 0.0f;
+		}
+		DevelopTime += DeltaTime;
 	}
 }
 
 bool FPhotoOverlay::IsVisible()
 {
-	return VisibleFramesRemaining > 0 && CapturedSRV;
+	return VisibleSecondsRemaining > 0.0f && CapturedSRV;
 }
 
 ID3D11ShaderResourceView* FPhotoOverlay::GetSRV()
@@ -93,6 +100,11 @@ ID3D11ShaderResourceView* FPhotoOverlay::GetSRV()
 ID3D11ShaderResourceView* FPhotoOverlay::GetFrameSRV()
 {
 	return FrameSRV;
+}
+
+float FPhotoOverlay::GetDevelopTime()
+{
+	return DevelopTime;
 }
 
 float FPhotoOverlay::GetCaptureAspectRatio()

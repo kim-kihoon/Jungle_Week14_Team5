@@ -35,6 +35,18 @@ UWorld* FEditorViewportClient::GetWorld() const
 
 namespace
 {
+	float Clamp01(float Value)
+	{
+		if (Value < 0.0f) return 0.0f;
+		if (Value > 1.0f) return 1.0f;
+		return Value;
+	}
+
+	int32 AlphaByte(float Alpha)
+	{
+		return static_cast<int32>(Clamp01(Alpha) * 255.0f);
+	}
+
 	bool IsActorNameInUse(UWorld* World, const FString& CandidateName)
 	{
 		if (!World)
@@ -845,7 +857,66 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 				UVMin.y = (1.0f - VisibleHeight) * 0.5f;
 				UVMax.y = 1.0f - UVMin.y;
 			}
-			DrawList->AddImage((ImTextureID)FPhotoOverlay::GetSRV(), InnerMin, InnerMax, UVMin, UVMax);
+			const float DevelopTime = FPhotoOverlay::GetDevelopTime();
+			ID3D11ShaderResourceView* PhotoSRV = FPhotoOverlay::GetSRV();
+			if (DevelopTime < 0.2f)
+			{
+				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(255, 255, 255, 230));
+			}
+			else if (DevelopTime < 0.6f)
+			{
+				const float Alpha = Clamp01((DevelopTime - 0.2f) / 0.4f);
+				DrawList->AddImage(
+					(ImTextureID)PhotoSRV,
+					InnerMin,
+					InnerMax,
+					UVMin,
+					UVMax,
+					IM_COL32(150, 150, 150, AlphaByte(0.25f + Alpha * 0.35f)));
+				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(210, 210, 210, AlphaByte(0.55f - Alpha * 0.25f)));
+			}
+			else if (DevelopTime < 1.0f)
+			{
+				const float Alpha = Clamp01((DevelopTime - 0.6f) / 0.4f);
+				DrawList->AddImage(
+					(ImTextureID)PhotoSRV,
+					InnerMin,
+					InnerMax,
+					UVMin,
+					UVMax,
+					IM_COL32(190, 190, 190, 220));
+				DrawList->AddImage(
+					(ImTextureID)PhotoSRV,
+					InnerMin,
+					InnerMax,
+					UVMin,
+					UVMax,
+					IM_COL32(255, 255, 255, AlphaByte(0.2f + Alpha * 0.45f)));
+				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(0, 0, 0, AlphaByte(0.35f * (1.0f - Alpha))));
+				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(255, 255, 255, AlphaByte(0.18f * (1.0f - Alpha))));
+			}
+			else if (DevelopTime < 1.3f)
+			{
+				const float Alpha = Clamp01((DevelopTime - 1.0f) / 0.3f);
+				DrawList->AddImage(
+					(ImTextureID)PhotoSRV,
+					InnerMin,
+					InnerMax,
+					UVMin,
+					UVMax,
+					IM_COL32(155, 155, 155, AlphaByte(1.0f - Alpha * 0.55f)));
+				DrawList->AddImage(
+					(ImTextureID)PhotoSRV,
+					InnerMin,
+					InnerMax,
+					UVMin,
+					UVMax,
+					IM_COL32(255, 255, 255, AlphaByte(0.35f + Alpha * 0.65f)));
+			}
+			else
+			{
+				DrawList->AddImage((ImTextureID)PhotoSRV, InnerMin, InnerMax, UVMin, UVMax);
+			}
 		}
 		else
 		{
@@ -856,7 +927,12 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 			DrawList->AddImage((ImTextureID)FPhotoOverlay::GetSRV(), PhotoMin, PhotoMax);
 			DrawList->AddRect(PhotoMin, PhotoMax, IM_COL32(255, 255, 255, 230), 0.0f, 0, 2.0f);
 		}
-		FPhotoOverlay::Tick();
+		if (FPhotoOverlay::GetDevelopTime() < 0.2f)
+		{
+			const float FlashAlpha = 1.0f - Clamp01(FPhotoOverlay::GetDevelopTime() / 0.2f);
+			DrawList->AddRectFilled(Min, Max, IM_COL32(255, 255, 255, AlphaByte(FlashAlpha * 0.9f)));
+		}
+		FPhotoOverlay::Tick(ImGui::GetIO().DeltaTime);
 	}
 
 	// 활성 뷰포트 테두리 강조

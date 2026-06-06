@@ -9,10 +9,11 @@ class FPhotoOverlay
 public:
 	static void RequestCapture();
 	static void CapturePendingFromViewport(ID3D11Texture2D* SourceTexture);
-	static void Tick();
+	static void Tick(float DeltaTime);
 	static bool IsVisible();
 	static ID3D11ShaderResourceView* GetSRV();
 	static ID3D11ShaderResourceView* GetFrameSRV();
+	static float GetDevelopTime();
 	static float GetCaptureAspectRatio();
 	static float GetFrameAspectRatio();
 
