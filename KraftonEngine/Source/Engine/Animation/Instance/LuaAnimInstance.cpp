@@ -11,6 +11,7 @@
 #include "Animation/Nodes/AnimNode_Slot.h"
 #include "Animation/Nodes/AnimNode_StateMachine.h"
 #include "Animation/Nodes/AnimNode_SequencePlayer.h"
+#include "Audio/AudioManager.h"
 #include "Component/Camera/CameraComponent.h"
 #include "Component/Movement/CharacterMovementComponent.h"
 #include "Component/PrimitiveComponent.h"
@@ -531,6 +532,12 @@ void ULuaAnimInstance::InstallBindings()
 		{
 			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
 			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("PhotoInvisible"));
+		});
+	Anim.set_function("play_pistol_fire_audio",
+		[]()
+		{
+			FAudioManager::Get().PlayAudio("PistolFire", 1.0f);
+			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.75f, 2.0f);
 		});
 	Anim.set_function("set_crosshair_visible",
 		[](bool bVisible)

@@ -139,6 +139,15 @@ local function spawn_projectile_from_muzzle()
     return projectile
 end
 
+local function start_pistol_fire_action(self)
+    self.ActionTime = 0.0
+    self.ActionPhase = ACTION_PISTOL_FIRE
+
+    if Anim.play_pistol_fire_audio ~= nil then
+        Anim.play_pistol_fire_audio()
+    end
+end
+
 local function report_anomaly_shot_from_camera()
     if World == nil or World.LineTraceObjects == nil then
         return false
@@ -311,11 +320,10 @@ function update(self, dt)
             else
                 self.SwitchPhase = SWITCH_TO_PISTOL
                 update_switch_to_pistol(self, 0.0)
-            end
+        end
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
             if report_anomaly_shot_from_camera() then
-                self.ActionTime = 0.0
-                self.ActionPhase = ACTION_PISTOL_FIRE
+                start_pistol_fire_action(self)
             else
                 spawn_projectile_from_muzzle()
             end
