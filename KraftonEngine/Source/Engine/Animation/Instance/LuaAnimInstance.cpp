@@ -527,7 +527,7 @@ void ULuaAnimInstance::InstallBindings()
 		[this]()
 		{
 			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
-			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("Fake"));
+			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("PhotoInvisible"));
 		});
 
 	Anim.set_function("get_owner_actor",

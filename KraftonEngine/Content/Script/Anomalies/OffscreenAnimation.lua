@@ -1,0 +1,89 @@
+local OffscreenAnimation = {}
+
+OffscreenAnimation.Name = "OffscreenAnimation"
+OffscreenAnimation.AnimationPath = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Walk.uasset"
+
+local function get_skeletal_mesh(actor)
+    if actor == nil or actor.GetSkeletalMeshComponent == nil then
+        return nil
+    end
+    return actor:GetSkeletalMeshComponent()
+end
+
+local function is_target_in_view(actor)
+    if World == nil or World.IsActorInViewFrustum == nil then
+        return true
+    end
+    return World.IsActorInViewFrustum(actor)
+end
+
+function OffscreenAnimation:Spawn(context)
+    local mesh = get_skeletal_mesh(context.Target)
+    if mesh == nil or mesh.PlayAnimationByPath == nil then
+        return false, "skeletal mesh animation binding unavailable"
+    end
+
+    context.State.Mesh = mesh
+    if mesh.GetAnimationPath ~= nil then
+        context.State.OriginalAnimationPath = mesh:GetAnimationPath()
+    end
+    if mesh.GetPlayRate ~= nil then
+        context.State.OriginalPlayRate = mesh:GetPlayRate()
+    end
+    if mesh.GetLooping ~= nil then
+        context.State.OriginalLooping = mesh:GetLooping()
+    end
+    if mesh.IsPlaying ~= nil then
+        context.State.OriginalPlaying = mesh:IsPlaying()
+    end
+    context.State.bPlayingOffscreen = false
+    return true
+end
+
+function OffscreenAnimation:Tick(context)
+    local mesh = context.State.Mesh
+    if mesh == nil then
+        return
+    end
+
+    local shouldPlay = not is_target_in_view(context.Target)
+    if shouldPlay == context.State.bPlayingOffscreen then
+        return
+    end
+
+    context.State.bPlayingOffscreen = shouldPlay
+    if shouldPlay then
+        mesh:PlayAnimationByPath(self.AnimationPath, true)
+    else
+        mesh:SetPlaying(false)
+    end
+end
+
+function OffscreenAnimation:Despawn(context)
+    local mesh = context.State.Mesh
+    if mesh == nil then
+        return
+    end
+
+    local originalPath = context.State.OriginalAnimationPath
+    if originalPath ~= nil and originalPath ~= "" and originalPath ~= "None" and mesh.SetAnimationByPath ~= nil then
+        mesh:SetAnimationByPath(originalPath)
+    end
+    if context.State.OriginalPlayRate ~= nil and mesh.SetPlayRate ~= nil then
+        mesh:SetPlayRate(context.State.OriginalPlayRate)
+    end
+    if context.State.OriginalLooping ~= nil and mesh.SetLooping ~= nil then
+        mesh:SetLooping(context.State.OriginalLooping)
+    end
+    if context.State.OriginalPlaying ~= nil and mesh.SetPlaying ~= nil then
+        mesh:SetPlaying(context.State.OriginalPlaying)
+    elseif mesh.StopAnimation ~= nil then
+        mesh:StopAnimation()
+    end
+end
+
+function OffscreenAnimation:IsCleared(context)
+    return context.State.bCleared == true
+end
+
+return OffscreenAnimation

@@ -1,0 +1,227 @@
+local AnomalyManager = {}
+
+local PhotoInvisible = require("Anomalies.PhotoInvisible")
+local NoShadow = require("Anomalies.NoShadow")
+local OffscreenAnimation = require("Anomalies.OffscreenAnimation")
+
+AnomalyManager.Tags = {
+    Candidate = "AnomalyCandidate",
+    ActiveTarget = "ActiveAnomalyTarget",
+    PhotoInvisible = "PhotoInvisible"
+}
+
+AnomalyManager.Rules = {
+    PhotoInvisible,
+    NoShadow,
+    OffscreenAnimation
+}
+
+AnomalyManager.Active = nil
+AnomalyManager.LastError = nil
+
+local seeded = false
+
+local function seed_random_once()
+    if seeded then
+        return
+    end
+    seeded = true
+    math.randomseed(os.time())
+end
+
+local function is_valid_actor(actor)
+    if actor == nil then
+        return false
+    end
+    if actor.IsValid == nil then
+        return true
+    end
+    return actor:IsValid()
+end
+
+local function get_rule_name(rule)
+    return rule and rule.Name or "Unknown"
+end
+
+local function safe_call(rule, function_name, context)
+    local fn = rule and rule[function_name]
+    if type(fn) ~= "function" then
+        return true
+    end
+
+    local ok, result, message = pcall(fn, rule, context)
+    if not ok then
+        return false, result
+    end
+    return result ~= false, message
+end
+
+function AnomalyManager:_BuildContext(target, rule)
+    return {
+        Manager = self,
+        Target = target,
+        Rule = rule,
+        Tags = self.Tags,
+        State = {}
+    }
+end
+
+function AnomalyManager:_GetCandidates()
+    local candidates = {}
+    if World == nil or World.FindActorsByTag == nil then
+        self.LastError = "World.FindActorsByTag unavailable"
+        return candidates
+    end
+
+    local found = World.FindActorsByTag(self.Tags.Candidate)
+    if found == nil then
+        return candidates
+    end
+
+    for _, actor in pairs(found) do
+        if is_valid_actor(actor) then
+            table.insert(candidates, actor)
+        end
+    end
+
+    return candidates
+end
+
+function AnomalyManager:HasActiveAnomaly()
+    return self.Active ~= nil and is_valid_actor(self.Active.Target)
+end
+
+function AnomalyManager:GetActiveTarget()
+    if not self:HasActiveAnomaly() then
+        return nil
+    end
+    return self.Active.Target
+end
+
+function AnomalyManager:GetActiveRuleName()
+    if self.Active == nil then
+        return nil
+    end
+    return get_rule_name(self.Active.Rule)
+end
+
+function AnomalyManager:DespawnCurrent(reason)
+    local active = self.Active
+    self.Active = nil
+
+    if active == nil then
+        return false
+    end
+
+    if is_valid_actor(active.Target) and active.AddedActiveTag then
+        active.Target:RemoveTag(self.Tags.ActiveTarget)
+    end
+
+    local context = active.Context
+    if context ~= nil then
+        context.Reason = reason
+        safe_call(active.Rule, "Despawn", context)
+    end
+
+    return true
+end
+
+function AnomalyManager:SelectAndSpawn()
+    seed_random_once()
+    self:DespawnCurrent("SelectAndSpawn")
+    self.LastError = nil
+
+    local candidates = self:_GetCandidates()
+    if #candidates <= 0 then
+        self.LastError = "AnomalyCandidate tag actor not found"
+        print("[AnomalyManager] " .. self.LastError)
+        return false
+    end
+
+    if #self.Rules <= 0 then
+        self.LastError = "Anomaly rule pool is empty"
+        print("[AnomalyManager] " .. self.LastError)
+        return false
+    end
+
+    local target = candidates[math.random(1, #candidates)]
+    local rule = self.Rules[math.random(1, #self.Rules)]
+    local context = self:_BuildContext(target, rule)
+
+    local ok, message = safe_call(rule, "Spawn", context)
+    if not ok then
+        self.LastError = "Spawn failed: " .. get_rule_name(rule) .. " target=" .. target.Name .. " reason=" .. tostring(message)
+        print("[AnomalyManager] " .. self.LastError)
+        return false
+    end
+
+    local hadActiveTag = target:HasTag(self.Tags.ActiveTarget)
+    if not hadActiveTag then
+        target:AddTag(self.Tags.ActiveTarget)
+    end
+
+    self.Active = {
+        Target = target,
+        Rule = rule,
+        Context = context,
+        AddedActiveTag = not hadActiveTag,
+        bCleared = false
+    }
+
+    print("[AnomalyManager] Active anomaly=" .. get_rule_name(rule) .. " target=" .. target.Name)
+    return true
+end
+
+function AnomalyManager:Tick(dt)
+    local active = self.Active
+    if active == nil then
+        return
+    end
+
+    if not is_valid_actor(active.Target) then
+        self:DespawnCurrent("TargetInvalid")
+        return
+    end
+
+    active.Context.DeltaTime = dt
+    safe_call(active.Rule, "Tick", active.Context)
+
+    local ok, cleared = pcall(function()
+        if type(active.Rule.IsCleared) ~= "function" then
+            return false
+        end
+        return active.Rule:IsCleared(active.Context)
+    end)
+
+    if ok and cleared then
+        active.bCleared = true
+    end
+end
+
+function AnomalyManager:ReportShot(actor)
+    if actor == nil or self.Active == nil then
+        return false
+    end
+
+    local active = self.Active
+    if not is_valid_actor(active.Target) then
+        self:DespawnCurrent("TargetInvalid")
+        return false
+    end
+
+    if actor ~= active.Target then
+        return false
+    end
+
+    active.bCleared = true
+    active.Context.State.bCleared = true
+    self:DespawnCurrent("Shot")
+    return true
+end
+
+function AnomalyManager:Reset()
+    self:DespawnCurrent("Reset")
+    self.LastError = nil
+end
+
+return AnomalyManager

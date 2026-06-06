@@ -56,6 +56,7 @@
 #include "Component/Shape/CapsuleComponent.h"
 #include "Component/Shape/SphereComponent.h"
 #include "Component/Vehicle/VehicleWheelPoseComponent.h"
+#include "Collision/Math/ConvexVolume.h"
 #include "Core/Property/ArrayProperty.h"
 #include "Core/Property/BoolProperty.h"
 #include "Core/Property/ClassProperty.h"
@@ -108,6 +109,7 @@
 #include "Platform/WindowsWindow.h"
 #include "Profiling/Time/Timer.h"
 #include "Runtime/Engine.h"
+#include "Render/Types/MinimalViewInfo.h"
 #include "Texture/Texture2D.h"
 #include "UI/UIManager.h"
 #include "UI/UserWidget.h"
@@ -4712,6 +4714,26 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         [](UPrimitiveComponent* Component) -> bool
         {
             return IsValid(Component) ? Component->GetGenerateOverlapEvents() : false;
+        },
+        "SetVisibility",
+        [](UPrimitiveComponent* Component, bool bVisible)
+        {
+            if (IsValid(Component)) Component->SetVisibility(bVisible);
+        },
+        "IsVisible",
+        [](UPrimitiveComponent* Component) -> bool
+        {
+            return IsValid(Component) ? Component->IsVisible() : false;
+        },
+        "SetCastShadow",
+        [](UPrimitiveComponent* Component, bool bCastShadow)
+        {
+            if (IsValid(Component)) Component->SetCastShadow(bCastShadow);
+        },
+        "GetCastShadow",
+        [](UPrimitiveComponent* Component) -> bool
+        {
+            return IsValid(Component) ? Component->GetCastShadow() : false;
         }
     );
 
@@ -4812,6 +4834,26 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         &USkeletalMeshComponent::SetLooping,
         "SetPlaying",
         &USkeletalMeshComponent::SetPlaying,
+        "GetAnimationPath",
+        [](USkeletalMeshComponent& Mesh)
+        {
+            return Mesh.GetAnimationData().AnimToPlayPath.ToString();
+        },
+        "GetPlayRate",
+        [](USkeletalMeshComponent& Mesh)
+        {
+            return Mesh.GetAnimationData().PlayRate;
+        },
+        "GetLooping",
+        [](USkeletalMeshComponent& Mesh)
+        {
+            return Mesh.GetAnimationData().bLooping;
+        },
+        "IsPlaying",
+        [](USkeletalMeshComponent& Mesh)
+        {
+            return Mesh.GetAnimationData().bPlaying;
+        },
         "GetAnimInstance",
         &USkeletalMeshComponent::GetAnimInstance,
         "GetAnimationMode",
@@ -5635,6 +5677,42 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         {
             UWorld* CurrentWorld = GEngine ? GEngine->GetWorld() : nullptr;
             return CurrentWorld ? CurrentWorld->GetGameTimeSeconds() : 0.0f;
+        }
+    );
+    World.set_function(
+        "IsActorInViewFrustum",
+        [](AActor* Actor) -> bool
+        {
+            if (!IsValid(Actor) || !GEngine)
+            {
+                return false;
+            }
+
+            UWorld* CurrentWorld = GEngine->GetWorld();
+            if (!CurrentWorld || Actor->GetWorld() != CurrentWorld)
+            {
+                return false;
+            }
+
+            UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Actor->GetRootComponent());
+            if (!IsValid(Primitive))
+            {
+                Primitive = Actor->GetComponentByClass<UPrimitiveComponent>();
+            }
+            if (!IsValid(Primitive))
+            {
+                return false;
+            }
+
+            FMinimalViewInfo POV;
+            if (!CurrentWorld->GetActivePOV(POV))
+            {
+                return false;
+            }
+
+            FConvexVolume ViewFrustum;
+            ViewFrustum.UpdateFromMatrix(POV.CalculateViewProjectionMatrix());
+            return ViewFrustum.IntersectAABB(Primitive->GetWorldBoundingBox());
         }
     );
     World.set_function(
