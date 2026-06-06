@@ -11,8 +11,11 @@
 #include "Animation/Nodes/AnimNode_Slot.h"
 #include "Animation/Nodes/AnimNode_StateMachine.h"
 #include "Animation/Nodes/AnimNode_SequencePlayer.h"
+#include "Component/Camera/CameraComponent.h"
 #include "Component/Movement/CharacterMovementComponent.h"
+#include "Component/PrimitiveComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 #include "Core/Logging/Log.h"
 #include "Core/Types/PropertyTypes.h"
 #include "GameFramework/AActor.h"
@@ -520,6 +523,249 @@ void ULuaAnimInstance::InstallBindings()
 	Anim.set_function("is_key_pressed",
 		[](int VK) -> bool { return FLuaScriptManager::GetLuaInputSnapshot().WasPressed(VK); });
 
+	Anim.set_function("get_owner_actor",
+		[this]() -> AActor*
+		{
+			return OwningComponent ? OwningComponent->GetOwner() : nullptr;
+		});
+	Anim.set_function("has_socket",
+		[this](std::string SocketName) -> bool
+		{
+			return OwningComponent && !SocketName.empty() && OwningComponent->HasSocket(FName(SocketName));
+		});
+	Anim.set_function("get_socket_location",
+		[this](std::string SocketName) -> FVector
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return FVector::ZeroVector;
+			}
+			return OwningComponent->GetSocketWorldLocation(FName(SocketName));
+		});
+	Anim.set_function("get_socket_rotation",
+		[this](std::string SocketName) -> FVector
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return FVector::ZeroVector;
+			}
+			return OwningComponent->GetSocketWorldRotation(FName(SocketName)).ToVector();
+		});
+	Anim.set_function("get_socket_forward",
+		[this](std::string SocketName) -> FVector
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return FVector::ForwardVector;
+			}
+			return OwningComponent->GetSocketForwardVector(FName(SocketName));
+		});
+
+	Anim.set_function("set_socket_child_visibility",
+		[this](std::string SocketName, bool bVisible) -> bool
+		{
+			if (!OwningComponent || SocketName.empty())
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FName TargetSocket(SocketName);
+			for (USceneComponent* Child : OwningComponent->GetChildren())
+			{
+				if (!Child || Child->GetAttachSocketName() != TargetSocket)
+				{
+					continue;
+				}
+
+				if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Child))
+				{
+					Primitive->SetVisibility(bVisible);
+					bChangedAny = true;
+				}
+			}
+			return bChangedAny;
+		});
+
+	Anim.set_function("set_owner_mesh_visibility",
+		[this](bool bVisible) -> bool
+		{
+			if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(OwningComponent))
+			{
+				Primitive->SetVisibility(bVisible);
+				return true;
+			}
+			return false;
+		});
+
+	Anim.set_function("set_owner_mesh_pitch",
+		[this](float PitchDegrees) -> bool
+		{
+			if (!OwningComponent)
+			{
+				return false;
+			}
+
+			FRotator Rotation = OwningComponent->GetRelativeRotation();
+			Rotation.Pitch = PitchDegrees;
+			OwningComponent->SetRelativeRotation(Rotation);
+			return true;
+		});
+
+	Anim.set_function("set_static_mesh_visibility_by_path",
+		[this](std::string MeshPath, bool bVisible) -> bool
+		{
+			if (!OwningComponent || MeshPath.empty())
+			{
+				return false;
+			}
+
+			AActor* Owner = OwningComponent->GetOwner();
+			if (!Owner)
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FString TargetPath(MeshPath);
+
+			TArray<USceneComponent*> SceneStack;
+			if (USceneComponent* Root = Owner->GetRootComponent())
+			{
+				SceneStack.push_back(Root);
+			}
+
+			for (size_t Index = 0; Index < SceneStack.size(); ++Index)
+			{
+				USceneComponent* SceneComponent = SceneStack[Index];
+				if (!SceneComponent)
+				{
+					continue;
+				}
+
+				for (USceneComponent* Child : SceneComponent->GetChildren())
+				{
+					if (Child)
+					{
+						SceneStack.push_back(Child);
+					}
+				}
+
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(SceneComponent);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetVisibility(bVisible);
+					bChangedAny = true;
+				}
+			}
+
+			for (UActorComponent* Component : Owner->GetComponents())
+			{
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetVisibility(bVisible);
+					bChangedAny = true;
+				}
+			}
+			return bChangedAny;
+		});
+
+	Anim.set_function("set_static_mesh_relative_location_by_path",
+		[this](std::string MeshPath, float X, float Y, float Z) -> bool
+		{
+			if (!OwningComponent || MeshPath.empty())
+			{
+				return false;
+			}
+
+			AActor* Owner = OwningComponent->GetOwner();
+			if (!Owner)
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FString TargetPath(MeshPath);
+			const FVector NewLocation(X, Y, Z);
+
+			TArray<USceneComponent*> SceneStack;
+			if (USceneComponent* Root = Owner->GetRootComponent())
+			{
+				SceneStack.push_back(Root);
+			}
+
+			for (size_t Index = 0; Index < SceneStack.size(); ++Index)
+			{
+				USceneComponent* SceneComponent = SceneStack[Index];
+				if (!SceneComponent)
+				{
+					continue;
+				}
+
+				for (USceneComponent* Child : SceneComponent->GetChildren())
+				{
+					if (Child)
+					{
+						SceneStack.push_back(Child);
+					}
+				}
+
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(SceneComponent);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetRelativeLocation(NewLocation);
+					bChangedAny = true;
+				}
+			}
+
+			for (UActorComponent* Component : Owner->GetComponents())
+			{
+				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
+				if (StaticMeshComponent && StaticMeshComponent->GetStaticMeshPath() == TargetPath)
+				{
+					StaticMeshComponent->SetRelativeLocation(NewLocation);
+					bChangedAny = true;
+				}
+			}
+			return bChangedAny;
+		});
+
+	Anim.set_function("toggle_socket_children",
+		[this](std::string EnabledSocketName, std::string DisabledSocketName) -> bool
+		{
+			if (!OwningComponent || EnabledSocketName.empty() || DisabledSocketName.empty())
+			{
+				return false;
+			}
+
+			bool bChangedAny = false;
+			const FName EnabledSocket(EnabledSocketName);
+			const FName DisabledSocket(DisabledSocketName);
+			for (USceneComponent* Child : OwningComponent->GetChildren())
+			{
+				if (!Child)
+				{
+					continue;
+				}
+
+				const FName AttachSocket = Child->GetAttachSocketName();
+				const bool bEnable = AttachSocket == EnabledSocket;
+				const bool bDisable = AttachSocket == DisabledSocket;
+				if (!bEnable && !bDisable)
+				{
+					continue;
+				}
+
+				if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Child))
+				{
+					Primitive->SetVisibility(bEnable);
+					bChangedAny = true;
+				}
+			}
+			return bChangedAny;
+		});
+
 	// ── AnimGraph build API (Phase 1.6b) — sub-state-machine / 임의 트리 표현 ──
 	// 노드는 UAnimInstance::MakeNode 가 OwnedNodes 에 push 후 raw 반환 — lifetime 은 C++ 가 관리.
 	// lua 는 raw pointer 핸들만 들고 다님 (light userdata). 다른 build 함수의 인자로 그대로 전달.
@@ -548,6 +794,18 @@ void ULuaAnimInstance::InstallBindings()
 			P->PlayRate = Rate;
 			P->bLooping = Loop;
 			return P;
+		});
+
+	Anim.set_function("get_sequence_length",
+		[](std::string Path) -> float
+		{
+			if (Path.empty() || Path == "None")
+			{
+				return 0.0f;
+			}
+
+			UAnimSequenceBase* Sequence = FAnimationManager::Get().LoadAnimation(Path);
+			return Sequence ? Sequence->GetPlayLength() : 0.0f;
 		});
 
 	// SM 에 state 추가 — SubGraphOverride 로 임의 노드를 state 의 sub-graph 로 박음.

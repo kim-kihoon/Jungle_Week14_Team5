@@ -1,6 +1,7 @@
 #include "SkinnedMeshComponent.h"
 #include "Mesh/Skeletal/SkeletalMesh.h"
 #include "Object/GarbageCollection.h"
+#include "Object/ObjectIterator.h"
 #include "Animation/Skeleton/Skeleton.h"
 #include "Serialization/Archive.h"
 #include "Runtime/Engine.h"
@@ -1300,6 +1301,34 @@ void USkinnedMeshComponent::MarkSocketAttachedChildrenDirty()
 		if (Child && Child->GetAttachSocketName().IsValid() && Child->GetAttachSocketName() != FName::None)
 		{
 			Child->MarkTransformDirty();
+		}
+	}
+}
+
+void USkinnedMeshComponent::RefreshSocketAttachedChildren()
+{
+	MarkSocketAttachedChildrenDirty();
+}
+
+void USkinnedMeshComponent::RefreshSocketAttachedChildrenForSkeleton(const USkeleton* Skeleton)
+{
+	if (!Skeleton)
+	{
+		return;
+	}
+
+	for (TObjectIterator<USkinnedMeshComponent> It; It; ++It)
+	{
+		USkinnedMeshComponent* Component = *It;
+		if (!IsValid(Component))
+		{
+			continue;
+		}
+
+		USkeletalMesh* Mesh = Component->GetSkeletalMesh();
+		if (Mesh && Mesh->GetSkeleton() == Skeleton)
+		{
+			Component->RefreshSocketAttachedChildren();
 		}
 	}
 }

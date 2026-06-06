@@ -945,6 +945,10 @@ void ACharacter::SetupInputComponent()
 			AddMovementInput(YawOnly.GetRightVector(), Value);
 		});
 
+	}
+
+	if (bAutoInputJump)
+	{
 		// Space = Jump. Walking 중에만 effective (CharacterMovement::Jump 가 guard).
 		InputComponent->AddActionMapping("Jump", 0x20);
 		InputComponent->BindAction("Jump", EInputEvent::Pressed, [this]()

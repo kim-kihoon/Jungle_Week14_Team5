@@ -34,6 +34,7 @@ void FMeshEditorViewportClient::Initialize(ID3D11Device* Device, uint32 Width, u
 void FMeshEditorViewportClient::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	Collector.AddReferencedObject(SelectedMesh);
+	Collector.AddReferencedObject(SelectedSocketSkeleton);
 	Collector.AddReferencedObject(Gizmo);
 	Collector.AddReferencedObject(PreviewMeshComponent);
 	Collector.AddReferencedObject(BoneDebugComponent);
@@ -220,6 +221,7 @@ void FMeshEditorViewportClient::Tick(float DeltaTime)
 void FMeshEditorViewportClient::SetSelectedBone(USkeletalMesh* Mesh, int32 BoneIndex)
 {
 	SelectedMesh = Mesh;
+	SelectedSocketSkeleton = nullptr;
 	SelectedBoneIndex = BoneIndex;
 	SelectedSocketIndex = -1;
 	ActivePhysicsGizmoKind = EPhysicsGizmoSelectionKind::None;
@@ -247,6 +249,7 @@ void FMeshEditorViewportClient::SetSelectedBone(USkeletalMesh* Mesh, int32 BoneI
 void FMeshEditorViewportClient::SetSelectedSocket(USkeletalMesh* Mesh, USkeleton* Skeleton, int32 SocketIndex)
 {
 	SelectedMesh = Mesh;
+	SelectedSocketSkeleton = Skeleton;
 	SelectedBoneIndex = -1;
 	SelectedSocketIndex = SocketIndex;
 	ActivePhysicsGizmoKind = EPhysicsGizmoSelectionKind::None;
@@ -383,6 +386,7 @@ bool FMeshEditorViewportClient::ConsumeSocketGizmoModified()
 	if (bModified)
 	{
 		RefreshBoneDebug();
+		USkinnedMeshComponent::RefreshSocketAttachedChildrenForSkeleton(SelectedSocketSkeleton);
 	}
 	return bModified;
 }

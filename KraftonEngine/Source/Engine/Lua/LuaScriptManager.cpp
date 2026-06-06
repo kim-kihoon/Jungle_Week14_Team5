@@ -79,6 +79,7 @@
 #include "GameFramework/GameMode/PlayerController.h"
 #include "GameFramework/Pawn/Character.h"
 #include "GameFramework/Pawn/Pawn.h"
+#include "Serialization/SceneSaveManager.h"
 #include "GameFramework/Pawn/WheeledVehiclePawn.h"
 #include "Input/InputKeyCodes.h"
 #include "Input/InputSystem.h"
@@ -3504,8 +3505,16 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         &UProjectileMovementComponent::GetInitialSpeed,
         "GetMaxSpeed",
         &UProjectileMovementComponent::GetMaxSpeed,
+        "SetProjectileGravityScale",
+        &UProjectileMovementComponent::SetProjectileGravityScale,
+        "GetProjectileGravityScale",
+        &UProjectileMovementComponent::GetProjectileGravityScale,
         "GetPreviewVelocity",
         &UProjectileMovementComponent::GetPreviewVelocity,
+        "SetIgnoredActor",
+        &UProjectileMovementComponent::SetIgnoredActor,
+        "GetIgnoredActor",
+        &UProjectileMovementComponent::GetIgnoredActor,
         "StopSimulating",
         &UProjectileMovementComponent::StopSimulating
     );
@@ -4584,6 +4593,36 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         {
             Component.SetRelativeRotation(Rotation);
         },
+        "HasSocket",
+        [](USceneComponent& Component, const FString& SocketName)
+        {
+            return Component.HasSocket(FName(SocketName));
+        },
+        "GetSocketLocation",
+        [](USceneComponent& Component, const FString& SocketName)
+        {
+            return Component.GetSocketWorldLocation(FName(SocketName));
+        },
+        "GetSocketRotation",
+        [](USceneComponent& Component, const FString& SocketName)
+        {
+            return Component.GetSocketWorldRotation(FName(SocketName)).ToVector();
+        },
+        "GetSocketForward",
+        [](USceneComponent& Component, const FString& SocketName)
+        {
+            return Component.GetSocketForwardVector(FName(SocketName));
+        },
+        "GetSocketRight",
+        [](USceneComponent& Component, const FString& SocketName)
+        {
+            return Component.GetSocketRightVector(FName(SocketName));
+        },
+        "GetSocketUp",
+        [](USceneComponent& Component, const FString& SocketName)
+        {
+            return Component.GetSocketUpVector(FName(SocketName));
+        },
 
         // 부모 기준 상대 위치 — 동일한 메시를 4개 깐 바퀴 같은 케이스에서 앞/뒤 구분 등
         // 위치 기반 필터링에 쓰인다. 월드 위치는 위 "Location" 프로퍼티 참고.
@@ -5064,6 +5103,12 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             return nullptr;
         },
 
+        "GetProjectileMovementComponent",
+        [](AActor& Actor)
+        {
+            return Actor.GetComponentByClass<UProjectileMovementComponent>();
+        },
+
         "GetStaticMeshComponent",
         [](AActor& Actor)
         {
@@ -5395,6 +5440,32 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         }
     );
     World.set_function(
+        "SpawnActorTemplate",
+        [](const FString& TemplatePath, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale) -> AActor*
+        {
+            if (!GEngine) return nullptr;
+            UWorld* W = GEngine->GetWorld();
+            if (!W) return nullptr;
+
+            FString Error;
+            AActor* Actor = FSceneSaveManager::LoadActorTemplateFromJSON(TemplatePath, W, &Error);
+            if (!IsValid(Actor))
+            {
+                if (!Error.empty())
+                {
+                    UE_LOG("[Lua] SpawnActorTemplate failed: %s Path=%s", Error.c_str(), TemplatePath.c_str());
+                }
+                return nullptr;
+            }
+
+            const FVector TemplateScale = Actor->GetActorScale();
+            Actor->SetActorLocation(Location.value_or(FVector(0, 0, 0)));
+            Actor->SetActorRotation(Rotation.value_or(FVector(0, 0, 0)));
+            Actor->SetActorScale(Scale.value_or(TemplateScale));
+            return Actor;
+        }
+    );
+    World.set_function(
         "SpawnPawn",
         [](const FString& ClassName, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale, sol::optional<bool> bPossess) -> APawn*
         {
@@ -5549,6 +5620,58 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             const FVector Direction = Delta / MaxDistance;
             FHitResult    Hit;
             if (CurrentWorld->PhysicsRaycast(Start, Direction, MaxDistance, Hit, ECollisionChannel::WorldStatic, IgnoreActor.value_or(nullptr)))
+            {
+                Result["Hit"]       = true;
+                Result["Actor"]     = Hit.HitActor;
+                Result["Component"] = Hit.HitComponent;
+                Result["Location"]  = Hit.WorldHitLocation;
+                Result["Normal"]    = Hit.WorldNormal;
+                Result["Distance"]  = Hit.Distance;
+            }
+            return Result;
+        }
+    );
+    World.set_function(
+        "LineTraceObjects",
+        [](const FVector& Start, const FVector& End, sol::optional<AActor*> IgnoreActor, sol::optional<uint32> ObjectTypeMask) -> sol::table
+        {
+            sol::table Result   = FLuaScriptManager::GetState().create_table();
+            Result["Hit"]       = false;
+            Result["Actor"]     = static_cast<AActor*>(nullptr);
+            Result["Component"] = static_cast<UPrimitiveComponent*>(nullptr);
+            Result["Location"]  = FVector(0, 0, 0);
+            Result["Normal"]    = FVector(0, 0, 0);
+            Result["Distance"]  = 0.0f;
+
+            UWorld* CurrentWorld = GEngine ? GEngine->GetWorld() : nullptr;
+            if (!CurrentWorld)
+            {
+                return Result;
+            }
+
+            FVector     Delta       = End - Start;
+            const float MaxDistance = Delta.Length();
+            if (MaxDistance <= 0.0001f)
+            {
+                return Result;
+            }
+
+            const uint32 DefaultMask =
+                ObjectTypeBit(ECollisionChannel::WorldStatic) |
+                ObjectTypeBit(ECollisionChannel::WorldDynamic) |
+                ObjectTypeBit(ECollisionChannel::Pawn) |
+                ObjectTypeBit(ECollisionChannel::Projectile) |
+                ObjectTypeBit(ECollisionChannel::Trigger);
+
+            const FVector Direction = Delta / MaxDistance;
+            FHitResult    Hit;
+            if (CurrentWorld->PhysicsRaycastByObjectTypes(
+                    Start,
+                    Direction,
+                    MaxDistance,
+                    Hit,
+                    ObjectTypeMask.value_or(DefaultMask),
+                    IgnoreActor.value_or(nullptr)))
             {
                 Result["Hit"]       = true;
                 Result["Actor"]     = Hit.HitActor;

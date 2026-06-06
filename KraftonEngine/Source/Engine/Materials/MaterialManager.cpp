@@ -1,6 +1,9 @@
 #include "MaterialManager.h"
 #include "Object/GarbageCollection.h"
 #include "Object/Object.h"
+#include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
@@ -19,6 +22,66 @@
 namespace
 {
     constexpr const char* MaterialGraphGeneratorVersion = "MaterialGraph";
+
+	// hospital-map 등 legacy Auto 머티리얼: 잘못된 노멀/알베도 보정 후 디스크에 반영.
+	static void SanitizeLoadedImportMaterial(UMaterial* Material, FMaterialManager& Manager)
+	{
+		if (!Material || Material->IsMaterialInstance())
+		{
+			return;
+		}
+
+		const FString AssetPath = Material->GetAssetPathFileName();
+		if (AssetPath.find("Content/Material/Auto/") == FString::npos)
+		{
+			return;
+		}
+
+		if (Material->GetShaderPathForSerialize() != "Shaders/Geometry/UberLit.hlsl")
+		{
+			return;
+		}
+
+		bool bDirty = false;
+		const bool bEmissive = Material->GetScalarParameterValue("bEmissive") >= 0.5f;
+
+		UTexture2D* NormalTex = Material->GetTextureParameterValue("NormalTexture");
+		const FString NormalPath = NormalTex ? NormalTex->GetSourcePath() : FString();
+		if (Material->GetScalarParameterValue("HasNormalMap") >= 0.5f && NormalPath.empty())
+		{
+			Material->SetScalarParameter("HasNormalMap", 0.0f);
+			if (NormalTex)
+			{
+				Material->SetTextureParameter("NormalTexture", nullptr);
+			}
+			bDirty = true;
+		}
+
+		UTexture2D* DiffuseTex = Material->GetTextureParameterValue("DiffuseTexture");
+		FVector4 SectionColor = Material->GetVector4ParameterValue("SectionColor");
+		if (!bEmissive)
+		{
+			if (DiffuseTex)
+			{
+				if (SectionColor.X < 0.99f || SectionColor.Y < 0.99f || SectionColor.Z < 0.99f)
+				{
+					Material->SetVector4Parameter("SectionColor", FVector4(1.0f, 1.0f, 1.0f, 1.0f));
+					bDirty = true;
+				}
+			}
+			else if (SectionColor.X < 0.2f && SectionColor.Y < 0.2f && SectionColor.Z < 0.2f)
+			{
+				Material->SetVector4Parameter("SectionColor", FVector4(0.2f, 0.2f, 0.2f, 1.0f));
+				bDirty = true;
+			}
+		}
+
+		if (bDirty)
+		{
+			Material->RebuildCachedSRVs();
+			Manager.SaveMaterial(Material, AssetPath);
+		}
+	}
 
 	// ".mat" → ".uasset" 정규화(이미 .uasset 이면 그대로). 캐시 키 + 바이너리 타겟.
 	// 메시 임베드/하드코딩 legacy ".mat" 참조가 자동으로 ".uasset" 을 가리키게 한다.
@@ -150,6 +213,13 @@ UMaterial* FMaterialManager::GetOrCreateMaterial(const FString& MatFilePath)
 	DefaultMaterial->Create(UassetPath, Template, EMaterialDomain::Surface, EBlendMode::Opaque, std::move(Buffers));
 	DefaultMaterial->SetShaderPathForSerialize(DefaultShaderPath);
 	DefaultMaterial->SetVector4Parameter("SectionColor", FVector4(1.0f, 0.0f, 1.0f, 1.0f));
+	DefaultMaterial->SetScalarParameter("HasNormalMap", 0.0f);
+	DefaultMaterial->SetScalarParameter("Opacity", 1.0f);
+	DefaultMaterial->SetScalarParameter("bEmissive", 0.0f);
+	DefaultMaterial->SetScalarParameter("EmissiveIntensity", 1.0f);
+	DefaultMaterial->SetScalarParameter("SpecularIntensity", 1.0f);
+	DefaultMaterial->SetScalarParameter("Shininess", 32.0f);
+	DefaultMaterial->SetScalarParameter("Metallic", 0.0f);
 	MaterialCache.emplace(UassetPath, DefaultMaterial);
 	return DefaultMaterial;
 }
@@ -251,12 +321,16 @@ UMaterial* FMaterialManager::LoadMaterialBinary(const FString& UassetPath)
         }
     }
 
+	SanitizeLoadedImportMaterial(Material, *this);
+
 	return Material;
 }
 
 // 임포터용 — JSON 없이 머티리얼을 직접 만들고 .uasset 으로 저장한다.
 UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPath, const FVector4& SectionColor,
-	const FString& DiffuseTexturePath, const FString& NormalTexturePath)
+	const FString& DiffuseTexturePath, const FString& NormalTexturePath,
+	bool bEmissive, float EmissiveIntensity, bool bTransparent, float Opacity,
+	bool bTwoSided, float SpecularIntensity, float Shininess, float Metallic)
 {
 	MaterialCache.erase(UassetPath);
 
@@ -265,16 +339,24 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	auto Buffers = CreateConstantBuffers(Template);
 
 	UMaterial* Material = UObjectManager::Get().CreateObject<UMaterial>();
-	Material->Create(UassetPath, Template, EMaterialDomain::Surface, EBlendMode::Opaque, std::move(Buffers));
+	const EBlendMode BlendMode = bTransparent ? EBlendMode::Transparent : EBlendMode::Opaque;
+	Material->Create(UassetPath, Template, EMaterialDomain::Surface, BlendMode, std::move(Buffers));
 	Material->SetShaderPathForSerialize(DefaultShaderPath);
 	Material->SetVector4Parameter("SectionColor", SectionColor);
-	Material->SetScalarParameter("HasNormalMap", NormalTexturePath.empty() ? 0.0f : 1.0f);
-	Material->SetScalarParameter("Opacity", 1.0f); // CB zero-init=0(투명) 방지 — 신규 머티리얼 기본 불투명
+	const bool bUseNormalMap = !NormalTexturePath.empty();
+	Material->SetScalarParameter("HasNormalMap", bUseNormalMap ? 1.0f : 0.0f);
+	Material->SetScalarParameter("Opacity", std::clamp(Opacity, 0.0f, 1.0f)); // CB zero-init=0(투명) 방지
+	Material->SetScalarParameter("bEmissive", bEmissive ? 1.0f : 0.0f);
+	Material->SetScalarParameter("EmissiveIntensity", bEmissive ? EmissiveIntensity : 1.0f);
+	Material->SetScalarParameter("SpecularIntensity", std::clamp(SpecularIntensity, 0.0f, 4.0f));
+	Material->SetScalarParameter("Shininess", std::clamp(Shininess, 2.0f, 256.0f));
+	Material->SetScalarParameter("Metallic", std::clamp(Metallic, 0.0f, 1.0f));
+	Material->SetTwoSided(bTwoSided);
 
 	if (!DiffuseTexturePath.empty())
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(DiffuseTexturePath, Device, ETextureColorSpace::SRGB))
 			Material->SetTextureParameter("DiffuseTexture", Tex);
-	if (!NormalTexturePath.empty())
+	if (bUseNormalMap)
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(NormalTexturePath, Device, ETextureColorSpace::Linear))
 			Material->SetTextureParameter("NormalTexture", Tex);
 

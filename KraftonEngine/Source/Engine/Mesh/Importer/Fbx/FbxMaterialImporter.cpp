@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <cwctype>
 #include <filesystem>
@@ -79,6 +80,43 @@ namespace
 		return Ext == L".png" || Ext == L".jpg" || Ext == L".jpeg" || Ext == L".tga" || Ext == L".bmp" || Ext == L".dds";
 	}
 
+	std::wstring DetectTextureExtensionFromContent(const fs::path& Path)
+	{
+		std::ifstream File(Path, std::ios::binary);
+		if (!File)
+		{
+			return std::wstring();
+		}
+
+		unsigned char Header[16] = {};
+		File.read(reinterpret_cast<char*>(Header), sizeof(Header));
+		const std::streamsize Count = File.gcount();
+		if (Count >= 8 &&
+			Header[0] == 0x89 && Header[1] == 0x50 && Header[2] == 0x4E && Header[3] == 0x47 &&
+			Header[4] == 0x0D && Header[5] == 0x0A && Header[6] == 0x1A && Header[7] == 0x0A)
+		{
+			return L".png";
+		}
+		if (Count >= 3 && Header[0] == 0xFF && Header[1] == 0xD8 && Header[2] == 0xFF)
+		{
+			return L".jpg";
+		}
+		if (Count >= 4 && Header[0] == 'D' && Header[1] == 'D' && Header[2] == 'S' && Header[3] == ' ')
+		{
+			return L".dds";
+		}
+		if (Count >= 2 && Header[0] == 'B' && Header[1] == 'M')
+		{
+			return L".bmp";
+		}
+		return std::wstring();
+	}
+
+	bool IsSupportedTextureFile(const fs::path& Path)
+	{
+		return IsSupportedTextureExtension(Path) || !DetectTextureExtensionFromContent(Path).empty();
+	}
+
 	bool HasUnsupportedTextureExtension(const fs::path& Path)
 	{
 		return !Path.extension().empty() && !IsSupportedTextureExtension(Path);
@@ -100,6 +138,16 @@ namespace
 			L".png", L".jpg", L".jpeg", L".tga", L".bmp", L".dds"
 		};
 		return Extensions;
+	}
+
+	std::wstring NormalizeTextureMatchName(std::wstring Value)
+	{
+		Value = ToLower(std::move(Value));
+		Value.erase(std::remove_if(Value.begin(), Value.end(), [](wchar_t Ch)
+		{
+			return Ch == L'.' || Ch == L'_' || Ch == L'-' || std::iswspace(Ch);
+		}), Value.end());
+		return Value;
 	}
 
 	bool TryFindCaseInsensitive(const fs::path& Candidate, fs::path& OutPath)
@@ -265,15 +313,18 @@ namespace
 			}
 
 			const fs::path EntryPath = Entry.path();
-			if (!IsSupportedTextureExtension(EntryPath))
+			if (!IsSupportedTextureFile(EntryPath))
 			{
 				continue;
 			}
 
 			const std::wstring EntryFileName = ToLower(EntryPath.filename().wstring());
 			const std::wstring EntryStem = ToLower(EntryPath.stem().wstring());
+			const std::wstring EntryMatchName = NormalizeTextureMatchName(EntryPath.filename().wstring());
+			const std::wstring WantedMatchName = NormalizeTextureMatchName(RawPath.filename().wstring());
 			if ((!WantedFileName.empty() && EntryFileName == WantedFileName) ||
-				(!WantedStem.empty() && EntryStem == WantedStem))
+				(!WantedStem.empty() && EntryStem == WantedStem) ||
+				(!WantedMatchName.empty() && EntryMatchName == WantedMatchName))
 			{
 				Matches.push_back(EntryPath);
 			}
@@ -293,10 +344,15 @@ namespace
 			return FString();
 		}
 
+		std::wstring DetectedExtension;
 		if (!IsSupportedTextureExtension(FoundPath))
 		{
-			LogUnsupportedTexture(ResolveContext, FoundPath);
-			return FString();
+			DetectedExtension = DetectTextureExtensionFromContent(FoundPath);
+			if (DetectedExtension.empty())
+			{
+				LogUnsupportedTexture(ResolveContext, FoundPath);
+				return FString();
+			}
 		}
 
 		const fs::path FbxPath = ToFilesystemPath(ResolveContext.FbxSourcePath);
@@ -307,10 +363,15 @@ namespace
 		std::error_code Ec;
 		fs::create_directories(DestAbsDir, Ec);
 
-		const fs::path DestAbsPath = DestAbsDir / FoundPath.filename();
+		fs::path DestFileName = FoundPath.filename();
+		if (!DetectedExtension.empty())
+		{
+			DestFileName += DetectedExtension;
+		}
+		const fs::path DestAbsPath = DestAbsDir / DestFileName;
 		if (ToLexicallyNormalAbsolutePath(FoundPath) == ToLexicallyNormalAbsolutePath(DestAbsPath))
 		{
-			const fs::path DestRelPath = DestRelDir / FoundPath.filename();
+			const fs::path DestRelPath = DestRelDir / DestFileName;
 			return FPaths::ToUtf8(DestRelPath.generic_wstring());
 		}
 
@@ -320,7 +381,7 @@ namespace
 			return FPaths::MakeProjectRelative(FPaths::ToUtf8(FoundPath.generic_wstring()));
 		}
 
-		const fs::path DestRelPath = DestRelDir / FoundPath.filename();
+		const fs::path DestRelPath = DestRelDir / DestFileName;
 		return FPaths::ToUtf8(DestRelPath.generic_wstring());
 	}
 
@@ -390,6 +451,58 @@ namespace
 		return Text.compare(Text.size() - TokenLength, TokenLength, Token) == 0;
 	}
 
+	bool IsEmissiveMaterialName(const FString& MaterialName)
+	{
+		return EndsWithToken(MaterialName, "_Emissive");
+	}
+
+	bool IsGlassMaterialName(const FString& MaterialName)
+	{
+		const FString LowerName = ToLower(MaterialName);
+		return LowerName.find("glass") != FString::npos;
+	}
+
+	float ReadDoubleProperty(FbxSurfaceMaterial* Material, const char* PropertyName, float DefaultValue)
+	{
+		if (!Material || !PropertyName)
+		{
+			return DefaultValue;
+		}
+
+		FbxProperty Property = Material->FindProperty(PropertyName);
+		if (!Property.IsValid())
+		{
+			return DefaultValue;
+		}
+
+		return static_cast<float>(Property.Get<FbxDouble>());
+	}
+
+	float ReadDoubleProperty(FbxSurfaceMaterial* Material, const char* PropertyNameA, const char* PropertyNameB, float DefaultValue)
+	{
+		const float ValueA = ReadDoubleProperty(Material, PropertyNameA, DefaultValue);
+		if (ValueA != DefaultValue)
+		{
+			return ValueA;
+		}
+
+		return ReadDoubleProperty(Material, PropertyNameB, DefaultValue);
+	}
+
+	bool IsNearlyBlack(const FVector& Color)
+	{
+		return Color.X < 0.02f && Color.Y < 0.02f && Color.Z < 0.02f;
+	}
+
+	FVector SanitizeLitDiffuseColor(const FVector& Color)
+	{
+		constexpr float MinChannel = 0.2f;
+		return FVector(
+			std::max(Color.X, MinChannel),
+			std::max(Color.Y, MinChannel),
+			std::max(Color.Z, MinChannel));
+	}
+
 	FString GetLowerTextureStem(const FString& TexturePath)
 	{
 		const fs::path Path(FPaths::ToWide(NormalizeTexturePathSeparators(TexturePath)));
@@ -429,6 +542,39 @@ namespace
 		return HasColorTextureToken(Stem);
 	}
 
+	// Normal/Bump 슬롯에 컬러 텍스처가 들어오는 FBX에서 라이팅이 죽지 않도록 역할을 검증한다.
+	void TryAssignNormalMapSlot(FFbxImportedMaterialInfo& MaterialInfo, const FString& TexturePath)
+	{
+		if (TexturePath.empty())
+		{
+			return;
+		}
+
+		if (IsLikelyColorTexturePath(TexturePath) && MaterialInfo.DiffuseTexturePath.empty())
+		{
+			MaterialInfo.DiffuseTexturePath = TexturePath;
+			return;
+		}
+
+		// Direct NormalMap/Bump FBX links are authoritative. Embedded Blender images often
+		// arrive as generic names like Image_2_002.png, so filename tokens are only a guard
+		// against obvious color maps, not a requirement.
+		MaterialInfo.NormalTexturePath = TexturePath;
+	}
+
+	bool TextureNameMatchesMaterial(const FString& TextureStem, const FString& MaterialName)
+	{
+		const std::wstring NormalizedTexture = NormalizeTextureMatchName(FPaths::ToWide(TextureStem));
+		const std::wstring NormalizedMaterial = NormalizeTextureMatchName(FPaths::ToWide(MaterialName));
+		if (NormalizedTexture.empty() || NormalizedMaterial.empty())
+		{
+			return false;
+		}
+
+		return NormalizedTexture.find(NormalizedMaterial) != std::wstring::npos ||
+			NormalizedMaterial.find(NormalizedTexture) != std::wstring::npos;
+	}
+
 	int32 ScoreTextureForRole(const fs::path& TexturePath, const FString& MaterialName, bool bNormalMap)
 	{
 		const FString Stem = ToLower(FPaths::ToUtf8(TexturePath.stem().wstring()));
@@ -436,9 +582,18 @@ namespace
 		const FString Mat  = ToLower(MaterialName);
 		int32 Score = 0;
 
+		if (!TextureNameMatchesMaterial(Stem, Mat))
+		{
+			return -10000;
+		}
+
 		if (Mat.find(Stem) != FString::npos || Stem.find(Mat) != FString::npos)
 		{
 			Score += 80;
+		}
+		else
+		{
+			Score += 60;
 		}
 
 		if (bNormalMap)
@@ -462,7 +617,7 @@ namespace
 	FString FindBestTextureByRole(const FTextureResolveContext& ResolveContext, bool bNormalMap)
 	{
 		fs::path BestPath;
-		int32 BestScore = bNormalMap ? 30 : 30;
+		int32 BestScore = 100;
 		for (const fs::path& Directory : BuildTextureSearchDirectories(ResolveContext))
 		{
 			std::error_code Ec;
@@ -473,7 +628,7 @@ namespace
 
 			for (const fs::directory_entry& Entry : fs::directory_iterator(Directory, Ec))
 			{
-				if (Ec || !Entry.is_regular_file() || !IsSupportedTextureExtension(Entry.path()))
+				if (Ec || !Entry.is_regular_file() || !IsSupportedTextureFile(Entry.path()))
 				{
 					continue;
 				}
@@ -487,7 +642,19 @@ namespace
 			}
 		}
 
-		return BestPath.empty() ? FString() : CopyResolvedTextureToProject(BestPath, ResolveContext);
+		if (BestPath.empty())
+		{
+			return FString();
+		}
+
+		UE_LOG(
+			"FBX texture heuristic match: Material='%s' Role='%s' Texture='%s' Score=%d",
+			ResolveContext.MaterialName.c_str(),
+			bNormalMap ? "Normal" : "Diffuse",
+			FPaths::ToUtf8(BestPath.generic_wstring()).c_str(),
+			BestScore
+		);
+		return CopyResolvedTextureToProject(BestPath, ResolveContext);
 	}
 
 	FString ReadFirstTextureFromProperty(const FbxProperty& Property, const FTextureResolveContext& ResolveContext)
@@ -556,6 +723,8 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 		FFbxImportedMaterialInfo MaterialInfo;
 		MaterialInfo.Name = Material->GetName();
 		MaterialInfo.DiffuseColor = FVector(1.0f, 1.0f, 1.0f);
+		MaterialInfo.bEmissive = IsEmissiveMaterialName(MaterialInfo.Name);
+		MaterialInfo.bTwoSided = MaterialInfo.bEmissive;
 
 		FTextureResolveContext ResolveContext;
 		ResolveContext.FbxSourcePath = Context.SourcePath;
@@ -581,35 +750,37 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 			}
 		}
 
-		FbxProperty NormalProp = Material->FindProperty(FbxSurfaceMaterial::sNormalMap);
-		const FString NormalTexturePath = ReadFirstTextureFromProperty(NormalProp, ResolveContext);
-		if (!NormalTexturePath.empty())
+		if (MaterialInfo.bEmissive)
 		{
-			if (IsLikelyColorTexturePath(NormalTexturePath) && MaterialInfo.DiffuseTexturePath.empty())
+			FbxProperty EmissiveProp = Material->FindProperty(FbxSurfaceMaterial::sEmissive);
+			if (EmissiveProp.IsValid())
 			{
-				MaterialInfo.DiffuseTexturePath = NormalTexturePath;
+				const FbxDouble3 EmissiveColor = EmissiveProp.Get<FbxDouble3>();
+				const FVector ImportedEmissiveColor(
+					static_cast<float>(EmissiveColor[0]),
+					static_cast<float>(EmissiveColor[1]),
+					static_cast<float>(EmissiveColor[2]));
+				if (!IsNearlyBlack(ImportedEmissiveColor))
+				{
+					MaterialInfo.DiffuseColor = ImportedEmissiveColor;
+				}
 			}
-			else
+
+			if (MaterialInfo.Name == "Material.029_Emissive" &&
+				std::fabs(MaterialInfo.DiffuseColor.X - MaterialInfo.DiffuseColor.Y) < 0.02f &&
+				std::fabs(MaterialInfo.DiffuseColor.Y - MaterialInfo.DiffuseColor.Z) < 0.02f)
 			{
-				MaterialInfo.NormalTexturePath = NormalTexturePath;
+				MaterialInfo.DiffuseColor = FVector(1.0f, 0.0f, 0.0f);
 			}
 		}
+
+		FbxProperty NormalProp = Material->FindProperty(FbxSurfaceMaterial::sNormalMap);
+		TryAssignNormalMapSlot(MaterialInfo, ReadFirstTextureFromProperty(NormalProp, ResolveContext));
 
 		if (MaterialInfo.NormalTexturePath.empty())
 		{
 			FbxProperty BumpProp = Material->FindProperty(FbxSurfaceMaterial::sBump);
-			const FString BumpTexturePath = ReadFirstTextureFromProperty(BumpProp, ResolveContext);
-			if (!BumpTexturePath.empty())
-			{
-				if (IsLikelyColorTexturePath(BumpTexturePath) && MaterialInfo.DiffuseTexturePath.empty())
-				{
-					MaterialInfo.DiffuseTexturePath = BumpTexturePath;
-				}
-				else
-				{
-					MaterialInfo.NormalTexturePath = BumpTexturePath;
-				}
-			}
+			TryAssignNormalMapSlot(MaterialInfo, ReadFirstTextureFromProperty(BumpProp, ResolveContext));
 		}
 
 		if (MaterialInfo.DiffuseTexturePath.empty())
@@ -620,6 +791,71 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 		{
 			MaterialInfo.NormalTexturePath = FindBestTextureByRole(ResolveContext, true);
 		}
+
+		float RawOpacity = 1.0f;
+		float RawTransparencyFactor = 0.0f;
+		bool bHasOpacity = false;
+		bool bHasTransparencyFactor = false;
+
+		FbxProperty OpacityProp = Material->FindProperty("Opacity");
+		if (OpacityProp.IsValid())
+		{
+			RawOpacity = static_cast<float>(OpacityProp.Get<FbxDouble>());
+			bHasOpacity = true;
+		}
+
+		FbxProperty TransparencyFactorProp = Material->FindProperty(FbxSurfaceMaterial::sTransparencyFactor);
+		if (TransparencyFactorProp.IsValid())
+		{
+			RawTransparencyFactor = static_cast<float>(TransparencyFactorProp.Get<FbxDouble>());
+			bHasTransparencyFactor = true;
+		}
+
+		if (bHasOpacity)
+		{
+			MaterialInfo.Opacity = RawOpacity;
+		}
+		else if (bHasTransparencyFactor)
+		{
+			MaterialInfo.Opacity = 1.0f - RawTransparencyFactor;
+		}
+
+		MaterialInfo.Opacity = std::clamp(MaterialInfo.Opacity, 0.0f, 1.0f);
+		MaterialInfo.bTransparent = MaterialInfo.Opacity < 0.999f;
+		MaterialInfo.bTwoSided = MaterialInfo.bTwoSided || MaterialInfo.bTransparent;
+
+		const float SpecularFactor = ReadDoubleProperty(Material, "SpecularFactor", 1.0f);
+		const float ReflectionFactor = ReadDoubleProperty(Material, "ReflectionFactor", 0.0f);
+		const float ImportedShininess = ReadDoubleProperty(Material, "Shininess", "ShininessExponent", 32.0f);
+		const float ImportedMetallic = ReadDoubleProperty(Material, "Metallic", 0.0f);
+		MaterialInfo.SpecularIntensity = std::clamp(std::max(SpecularFactor, ReflectionFactor), 0.0f, 4.0f);
+		MaterialInfo.Shininess = std::clamp(ImportedShininess, 2.0f, 256.0f);
+		MaterialInfo.Metallic = std::clamp(ImportedMetallic, 0.0f, 1.0f);
+
+		if (MaterialInfo.bTransparent && MaterialInfo.DiffuseTexturePath.empty() &&
+			IsGlassMaterialName(MaterialInfo.Name) && IsNearlyBlack(MaterialInfo.DiffuseColor))
+		{
+			MaterialInfo.DiffuseColor = FVector(0.65f, 0.85f, 1.0f);
+		}
+
+		UE_LOG("[MaterialImport] %s -> Emissive=%s TwoSided=%s Transparent=%s Opacity=%.3f RawOpacity=%s:%.3f RawTransparencyFactor=%s:%.3f DiffuseColor=(%.3f, %.3f, %.3f) Specular=%.3f Shininess=%.3f Metallic=%.3f Diffuse='%s' Normal='%s'",
+			MaterialInfo.Name.c_str(),
+			MaterialInfo.bEmissive ? "true" : "false",
+			MaterialInfo.bTwoSided ? "true" : "false",
+			MaterialInfo.bTransparent ? "true" : "false",
+			MaterialInfo.Opacity,
+			bHasOpacity ? "true" : "false",
+			RawOpacity,
+			bHasTransparencyFactor ? "true" : "false",
+			RawTransparencyFactor,
+			MaterialInfo.DiffuseColor.X,
+			MaterialInfo.DiffuseColor.Y,
+			MaterialInfo.DiffuseColor.Z,
+			MaterialInfo.SpecularIntensity,
+			MaterialInfo.Shininess,
+			MaterialInfo.Metallic,
+			MaterialInfo.DiffuseTexturePath.c_str(),
+			MaterialInfo.NormalTexturePath.c_str());
 
 		const int32 GlobalIndex = static_cast<int32>(Context.Materials.size());
 		Context.Materials.push_back(MaterialInfo);
@@ -715,13 +951,30 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 
 	std::filesystem::create_directories(FPaths::ToWide("Content/Material/Auto"));
 
-	const FVector4 SectionColor = MaterialInfo.DiffuseTexturePath.empty()
-		? FVector4(MaterialInfo.DiffuseColor.X, MaterialInfo.DiffuseColor.Y, MaterialInfo.DiffuseColor.Z, 1.0f)
+	// Diffuse 텍스처가 있으면 SectionColor는 흰색(텍스처 알베도 유지). Emissive/무텍스처만 FBX 색 사용.
+	const bool bUseImportedColor = MaterialInfo.DiffuseTexturePath.empty() || MaterialInfo.bEmissive;
+	const FVector DiffuseForSection = MaterialInfo.bEmissive
+		? MaterialInfo.DiffuseColor
+		: SanitizeLitDiffuseColor(MaterialInfo.DiffuseColor);
+	const FVector4 SectionColor = bUseImportedColor
+		? FVector4(DiffuseForSection.X, DiffuseForSection.Y, DiffuseForSection.Z, 1.0f)
 		: FVector4(1.0f, 1.0f, 1.0f, 1.0f);
 	const FString DiffuseTex = MaterialInfo.DiffuseTexturePath.empty() ? FString() : FPaths::MakeProjectRelative(MaterialInfo.DiffuseTexturePath);
 	const FString NormalTex  = MaterialInfo.NormalTexturePath.empty()  ? FString() : FPaths::MakeProjectRelative(MaterialInfo.NormalTexturePath);
 
 	// JSON 없이 머티리얼을 직접 빌드해 .uasset(바이너리)으로 저장.
-	FMaterialManager::Get().CreateImportedMaterialAsset(UassetPath, SectionColor, DiffuseTex, NormalTex);
+	FMaterialManager::Get().CreateImportedMaterialAsset(
+		UassetPath,
+		SectionColor,
+		DiffuseTex,
+		NormalTex,
+		MaterialInfo.bEmissive,
+		4.0f,
+		MaterialInfo.bTransparent,
+		MaterialInfo.Opacity,
+		MaterialInfo.bTwoSided,
+		MaterialInfo.SpecularIntensity,
+		MaterialInfo.Shininess,
+		MaterialInfo.Metallic);
 	return UassetPath;
 }
