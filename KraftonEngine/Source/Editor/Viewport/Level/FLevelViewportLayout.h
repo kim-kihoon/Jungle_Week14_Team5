@@ -88,6 +88,7 @@ public:
 		CapsuleCollider,
 		TriggerVolume,
 		TriggerVolumeParticle,
+		AudioVolume,
 		SkeletalMesh,
 		Character,
 		LuaCharacter,

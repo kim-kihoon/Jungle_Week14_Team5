@@ -205,8 +205,22 @@ void UEditorEngine::Tick(float DeltaTime)
 
 	MainPanel.TickAssetEditors(DeltaTime);
 
-	FAudioManager::Get().Tick();
+	if (UWorld* World = GetWorld())
+	{
+		if (!FAudioManager::Get().UpdateListenerFromWorld(World))
+		{
+			FMinimalViewInfo ViewportPOV;
+			if (GetActiveViewportPOV(ViewportPOV))
+			{
+				FAudioManager::Get().SetListener(
+					ViewportPOV.Location,
+					ViewportPOV.Rotation.GetForwardVector(),
+					ViewportPOV.Rotation.GetUpVector());
+			}
+		}
+	}
 	WorldTick(DeltaTime);
+	FAudioManager::Get().Tick();
 	FPhotoOverlay::Tick(DeltaTime);
 	FGarbageCollector::Get().TryCollectGarbage();
 	Render(DeltaTime);

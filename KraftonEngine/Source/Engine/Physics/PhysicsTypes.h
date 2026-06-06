@@ -8,6 +8,8 @@
 #include "Object/FName.h"
 #include "Physics/PhysicsBodyHandle.h"
 
+#include <memory>
+
 enum class EPhysicsBodyType : uint8
 {
     Static,
@@ -203,6 +205,13 @@ struct FPhysicsShapeDesc
 
     float CapsuleRadius     = 50.0f;
     float CapsuleHalfHeight = 100.0f;
+
+    struct FTriangleMeshData
+    {
+        TArray<FVector> Vertices;
+        TArray<uint32> Indices;
+    };
+    std::shared_ptr<const FTriangleMeshData> TriangleMeshData;
 
     ECollisionEnabled CollisionEnabled = ECollisionEnabled::QueryAndPhysics;
 

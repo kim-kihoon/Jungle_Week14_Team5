@@ -41,6 +41,7 @@ void APawn::ProcessPlayerInput(const FInputSystemSnapshot& Snapshot, float Delta
 void APawn::PossessedBy(APlayerController* PC)
 {
 	Controller = PC;
+	ControlRotation = bOverrideInitialControlRotation ? FRotator(InitialControlRotation) : GetActorRotation();
 
 	// 자기 첫 카메라 컴포넌트를 ActiveCamera로 — PIE 시작 시 시점이 Pawn 기준이 되도록.
 	// 카메라 컴포넌트가 없으면 no-op (CameraManager의 기존 흐름이 다른 카메라를 선택).
