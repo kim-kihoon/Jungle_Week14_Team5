@@ -26,7 +26,15 @@ local function seed_random_once()
         return
     end
     seeded = true
-    math.randomseed(os.time())
+
+    local seed = 1
+    if World ~= nil and World.GetGameTime ~= nil then
+        seed = math.floor((tonumber(World.GetGameTime()) or 0) * 1000)
+    end
+    if seed <= 0 then
+        seed = 1
+    end
+    math.randomseed(seed)
 end
 
 local function is_valid_actor(actor)
