@@ -254,6 +254,49 @@ void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch, con
 	}
 }
 
+void FAudioManager::PlayAudioFadeOut(const FString& Key, float Volume, float FadeOutSeconds, float Pitch, const FAudio3DPlaySettings* Settings3D)
+{
+	FMOD::Sound* Sound = FindSound(Key);
+	if (!System || !Sound)
+	{
+		return;
+	}
+
+	FMOD::Channel* Channel = nullptr;
+	System->playSound(Sound, nullptr, false, &Channel);
+
+	if (!Channel)
+	{
+		return;
+	}
+
+	const float ClampedVolume = std::clamp(Volume, 0.0f, 1.0f);
+	Channel->setVolume(ClampedVolume);
+	Channel->setPitch(std::clamp(Pitch, 0.1f, 3.0f));
+	if (Settings3D)
+	{
+		Apply3DSettingsToChannel(Channel, *Settings3D);
+	}
+
+	int SampleRate = 0;
+	System->getSoftwareFormat(&SampleRate, nullptr, nullptr);
+	if (SampleRate <= 0 || FadeOutSeconds <= 0.0f)
+	{
+		return;
+	}
+
+	unsigned long long DspClock = 0;
+	unsigned long long ParentClock = 0;
+	if (Channel->getDSPClock(&DspClock, &ParentClock) != FMOD_OK)
+	{
+		return;
+	}
+
+	const unsigned long long FadeDuration = static_cast<unsigned long long>(FadeOutSeconds * static_cast<float>(SampleRate));
+	Channel->addFadePoint(ParentClock, ClampedVolume);
+	Channel->addFadePoint(ParentClock + FadeDuration, 0.0f);
+}
+
 void FAudioManager::PlayBGM(const FString& Key, float Volume)
 {
 	FMOD::Sound* Sound = FindSound(Key);
@@ -419,4 +462,6 @@ void FAudioManager::LoadDefaultAudios()
 {
 	LoadAudio("CameraShutter", "Camera/CameraShutter.mp3", false);
 	LoadAudio("PhotoOut", "Camera/PhotoOut.mp3", false);
+	LoadAudio("PistolFire", "Pistol/pistolFire.mp3", false);
+	LoadAudio("Tinnitus", "Pistol/tinnitus.mp3", false);
 }

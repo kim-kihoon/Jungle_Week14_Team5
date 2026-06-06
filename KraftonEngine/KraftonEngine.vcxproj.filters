@@ -2078,6 +2078,9 @@
     <ClCompile Include="Source\Engine\Texture\Texture2D.cpp">
       <Filter>Source\Engine\Texture</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\UI\CrosshairOverlay.cpp">
+      <Filter>Source\Engine\UI</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Texture\stb_image_impl.cpp">
       <Filter>Source\Engine\Texture</Filter>
     </ClCompile>
@@ -3689,6 +3692,9 @@
     </ClInclude>
     <ClInclude Include="Source\Engine\Texture\Texture2D.h">
       <Filter>Source\Engine\Texture</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\UI\CrosshairOverlay.h">
+      <Filter>Source\Engine\UI</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\UI\PhotoOverlay.h">
       <Filter>Source\Engine\UI</Filter>
