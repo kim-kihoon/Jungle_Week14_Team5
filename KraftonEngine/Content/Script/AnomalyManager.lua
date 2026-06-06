@@ -274,7 +274,12 @@ function AnomalyManager:ReportShot(actor)
         return false
     end
 
-    if actor ~= active.Target then
+    local bHitActiveTarget = actor == active.Target
+    if not bHitActiveTarget and actor.HasTag ~= nil then
+        bHitActiveTarget = actor:HasTag(self.Tags.ActiveTarget)
+    end
+
+    if not bHitActiveTarget then
         return false
     end
 
