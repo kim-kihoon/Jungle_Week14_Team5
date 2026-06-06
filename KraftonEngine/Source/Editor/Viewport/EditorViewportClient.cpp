@@ -817,122 +817,13 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 
 	DrawList->AddImage((ImTextureID)Viewport->GetSRV(), Min, Max);
 
-	if (bIsActiveViewport && FPhotoOverlay::IsVisible())
+	if (bIsActiveViewport)
 	{
-		const float Padding = 16.0f;
-		const float FrameWidth = (std::min)(R.Width * 0.36f, 420.0f);
-		const float FrameHeight = FrameWidth / FPhotoOverlay::GetFrameAspectRatio();
-		ImVec2 FrameMin(R.X + Padding, R.Y + Padding);
-		ImVec2 FrameMax(FrameMin.x + FrameWidth, FrameMin.y + FrameHeight);
-		DrawList->AddRectFilled(
-			ImVec2(FrameMin.x + 4.0f, FrameMin.y + 5.0f),
-			ImVec2(FrameMax.x + 5.0f, FrameMax.y + 6.0f),
-			IM_COL32(0, 0, 0, 100),
-			2.0f);
-
-		ID3D11ShaderResourceView* FrameSRV = FPhotoOverlay::GetFrameSRV();
-		if (FrameSRV)
+		if (FPhotoOverlay::IsVisible() && FPhotoOverlay::GetDisplayTime() < 0.2f)
 		{
-			DrawList->AddImage((ImTextureID)FrameSRV, FrameMin, FrameMax);
-
-			const ImVec2 InnerMin(
-				FrameMin.x + FrameWidth * (58.0f / 1672.0f),
-				FrameMin.y + FrameHeight * (103.0f / 941.0f));
-			const ImVec2 InnerMax(
-				FrameMin.x + FrameWidth * (1614.0f / 1672.0f),
-				FrameMin.y + FrameHeight * (801.0f / 941.0f));
-			const float TargetAspect = (InnerMax.x - InnerMin.x) / (InnerMax.y - InnerMin.y);
-			const float CaptureAspect = FPhotoOverlay::GetCaptureAspectRatio();
-			ImVec2 UVMin(0.0f, 0.0f);
-			ImVec2 UVMax(1.0f, 1.0f);
-			if (CaptureAspect > TargetAspect)
-			{
-				const float VisibleWidth = TargetAspect / CaptureAspect;
-				UVMin.x = (1.0f - VisibleWidth) * 0.5f;
-				UVMax.x = 1.0f - UVMin.x;
-			}
-			else if (CaptureAspect < TargetAspect)
-			{
-				const float VisibleHeight = CaptureAspect / TargetAspect;
-				UVMin.y = (1.0f - VisibleHeight) * 0.5f;
-				UVMax.y = 1.0f - UVMin.y;
-			}
-			const float DevelopTime = FPhotoOverlay::GetDevelopTime();
-			ID3D11ShaderResourceView* PhotoSRV = FPhotoOverlay::GetSRV();
-			if (DevelopTime < 0.2f)
-			{
-				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(255, 255, 255, 230));
-			}
-			else if (DevelopTime < 0.6f)
-			{
-				const float Alpha = Clamp01((DevelopTime - 0.2f) / 0.4f);
-				DrawList->AddImage(
-					(ImTextureID)PhotoSRV,
-					InnerMin,
-					InnerMax,
-					UVMin,
-					UVMax,
-					IM_COL32(150, 150, 150, AlphaByte(0.25f + Alpha * 0.35f)));
-				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(210, 210, 210, AlphaByte(0.55f - Alpha * 0.25f)));
-			}
-			else if (DevelopTime < 1.0f)
-			{
-				const float Alpha = Clamp01((DevelopTime - 0.6f) / 0.4f);
-				DrawList->AddImage(
-					(ImTextureID)PhotoSRV,
-					InnerMin,
-					InnerMax,
-					UVMin,
-					UVMax,
-					IM_COL32(190, 190, 190, 220));
-				DrawList->AddImage(
-					(ImTextureID)PhotoSRV,
-					InnerMin,
-					InnerMax,
-					UVMin,
-					UVMax,
-					IM_COL32(255, 255, 255, AlphaByte(0.2f + Alpha * 0.45f)));
-				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(0, 0, 0, AlphaByte(0.35f * (1.0f - Alpha))));
-				DrawList->AddRectFilled(InnerMin, InnerMax, IM_COL32(255, 255, 255, AlphaByte(0.18f * (1.0f - Alpha))));
-			}
-			else if (DevelopTime < 1.3f)
-			{
-				const float Alpha = Clamp01((DevelopTime - 1.0f) / 0.3f);
-				DrawList->AddImage(
-					(ImTextureID)PhotoSRV,
-					InnerMin,
-					InnerMax,
-					UVMin,
-					UVMax,
-					IM_COL32(155, 155, 155, AlphaByte(1.0f - Alpha * 0.55f)));
-				DrawList->AddImage(
-					(ImTextureID)PhotoSRV,
-					InnerMin,
-					InnerMax,
-					UVMin,
-					UVMax,
-					IM_COL32(255, 255, 255, AlphaByte(0.35f + Alpha * 0.65f)));
-			}
-			else
-			{
-				DrawList->AddImage((ImTextureID)PhotoSRV, InnerMin, InnerMax, UVMin, UVMax);
-			}
-		}
-		else
-		{
-			const float PhotoWidth = (std::min)(R.Width * 0.28f, 320.0f);
-			const float PhotoHeight = PhotoWidth * 9.0f / 16.0f;
-			ImVec2 PhotoMin(R.X + Padding, R.Y + Padding);
-			ImVec2 PhotoMax(PhotoMin.x + PhotoWidth, PhotoMin.y + PhotoHeight);
-			DrawList->AddImage((ImTextureID)FPhotoOverlay::GetSRV(), PhotoMin, PhotoMax);
-			DrawList->AddRect(PhotoMin, PhotoMax, IM_COL32(255, 255, 255, 230), 0.0f, 0, 2.0f);
-		}
-		if (FPhotoOverlay::GetDevelopTime() < 0.2f)
-		{
-			const float FlashAlpha = 1.0f - Clamp01(FPhotoOverlay::GetDevelopTime() / 0.2f);
+			const float FlashAlpha = 1.0f - Clamp01(FPhotoOverlay::GetDisplayTime() / 0.2f);
 			DrawList->AddRectFilled(Min, Max, IM_COL32(255, 255, 255, AlphaByte(FlashAlpha * 0.9f)));
 		}
-		FPhotoOverlay::Tick(ImGui::GetIO().DeltaTime);
 	}
 
 	// 활성 뷰포트 테두리 강조

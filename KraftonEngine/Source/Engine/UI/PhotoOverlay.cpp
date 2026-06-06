@@ -1,22 +1,30 @@
-#include "UI/PhotoOverlay.h"
+﻿#include "UI/PhotoOverlay.h"
 
+#include "Component/Primitive/PhotoPolaroidComponent.h"
 #include "GameFramework/AActor.h"
 #include "GameFramework/World.h"
+#include "Math/Matrix.h"
+#include "Math/Quat.h"
 #include "Object/Object.h"
 #include "Object/Ptr/WeakObjectPtr.h"
 #include "Platform/Paths.h"
+#include "Render/Types/MinimalViewInfo.h"
 #include "WICTextureLoader.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 
 namespace
 {
-	constexpr float PhotoVisibleSeconds = 4.0f;
+	constexpr float PhotoEjectSeconds = 0.65f;
+	constexpr float PhotoVisibleSeconds = 4.8f;
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
 
 	bool bCaptureRequested = false;
 	float VisibleSecondsRemaining = 0.0f;
+	float DisplayTime = 0.0f;
 	float DevelopTime = 0.0f;
 	uint32 CapturedWidth = 0;
 	uint32 CapturedHeight = 0;
@@ -26,6 +34,9 @@ namespace
 	uint32 FrameHeight = 0;
 	ID3D11ShaderResourceView* FrameSRV = nullptr;
 	TArray<TWeakObjectPtr<AActor>> CaptureHiddenActors;
+	TWeakObjectPtr<UWorld> PendingCaptureWorld;
+	TWeakObjectPtr<AActor> PhotoActor;
+	TWeakObjectPtr<UPhotoPolaroidComponent> PhotoComponent;
 
 	std::filesystem::path ToProjectPath(const FString& Path)
 	{
@@ -35,6 +46,101 @@ namespace
 			Result = std::filesystem::path(FPaths::RootDir()) / Result;
 		}
 		return Result;
+	}
+
+	float Clamp01(float Value)
+	{
+		return (std::max)(0.0f, (std::min)(1.0f, Value));
+	}
+
+	float EaseOutCubic(float Alpha)
+	{
+		const float InvAlpha = 1.0f - Clamp01(Alpha);
+		return 1.0f - InvAlpha * InvAlpha * InvAlpha;
+	}
+
+	void DestroyPhotoActor()
+	{
+		if (AActor* Actor = PhotoActor.Get())
+		{
+			if (UWorld* World = Actor->GetWorld())
+			{
+				World->DestroyActor(Actor);
+			}
+		}
+		PhotoComponent.Reset();
+		PhotoActor.Reset();
+	}
+
+	void SpawnPhotoActor(UWorld* World)
+	{
+		DestroyPhotoActor();
+		if (!World || !CapturedSRV || !FrameSRV)
+		{
+			return;
+		}
+
+		AActor* Actor = World->SpawnActor<AActor>();
+		if (!Actor)
+		{
+			return;
+		}
+		Actor->SetFName(FName("RuntimePolaroidPhoto"));
+		Actor->AddTag(FName("Fake"));
+		Actor->bNeedsTick = false;
+
+		UPhotoPolaroidComponent* Component = Actor->AddComponent<UPhotoPolaroidComponent>();
+		if (!Component)
+		{
+			World->DestroyActor(Actor);
+			return;
+		}
+
+		Component->SetCastShadow(false);
+		Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Component->SetTextures(CapturedSRV, FrameSRV);
+		Component->SetDisplayTime(0.0f);
+		Component->SetDevelopTime(0.0f);
+		Actor->SetRootComponent(Component);
+
+		PhotoActor = Actor;
+		PhotoComponent = Component;
+	}
+
+	void UpdatePhotoActorTransform()
+	{
+		UPhotoPolaroidComponent* Component = PhotoComponent.Get();
+		AActor* Actor = PhotoActor.Get();
+		UWorld* World = Actor ? Actor->GetWorld() : PendingCaptureWorld.Get();
+		if (!Component || !Actor || !World)
+		{
+			return;
+		}
+
+		FMinimalViewInfo POV;
+		if (!World->GetActivePOV(POV))
+		{
+			return;
+		}
+
+		const float EjectAlpha = Clamp01(DisplayTime / PhotoEjectSeconds);
+		const float EjectEase = EaseOutCubic(EjectAlpha);
+		const FVector Forward = POV.Rotation.GetForwardVector();
+		const FVector Right = POV.Rotation.GetRightVector();
+		const FVector Up = POV.Rotation.GetUpVector();
+		const FVector Location =
+			POV.Location +
+			Forward * 0.225f +
+			Up * (-0.22f + 0.22f * EjectEase);
+
+		FMatrix PhotoRotationMatrix;
+		PhotoRotationMatrix.SetAxes(Forward, Right, Up);
+		Component->SetWorldRotation(FQuat::FromMatrix(PhotoRotationMatrix));
+
+		Component->SetWorldLocation(Location);
+		Component->SetRelativeScale(FVector(0.1f, 0.1f, 0.1f));
+		Component->SetDisplayTime(DisplayTime);
+		Component->SetDevelopTime(DevelopTime);
 	}
 }
 
@@ -47,6 +153,7 @@ void FPhotoOverlay::RequestCapture()
 void FPhotoOverlay::RequestCapture(UWorld* World, const FName& ExcludeActorTag)
 {
 	RestoreHiddenActors();
+	PendingCaptureWorld = World;
 
 	if (World && ExcludeActorTag.IsValid() && ExcludeActorTag != FName::None)
 	{
@@ -108,7 +215,10 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	Context->Release();
 	RestoreHiddenActors();
 	VisibleSecondsRemaining = PhotoVisibleSeconds;
+	DisplayTime = 0.0f;
 	DevelopTime = 0.0f;
+	SpawnPhotoActor(PendingCaptureWorld.Get());
+	UpdatePhotoActorTransform();
 }
 
 void FPhotoOverlay::Tick(float DeltaTime)
@@ -120,7 +230,13 @@ void FPhotoOverlay::Tick(float DeltaTime)
 		{
 			VisibleSecondsRemaining = 0.0f;
 		}
-		DevelopTime += DeltaTime;
+		DisplayTime += DeltaTime;
+		DevelopTime = DisplayTime > PhotoEjectSeconds ? DisplayTime - PhotoEjectSeconds : 0.0f;
+		UpdatePhotoActorTransform();
+	}
+	else
+	{
+		DestroyPhotoActor();
 	}
 }
 
@@ -139,9 +255,19 @@ ID3D11ShaderResourceView* FPhotoOverlay::GetFrameSRV()
 	return FrameSRV;
 }
 
+float FPhotoOverlay::GetDisplayTime()
+{
+	return DisplayTime;
+}
+
 float FPhotoOverlay::GetDevelopTime()
 {
 	return DevelopTime;
+}
+
+float FPhotoOverlay::GetEjectSeconds()
+{
+	return PhotoEjectSeconds;
 }
 
 float FPhotoOverlay::GetCaptureAspectRatio()

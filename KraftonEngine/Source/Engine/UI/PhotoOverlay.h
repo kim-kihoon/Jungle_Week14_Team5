@@ -17,7 +17,9 @@ public:
 	static bool IsVisible();
 	static ID3D11ShaderResourceView* GetSRV();
 	static ID3D11ShaderResourceView* GetFrameSRV();
+	static float GetDisplayTime();
 	static float GetDevelopTime();
+	static float GetEjectSeconds();
 	static float GetCaptureAspectRatio();
 	static float GetFrameAspectRatio();
 
