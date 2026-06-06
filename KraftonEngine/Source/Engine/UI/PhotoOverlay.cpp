@@ -1,5 +1,9 @@
 #include "UI/PhotoOverlay.h"
 
+#include "GameFramework/AActor.h"
+#include "GameFramework/World.h"
+#include "Object/Object.h"
+#include "Object/Ptr/WeakObjectPtr.h"
 #include "Platform/Paths.h"
 #include "WICTextureLoader.h"
 
@@ -21,6 +25,7 @@ namespace
 	uint32 FrameWidth = 0;
 	uint32 FrameHeight = 0;
 	ID3D11ShaderResourceView* FrameSRV = nullptr;
+	TArray<TWeakObjectPtr<AActor>> CaptureHiddenActors;
 
 	std::filesystem::path ToProjectPath(const FString& Path)
 	{
@@ -35,19 +40,48 @@ namespace
 
 void FPhotoOverlay::RequestCapture()
 {
+	RestoreHiddenActors();
+	bCaptureRequested = true;
+}
+
+void FPhotoOverlay::RequestCapture(UWorld* World, const FName& ExcludeActorTag)
+{
+	RestoreHiddenActors();
+
+	if (World && ExcludeActorTag.IsValid() && ExcludeActorTag != FName::None)
+	{
+		for (AActor* Actor : World->GetActors())
+		{
+			if (!Actor || !Actor->IsVisible() || !Actor->HasTag(ExcludeActorTag))
+			{
+				continue;
+			}
+
+			Actor->SetVisible(false);
+			CaptureHiddenActors.push_back(TWeakObjectPtr<AActor>(Actor));
+		}
+	}
+
 	bCaptureRequested = true;
 }
 
 void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 {
-	if (!bCaptureRequested || !SourceTexture)
+	if (!bCaptureRequested)
 	{
+		return;
+	}
+	if (!SourceTexture)
+	{
+		bCaptureRequested = false;
+		RestoreHiddenActors();
 		return;
 	}
 
 	bCaptureRequested = false;
 	if (!EnsureResources(SourceTexture))
 	{
+		RestoreHiddenActors();
 		return;
 	}
 
@@ -55,6 +89,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	SourceTexture->GetDevice(&Device);
 	if (!Device)
 	{
+		RestoreHiddenActors();
 		return;
 	}
 
@@ -65,11 +100,13 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 
 	if (!Context)
 	{
+		RestoreHiddenActors();
 		return;
 	}
 
 	Context->CopyResource(CapturedTexture, SourceTexture);
 	Context->Release();
+	RestoreHiddenActors();
 	VisibleSecondsRemaining = PhotoVisibleSeconds;
 	DevelopTime = 0.0f;
 }
@@ -115,6 +152,18 @@ float FPhotoOverlay::GetCaptureAspectRatio()
 float FPhotoOverlay::GetFrameAspectRatio()
 {
 	return FrameHeight > 0 ? static_cast<float>(FrameWidth) / static_cast<float>(FrameHeight) : DefaultFrameAspectRatio;
+}
+
+void FPhotoOverlay::RestoreHiddenActors()
+{
+	for (TWeakObjectPtr<AActor>& ActorPtr : CaptureHiddenActors)
+	{
+		if (AActor* Actor = ActorPtr.Get())
+		{
+			Actor->SetVisible(true);
+		}
+	}
+	CaptureHiddenActors.clear();
 }
 
 bool FPhotoOverlay::EnsureResources(ID3D11Texture2D* SourceTexture)
