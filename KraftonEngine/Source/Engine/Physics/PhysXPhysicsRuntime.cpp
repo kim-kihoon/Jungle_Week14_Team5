@@ -2149,6 +2149,7 @@ FPhysicsShapeHandle FPhysXPhysicsRuntime::AddShapeToBody(
     {
         return {};
     }
+    ShapeDesc.TriangleMeshData.reset();
 
     Body->Actor->attachShape(*Shape);
 

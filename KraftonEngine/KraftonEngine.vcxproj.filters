@@ -1199,6 +1199,9 @@
     <ClCompile Include="Source\Engine\Component\ShapeComponent.cpp">
       <Filter>Source\Engine\Component</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Component\Audio\AudioComponent.cpp">
+      <Filter>Source\Engine\Component</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Component\Camera\CameraComponent.cpp">
       <Filter>Source\Engine\Component\Camera</Filter>
     </ClCompile>
@@ -1410,6 +1413,9 @@
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\GameFramework\Actor\HeightFogActor.cpp">
+      <Filter>Source\Engine\GameFramework\Actor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\GameFramework\Actor\AudioVolume.cpp">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\GameFramework\Actor\ParticleSystemActor.cpp">
@@ -2568,6 +2574,9 @@
     <ClInclude Include="Source\Engine\Component\ShapeComponent.h">
       <Filter>Source\Engine\Component</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Component\Audio\AudioComponent.h">
+      <Filter>Source\Engine\Component</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Component\Camera\CameraComponent.h">
       <Filter>Source\Engine\Component\Camera</Filter>
     </ClInclude>
@@ -2809,6 +2818,9 @@
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\GameFramework\Actor\HeightFogActor.h">
+      <Filter>Source\Engine\GameFramework\Actor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\GameFramework\Actor\AudioVolume.h">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\GameFramework\Actor\ParticleSystemActor.h">

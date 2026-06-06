@@ -1,4 +1,4 @@
-//
+﻿//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
 // are met:
@@ -392,7 +392,7 @@ public:
 	\param	[in] materials		The materials for the shape
 	\param	[in] materialCount	The number of materials
 	\param	[in] isExclusive	Whether this shape is exclusive to a single actor or may be shared
-	\param	[in] shapeFlags		The PxShapeFlags to be set
+	\param	[in] shapeFlags		The PxShapeFlags to be set  
 
 	Shared shapes are not mutable when they are attached to an actor
 

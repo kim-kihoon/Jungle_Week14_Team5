@@ -2,6 +2,7 @@
 
 #include "Component/PrimitiveComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
+#include "Component/Primitive/StaticMeshComponent.h"
 #include "Component/Shape/BoxComponent.h"
 #include "Component/Shape/CapsuleComponent.h"
 #include "Component/Shape/SphereComponent.h"
@@ -9,6 +10,7 @@
 #include "Core/Logging/Log.h"
 #include "GameFramework/AActor.h"
 #include "GameFramework/World.h"
+#include "Mesh/Static/StaticMeshAsset.h"
 #include "Object/Object.h"
 #include "Object/Ptr/WeakObjectPtr.h"
 #include "Physics/PhysicsBodyInstance.h"
@@ -1693,6 +1695,52 @@ FPhysicsShapeDesc FPhysXPhysicsScene::BuildShapeDescFromComponent_GameThread(
         Desc.Type              = EPhysicsShapeType::Capsule;
         Desc.CapsuleRadius     = Capsule->GetScaledCapsuleRadius();
         Desc.CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+    }
+    else if (auto* StaticMeshComponent = Cast<UStaticMeshComponent>(Comp))
+    {
+        const bool bRootBodyIsStatic = RootComponent &&
+            !RootComponent->GetSimulatePhysics() &&
+            !RootComponent->IsKinematic();
+        UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh();
+        FStaticMesh* MeshAsset = StaticMesh ? StaticMesh->GetStaticMeshAsset() : nullptr;
+
+        if (bRootBodyIsStatic && MeshAsset && MeshAsset->Vertices.size() >= 3 && MeshAsset->Indices.size() >= 3)
+        {
+            auto MeshData = std::make_shared<FPhysicsShapeDesc::FTriangleMeshData>();
+            MeshData->Vertices.reserve(MeshAsset->Vertices.size());
+            for (const FNormalVertex& Vertex : MeshAsset->Vertices)
+            {
+                MeshData->Vertices.push_back(Vertex.pos);
+            }
+            MeshData->Indices = MeshAsset->Indices;
+
+            Desc.Type = EPhysicsShapeType::TriangleMesh;
+            Desc.TriangleMeshData = std::move(MeshData);
+            Desc.LocalTransform = MakeShapeLocalTransform_GameThread(Comp, RootComponent);
+            UE_LOG("Physics: Static mesh triangle collision registered. Component=%s Vertices=%zu Triangles=%zu",
+                Comp->GetName().c_str(),
+                MeshAsset->Vertices.size(),
+                MeshAsset->Indices.size() / 3);
+        }
+        else
+        {
+            const FBoundingBox Bounds      = Comp->GetWorldBoundingBox();
+            const FVector      WorldCenter = Bounds.GetCenter();
+            FVector            WorldExtent = Bounds.GetExtent();
+
+            if (WorldExtent.X <= 0.0f || WorldExtent.Y <= 0.0f || WorldExtent.Z <= 0.0f)
+            {
+                WorldExtent = FVector(0.5f, 0.5f, 0.5f);
+            }
+
+            Desc.Type           = EPhysicsShapeType::Box;
+            Desc.BoxHalfExtent  = WorldExtent;
+            Desc.LocalTransform = MakeRelativeTransformFromWorld_GameThread(
+                WorldCenter,
+                GetComponentWorldRotationNoScale_GameThread(Comp),
+                RootComponent
+            );
+        }
     }
     else
     {

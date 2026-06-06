@@ -172,8 +172,12 @@ void UEngine::TickFrameStart(float DeltaTime)
 
 void UEngine::TickFrameBody(float DeltaTime)
 {
-	FAudioManager::Get().Tick();
+	if (UWorld* World = GetWorld())
+	{
+		FAudioManager::Get().UpdateListenerFromWorld(World);
+	}
 	WorldTick(DeltaTime);
+	FAudioManager::Get().Tick();
 	Render(DeltaTime);
 }
 

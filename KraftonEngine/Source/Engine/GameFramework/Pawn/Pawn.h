@@ -71,6 +71,11 @@ public:
 	UFUNCTION(Callable, Category="Pawn|Control")
 	void             AddPitchInput(float Value) { ControlRotation.Pitch += Value; }
 
+	UPROPERTY(Edit, Save, Category="Pawn|Control", DisplayName="Override Initial Control Rotation")
+	bool bOverrideInitialControlRotation = false;
+	UPROPERTY(Edit, Save, Category="Pawn|Control", DisplayName="Initial Control Rotation", Type=Vec3)
+	FVector InitialControlRotation = FVector(0.0f, 0.0f, 0.0f);
+
 	// RootComponent (Character 의 경우 Capsule) 의 rotation 을 ControlRotation 의 해당 axis 로
 	// 즉시 set. ACharacter::Tick 의 mouse handling 직후 호출 — 1 frame 지연 없이 반영.
 	UFUNCTION(Callable, Category="Pawn|Control")

@@ -10,6 +10,7 @@
 #include "Engine/Input/InputSystem.h"
 #include "GameFramework/Actor/DecalActor.h"
 #include "GameFramework/Actor/HeightFogActor.h"
+#include "GameFramework/Actor/AudioVolume.h"
 #include "GameFramework/Actor/TriggerVolumeBase.h"
 #include "GameFramework/Actor/TriggerVolumeParticle.h"
 #include "GameFramework/Light/AmbientLightActor.h"
@@ -1777,6 +1778,7 @@ void FLevelViewportLayout::RenderViewportPlaceActorPopup()
 		PlaceActorMenuItem("Capsule Collider", EViewportPlaceActorType::CapsuleCollider);
 		PlaceActorMenuItem("Trigger Volume", EViewportPlaceActorType::TriggerVolume);
 		PlaceActorMenuItem("Trigger Volume (Particle)", EViewportPlaceActorType::TriggerVolumeParticle);
+		PlaceActorMenuItem("Audio Volume", EViewportPlaceActorType::AudioVolume);
 		PlaceActorMenuItem("Skeletal Mesh Actor", EViewportPlaceActorType::SkeletalMesh);
 		PlaceActorMenuItem("Character",           EViewportPlaceActorType::Character);
 		PlaceActorMenuItem("Lua Character", EViewportPlaceActorType::LuaCharacter);
@@ -2068,6 +2070,16 @@ AActor* FLevelViewportLayout::SpawnActorFromViewportMenu(EViewportPlaceActorType
 		if (Actor)
 		{
 			Actor->InitDefaultComponents();  // 베이스의 BoxComponent Trigger 셋업 상속
+			SpawnedActor = Actor;
+		}
+		break;
+	}
+	case EViewportPlaceActorType::AudioVolume:
+	{
+		AAudioVolume* Actor = World->SpawnActor<AAudioVolume>();
+		if (Actor)
+		{
+			Actor->InitDefaultComponents();
 			SpawnedActor = Actor;
 		}
 		break;
