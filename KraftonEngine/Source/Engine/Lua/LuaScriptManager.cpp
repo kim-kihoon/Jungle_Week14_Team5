@@ -2313,6 +2313,23 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         }
     );
     AudioManager.set_function(
+        "PlayAt",
+        [](const FString& SoundName, float Volume, const FVector& Position, sol::optional<float> MinDistance,
+           sol::optional<float> MaxDistance, sol::optional<float> Pitch)
+        {
+            FAudio3DPlaySettings Settings3D;
+            Settings3D.bEnabled = true;
+            Settings3D.Position = Position;
+            Settings3D.MinDistance = MinDistance.value_or(1.0f);
+            Settings3D.MaxDistance = MaxDistance.value_or(12.0f);
+            FAudioManager::Get().PlayAudio(
+                SoundName,
+                Volume,
+                Pitch.value_or(1.0f),
+                &Settings3D);
+        }
+    );
+    AudioManager.set_function(
         "PlayBGM",
         [](const FString& SoundName, float Volume)
         {

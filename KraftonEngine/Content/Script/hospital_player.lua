@@ -9,6 +9,7 @@ local WARP_DELTA_Z = 0.0
 local bCanWarp = true
 local Doors = {}
 local DoorStateByName = {}
+local PendingDoorCloseSounds = {}
 local bDoorsInitialized = false
 local bInteractWasDown = false
 
@@ -17,11 +18,19 @@ local KEY_W = 0x57
 local KEY_A = 0x41
 local KEY_S = 0x53
 local KEY_D = 0x44
-local INTERACT_DISTANCE = 3.5
+local INTERACT_DISTANCE = 1.0
 local INTERACT_DISTANCE_SQ = INTERACT_DISTANCE * INTERACT_DISTANCE
 local DOOR_OPEN_DURATION = 1.0
 local DOOR_OPEN_ANGLE_PLUS = 80.0
 local DOOR_OPEN_ANGLE_MINUS = -80.0
+local DOOR_CLOSE_SOUND_DELAY = 1.0
+local DOOR_OPEN_SOUND_KEY = "DoorOpen"
+local HEAVY_DOOR_OPEN_SOUND_KEY = "HeavyDoorOpen"
+local DOOR_CLOSE_SOUND_KEY = "DoorClose"
+local DOOR_SOUND_MIN_DISTANCE = 1.0
+local DOOR_SOUND_MAX_DISTANCE = 12.0
+local DOOR_SOUND_VOLUME = 1.0
+local DOOR_OPEN_SOUND_VOLUME = 3.0
 local DOOR_CONTACT_SLOP = 0.08
 local DOOR_CONTACT_RAY_COUNT = 16
 local DOOR_APPROACH_DOT_THRESHOLD = 1.0e-6
@@ -49,6 +58,13 @@ local INITIALLY_OPEN_NAMES = {
     AStaticMeshActor_3 = true,
     AStaticMeshActor_4_Copy = true,
     AStaticMeshActor_24 = true,
+}
+
+local DOUBLE_DOOR_NAMES = {
+    AStaticMeshActor_12 = true,
+    AStaticMeshActor_13 = true,
+    AStaticMeshActor_16 = true,
+    AStaticMeshActor_17 = true,
 }
 
 local function IsInTriggerZone(location)
@@ -218,6 +234,70 @@ local function SyncPlayerPhysics()
         pcall(function()
             root:SyncPhysicsTransform()
         end)
+    end
+end
+
+local function PlayDoorAudioAt(doorActor, key, volume)
+    if doorActor == nil or key == nil then
+        return
+    end
+
+    volume = tonumber(volume) or DOOR_SOUND_VOLUME
+
+    local okLocation, doorLocation = pcall(function()
+        return doorActor:GetLocation()
+    end)
+    if not okLocation or doorLocation == nil then
+        return
+    end
+
+    if Audio ~= nil and Audio.PlayAt ~= nil then
+        pcall(function()
+            Audio.PlayAt(
+                key,
+                volume,
+                doorLocation,
+                DOOR_SOUND_MIN_DISTANCE,
+                DOOR_SOUND_MAX_DISTANCE
+            )
+        end)
+        return
+    end
+
+    if Audio ~= nil and Audio.Play ~= nil then
+        pcall(function()
+            Audio.Play(key, volume)
+        end)
+    end
+end
+
+local function QueueDoorCloseSound(doorActor)
+    if doorActor == nil then
+        return
+    end
+
+    table.insert(PendingDoorCloseSounds, {
+        Delay = DOOR_CLOSE_SOUND_DELAY,
+        Actor = doorActor,
+    })
+end
+
+local function UpdatePendingDoorCloseSounds(dt)
+    local deltaTime = tonumber(dt) or 0.0
+    if deltaTime <= 0.0 then
+        return
+    end
+
+    local index = 1
+    while index <= #PendingDoorCloseSounds do
+        local pending = PendingDoorCloseSounds[index]
+        pending.Delay = pending.Delay - deltaTime
+        if pending.Delay <= 0.0 then
+            PlayDoorAudioAt(pending.Actor, DOOR_CLOSE_SOUND_KEY, DOOR_SOUND_VOLUME)
+            table.remove(PendingDoorCloseSounds, index)
+        else
+            index = index + 1
+        end
     end
 end
 
@@ -401,6 +481,7 @@ local function ToggleDoor(door)
         return
     end
 
+    local bWasOpen = door.IsOpen
     door.IsOpen = not door.IsOpen
     DoorStateByName[door.Name] = door.IsOpen
 
@@ -412,6 +493,13 @@ local function ToggleDoor(door)
 
     SetDoorYaw(door, door.StartYaw)
     SyncDoorPhysics(door.Actor)
+
+    if door.IsOpen then
+        local openVolume = door.OpenSoundKey == DOOR_OPEN_SOUND_KEY and DOOR_OPEN_SOUND_VOLUME or DOOR_SOUND_VOLUME
+        PlayDoorAudioAt(door.Actor, door.OpenSoundKey, openVolume)
+    elseif bWasOpen then
+        QueueDoorCloseSound(door.Actor)
+    end
 
     print("[Door] toggle " .. tostring(door.Name)
         .. " open=" .. tostring(door.IsOpen)
@@ -438,12 +526,14 @@ local function AddDoor(actor, openYaw)
     local closeYaw = isOpen and 0.0 or sceneYaw
     local resolvedOpenYaw = bUseSceneYawAsOpen and sceneYaw or openYaw
     local currentYaw = isOpen and resolvedOpenYaw or closeYaw
+    local openSoundKey = DOUBLE_DOOR_NAMES[name] == true and HEAVY_DOOR_OPEN_SOUND_KEY or DOOR_OPEN_SOUND_KEY
 
     table.insert(Doors, {
         Actor = actor,
         Name = name,
         OpenYaw = resolvedOpenYaw,
         CloseYaw = closeYaw,
+        OpenSoundKey = openSoundKey,
         IsOpen = isOpen,
         CurrentYaw = currentYaw,
         TargetYaw = currentYaw,
@@ -573,6 +663,7 @@ end
 
 function BeginPlay()
     bCanWarp = true
+    PendingDoorCloseSounds = {}
     bDoorsInitialized = false
     bInteractWasDown = false
 end
@@ -581,6 +672,7 @@ function EndPlay()
     bCanWarp = true
     Doors = {}
     DoorStateByName = {}
+    PendingDoorCloseSounds = {}
     bDoorsInitialized = false
     bInteractWasDown = false
 end
@@ -597,6 +689,7 @@ function Tick(dt)
 
     AddPlayerMovement()
     UpdateDoors(dt)
+    UpdatePendingDoorCloseSounds(dt)
 
     if bInZone and bCanWarp then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
