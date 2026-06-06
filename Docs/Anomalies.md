@@ -291,9 +291,10 @@ SkeletalMeshComponent:GetLooping()
 SkeletalMeshComponent:IsPlaying()
 World.IsActorInViewFrustum(actor)
 World.GetGameTime()
+World.GetRealTimeSeconds()
 ```
 
-`AnomalyManager`의 랜덤 시드는 `os.time()`을 쓰지 않는다. 이 엔진 Lua는 `os` 라이브러리를 열지 않기 때문에 `World.GetGameTime()`을 사용한다.
+`AnomalyManager`의 랜덤 시드는 `os.time()`을 쓰지 않는다. 이 엔진 Lua는 `os` 라이브러리를 열지 않기 때문에, 엔진에서 안전하게 노출한 `World.GetRealTimeSeconds()`만 사용한다. 해당 바인딩이 없는 런타임에서는 고정 시드로 대체하지 않는다.
 
 ## 신규 규칙 추가 방법
 

@@ -21,20 +21,28 @@ AnomalyManager.LastError = nil
 
 local seeded = false
 
+local function make_seed(timeSeconds)
+    local rawSeed = math.floor((tonumber(timeSeconds) or 0) * 1000000)
+    if rawSeed <= 0 then
+        return nil
+    end
+    return (rawSeed % 2147483646) + 1
+end
+
 local function seed_random_once()
     if seeded then
         return
     end
-    seeded = true
 
-    local seed = 1
-    if World ~= nil and World.GetGameTime ~= nil then
-        seed = math.floor((tonumber(World.GetGameTime()) or 0) * 1000)
+    local seed = nil
+    if World ~= nil and World.GetRealTimeSeconds ~= nil then
+        seed = make_seed(World.GetRealTimeSeconds())
     end
-    if seed <= 0 then
-        seed = 1
+
+    if seed ~= nil then
+        math.randomseed(seed)
+        seeded = true
     end
-    math.randomseed(seed)
 end
 
 local function is_valid_actor(actor)
