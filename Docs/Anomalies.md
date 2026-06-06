@@ -117,7 +117,7 @@ DebugManager:Tick(dt, GameManager)
 GameManager:ReportAnomalyShot(actor)
   ├─ AnomalyManager:ReportShot(actor)
   │    ├─ 활성 대상과 같은 액터인지 확인
-  │    └─ context.State.bCleared = true
+  │    └─ AnomalyManager:OnClear(active, "Shot")
   └─ 정답이면 GameManager:StopLoop()
        ├─ elapsedTime / remainingTime 갱신 정지
        └─ LoopStopped 이벤트로 CymbalMonkey 애니메이션 정지
@@ -263,6 +263,7 @@ Content/Data/Samba Dancing/YeoulDance.uasset
 - 기존 애니메이션 정보를 저장했다가 가능한 범위에서 되돌린다.
 - 기존 재생 상태가 있으면 `SetPlaying(OriginalPlaying)`으로 복구한다.
 - 기존 애니메이션 경로가 없으면 강제로 새 애니메이션을 지정하지 않는다.
+- 기존 애니메이션 경로가 없으면 `StopAnimation()`으로 애니메이션을 비워 reference pose로 돌아가게 한다.
 
 ## C++ / Lua 연결 지점
 
@@ -286,7 +287,6 @@ SkeletalMeshComponent:GetAnimationPath()
 SkeletalMeshComponent:GetPlayRate()
 SkeletalMeshComponent:GetLooping()
 SkeletalMeshComponent:IsPlaying()
-
 World.IsActorInViewFrustum(actor)
 World.GetGameTime()
 ```
