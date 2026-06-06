@@ -19,6 +19,8 @@ local KEY_S = 0x53
 local KEY_D = 0x44
 local INTERACT_DISTANCE = 3.5
 local INTERACT_DISTANCE_SQ = INTERACT_DISTANCE * INTERACT_DISTANCE
+local DOOR_OPEN_DURATION = 0.45
+local DOOR_YAW_SPEED = 90.0 / DOOR_OPEN_DURATION
 
 local OPEN_PLUS_NAMES = {
     AStaticMeshActor_2 = true,
@@ -146,6 +148,8 @@ local function AddDoor(actor, openYaw)
         OpenYaw = openYaw,
         CloseYaw = 0.0,
         IsOpen = isOpen,
+        CurrentYaw = isOpen and openYaw or 0.0,
+        TargetYaw = isOpen and openYaw or 0.0,
     })
     DoorStateByName[name] = isOpen
 end
@@ -244,6 +248,41 @@ local function RefreshDoorCollision(actor)
     end
 end
 
+local function SetDoorYaw(door, yaw)
+    if door == nil or door.Actor == nil then
+        return false
+    end
+
+    local ok = pcall(function()
+        door.Actor.Rotation = Vec3(0.0, 0.0, yaw)
+    end)
+    if ok then
+        door.CurrentYaw = yaw
+    end
+    return ok
+end
+
+local function Approach(current, target, maxDelta)
+    if current < target then
+        return math.min(current + maxDelta, target)
+    elseif current > target then
+        return math.max(current - maxDelta, target)
+    end
+    return current
+end
+
+local function UpdateDoors(dt)
+    local maxDelta = DOOR_YAW_SPEED * dt
+    for _, door in ipairs(Doors) do
+        if door.CurrentYaw ~= door.TargetYaw then
+            local nextYaw = Approach(door.CurrentYaw, door.TargetYaw, maxDelta)
+            if SetDoorYaw(door, nextYaw) then
+                RefreshDoorCollision(door.Actor)
+            end
+        end
+    end
+end
+
 local function ToggleDoor(door)
     if door == nil or door.Actor == nil then
         return
@@ -253,11 +292,8 @@ local function ToggleDoor(door)
     DoorStateByName[door.Name] = door.IsOpen
 
     local targetYaw = door.IsOpen and door.OpenYaw or door.CloseYaw
-    local ok = pcall(function()
-        door.Actor.Rotation = Vec3(0.0, 0.0, targetYaw)
-    end)
-    print("[Door] toggle " .. tostring(door.Name) .. " open=" .. tostring(door.IsOpen) .. " yaw=" .. tostring(targetYaw) .. " ok=" .. tostring(ok))
-    RefreshDoorCollision(door.Actor)
+    door.TargetYaw = targetYaw
+    print("[Door] toggle " .. tostring(door.Name) .. " open=" .. tostring(door.IsOpen) .. " targetYaw=" .. tostring(targetYaw))
 end
 
 function BeginPlay()
@@ -282,6 +318,7 @@ function Tick(dt)
     local bInZone = IsInTriggerZone(location)
 
     AddPlayerMovement()
+    UpdateDoors(dt)
 
     if bInZone and bCanWarp then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
