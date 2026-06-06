@@ -19,8 +19,7 @@ local KEY_S = 0x53
 local KEY_D = 0x44
 local INTERACT_DISTANCE = 3.5
 local INTERACT_DISTANCE_SQ = INTERACT_DISTANCE * INTERACT_DISTANCE
-local DOOR_OPEN_DURATION = 0.45
-local DOOR_YAW_SPEED = 90.0 / DOOR_OPEN_DURATION
+local DOOR_OPEN_DURATION = 1.0
 
 local OPEN_PLUS_NAMES = {
     AStaticMeshActor_2 = true,
@@ -150,6 +149,8 @@ local function AddDoor(actor, openYaw)
         IsOpen = isOpen,
         CurrentYaw = isOpen and openYaw or 0.0,
         TargetYaw = isOpen and openYaw or 0.0,
+        StartYaw = isOpen and openYaw or 0.0,
+        Elapsed = DOOR_OPEN_DURATION,
     })
     DoorStateByName[name] = isOpen
 end
@@ -262,20 +263,17 @@ local function SetDoorYaw(door, yaw)
     return ok
 end
 
-local function Approach(current, target, maxDelta)
-    if current < target then
-        return math.min(current + maxDelta, target)
-    elseif current > target then
-        return math.max(current - maxDelta, target)
-    end
-    return current
+local function SmoothStep(alpha)
+    alpha = math.max(0.0, math.min(alpha, 1.0))
+    return alpha * alpha * (3.0 - 2.0 * alpha)
 end
 
 local function UpdateDoors(dt)
-    local maxDelta = DOOR_YAW_SPEED * dt
     for _, door in ipairs(Doors) do
-        if door.CurrentYaw ~= door.TargetYaw then
-            local nextYaw = Approach(door.CurrentYaw, door.TargetYaw, maxDelta)
+        if door.Elapsed < DOOR_OPEN_DURATION then
+            door.Elapsed = math.min(door.Elapsed + dt, DOOR_OPEN_DURATION)
+            local alpha = SmoothStep(door.Elapsed / DOOR_OPEN_DURATION)
+            local nextYaw = door.StartYaw + (door.TargetYaw - door.StartYaw) * alpha
             if SetDoorYaw(door, nextYaw) then
                 RefreshDoorCollision(door.Actor)
             end
@@ -292,7 +290,9 @@ local function ToggleDoor(door)
     DoorStateByName[door.Name] = door.IsOpen
 
     local targetYaw = door.IsOpen and door.OpenYaw or door.CloseYaw
+    door.StartYaw = door.CurrentYaw
     door.TargetYaw = targetYaw
+    door.Elapsed = 0.0
     print("[Door] toggle " .. tostring(door.Name) .. " open=" .. tostring(door.IsOpen) .. " targetYaw=" .. tostring(targetYaw))
 end
 
