@@ -5133,6 +5133,17 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             }
             Actor.SetActorLocation(Location);
         },
+        "SetRotation",
+        [](AActor& Actor, sol::object RotationObject)
+        {
+            FVector Rotation;
+            if (!LuaObjectToVector(RotationObject, Rotation))
+            {
+                UE_LOG("[Lua] Actor.SetRotation ignored: expected Vector or {X,Y,Z}");
+                return;
+            }
+            Actor.SetActorRotation(Rotation);
+        },
 
         "AddMovementInput",
         [](AActor& Actor, const FVector& Direction, sol::optional<float> Scale)

@@ -10,13 +10,14 @@ local bCanWarp = true
 local Doors = {}
 local DoorStateByName = {}
 local bDoorsInitialized = false
+local bInteractWasDown = false
 
 local INTERACT_KEY = 0x45 -- E
 local KEY_W = 0x57
 local KEY_A = 0x41
 local KEY_S = 0x53
 local KEY_D = 0x44
-local INTERACT_DISTANCE = 2.25
+local INTERACT_DISTANCE = 3.5
 local INTERACT_DISTANCE_SQ = INTERACT_DISTANCE * INTERACT_DISTANCE
 
 local OPEN_PLUS_NAMES = {
@@ -197,6 +198,7 @@ local function InitDoors()
     end
 
     bDoorsInitialized = true
+    print("[Door] initialized count=" .. tostring(#Doors))
 end
 
 local function DistanceSquared2D(a, b)
@@ -233,7 +235,7 @@ local function RefreshDoorCollision(actor)
     end
 
     local ok, root = pcall(function()
-        return actor:GetPrimitiveRootComponent()
+        return actor:GetRootPrimitiveComponent()
     end)
     if ok and root ~= nil then
         pcall(function()
@@ -251,9 +253,10 @@ local function ToggleDoor(door)
     DoorStateByName[door.Name] = door.IsOpen
 
     local targetYaw = door.IsOpen and door.OpenYaw or door.CloseYaw
-    pcall(function()
-        door.Actor:SetRotation(Vec3(0.0, 0.0, targetYaw))
+    local ok = pcall(function()
+        door.Actor.Rotation = Vec3(0.0, 0.0, targetYaw)
     end)
+    print("[Door] toggle " .. tostring(door.Name) .. " open=" .. tostring(door.IsOpen) .. " yaw=" .. tostring(targetYaw) .. " ok=" .. tostring(ok))
     RefreshDoorCollision(door.Actor)
 end
 
@@ -267,6 +270,7 @@ function EndPlay()
     Doors = {}
     DoorStateByName = {}
     bDoorsInitialized = false
+    bInteractWasDown = false
 end
 
 function Tick(dt)
@@ -290,15 +294,20 @@ function Tick(dt)
         pcall(InitDoors)
     end
 
-    if Input ~= nil and Input.GetKeyDown ~= nil then
+    if Input ~= nil and Input.GetKey ~= nil then
         local ok, pressed = pcall(function()
-            return Input.GetKeyDown(INTERACT_KEY)
+            return Input.GetKey(INTERACT_KEY)
         end)
-        if ok and pressed then
+        if ok and pressed and not bInteractWasDown then
             pcall(function()
-                ToggleDoor(FindNearestDoor(location))
+                local door = FindNearestDoor(location)
+                if door == nil then
+                    print("[Door] no door in range. count=" .. tostring(#Doors))
+                end
+                ToggleDoor(door)
             end)
         end
+        bInteractWasDown = ok and pressed == true
     end
 end
 
