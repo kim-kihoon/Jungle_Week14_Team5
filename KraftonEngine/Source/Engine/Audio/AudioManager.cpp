@@ -237,5 +237,6 @@ void FAudioManager::SetMasterVolume(float Volume)
 
 void FAudioManager::LoadDefaultAudios()
 {
-
+	LoadAudio("CameraShutter", "Camera/CameraShutter.mp3", false);
+	LoadAudio("PhotoOut", "Camera/PhotoOut.mp3", false);
 }

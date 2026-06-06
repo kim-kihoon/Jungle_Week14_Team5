@@ -1,5 +1,6 @@
 ﻿#include "UI/PhotoOverlay.h"
 
+#include "Audio/AudioManager.h"
 #include "Component/Primitive/PhotoPolaroidComponent.h"
 #include "Component/Primitive/StaticMeshComponent.h"
 #include "GameFramework/AActor.h"
@@ -19,7 +20,9 @@
 
 namespace
 {
-	constexpr float PhotoEjectSeconds = 0.65f;
+	constexpr float PhotoEjectSeconds = 1.0f;
+	constexpr float PhotoSpawnDelaySeconds = 0.25f;
+	constexpr float PhotoFlashSeconds = 0.2f;
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
 	constexpr const char* HeldCameraMeshPath = "Content/Data/camera/camera_StaticMesh.uasset";
 	constexpr const char* HeldCameraMeshFileName = "camera_StaticMesh.uasset";
@@ -27,8 +30,13 @@ namespace
 	constexpr float HeldCameraPhotoRightOffset = 0.0f;
 	constexpr float HeldCameraPhotoBaseUpOffset = 0.0f;
 	constexpr float HeldCameraPhotoEjectUpDistance = 0.19f;
+	constexpr const char* CameraShutterAudioKey = "CameraShutter";
+	constexpr const char* PhotoOutAudioKey = "PhotoOut";
 
 	bool bCaptureRequested = false;
+	bool bPhotoSpawnPending = false;
+	float PhotoSpawnDelayRemaining = 0.0f;
+	float FlashTime = PhotoFlashSeconds;
 	float DisplayTime = 0.0f;
 	float DevelopTime = 0.0f;
 	uint32 CapturedWidth = 0;
@@ -63,6 +71,16 @@ namespace
 	{
 		const float InvAlpha = 1.0f - Clamp01(Alpha);
 		return 1.0f - InvAlpha * InvAlpha * InvAlpha;
+	}
+
+	void PlayCameraShutterAudio()
+	{
+		FAudioManager::Get().PlayAudio(CameraShutterAudioKey, 1.0f);
+	}
+
+	void PlayPhotoOutAudio()
+	{
+		FAudioManager::Get().PlayAudio(PhotoOutAudioKey, 1.0f, 2.0f);
 	}
 
 	bool IsHeldCameraMesh(UStaticMeshComponent* Component)
@@ -214,17 +232,43 @@ namespace
 		Component->SetDisplayTime(DisplayTime);
 		Component->SetDevelopTime(DevelopTime);
 	}
+
+	void StartCapturedPhotoEject()
+	{
+		bPhotoSpawnPending = false;
+		PhotoSpawnDelayRemaining = 0.0f;
+		DisplayTime = 0.0f;
+		DevelopTime = 0.0f;
+		SpawnPhotoActor(PendingCaptureWorld.Get());
+		UpdatePhotoActorTransform();
+		PlayPhotoOutAudio();
+	}
+
+	void ResetPhotoForNewCapture()
+	{
+		bPhotoSpawnPending = false;
+		PhotoSpawnDelayRemaining = 0.0f;
+		DisplayTime = 0.0f;
+		DevelopTime = 0.0f;
+		DestroyPhotoActor();
+	}
 }
 
 void FPhotoOverlay::RequestCapture()
 {
+	PlayCameraShutterAudio();
 	RestoreHiddenActors();
+	ResetPhotoForNewCapture();
+	FlashTime = 0.0f;
 	bCaptureRequested = true;
 }
 
 void FPhotoOverlay::RequestCapture(UWorld* World, const FName& ExcludeActorTag)
 {
+	PlayCameraShutterAudio();
 	RestoreHiddenActors();
+	ResetPhotoForNewCapture();
+	FlashTime = 0.0f;
 	PendingCaptureWorld = World;
 
 	if (World && ExcludeActorTag.IsValid() && ExcludeActorTag != FName::None)
@@ -253,6 +297,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	if (!SourceTexture)
 	{
 		bCaptureRequested = false;
+		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
 	}
@@ -260,6 +305,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	bCaptureRequested = false;
 	if (!EnsureResources(SourceTexture))
 	{
+		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
 	}
@@ -268,6 +314,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	SourceTexture->GetDevice(&Device);
 	if (!Device)
 	{
+		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
 	}
@@ -279,6 +326,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 
 	if (!Context)
 	{
+		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
 	}
@@ -286,14 +334,26 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	Context->CopyResource(CapturedTexture, SourceTexture);
 	Context->Release();
 	RestoreHiddenActors();
-	DisplayTime = 0.0f;
-	DevelopTime = 0.0f;
-	SpawnPhotoActor(PendingCaptureWorld.Get());
-	UpdatePhotoActorTransform();
+	bPhotoSpawnPending = true;
+	PhotoSpawnDelayRemaining = PhotoSpawnDelaySeconds;
 }
 
 void FPhotoOverlay::Tick(float DeltaTime)
 {
+	if (FlashTime < PhotoFlashSeconds)
+	{
+		FlashTime += DeltaTime;
+	}
+
+	if (bPhotoSpawnPending)
+	{
+		PhotoSpawnDelayRemaining -= DeltaTime;
+		if (PhotoSpawnDelayRemaining <= 0.0f)
+		{
+			StartCapturedPhotoEject();
+		}
+	}
+
 	if (PhotoActor.Get() && PhotoComponent.Get())
 	{
 		DisplayTime += DeltaTime;
@@ -305,6 +365,11 @@ void FPhotoOverlay::Tick(float DeltaTime)
 bool FPhotoOverlay::IsVisible()
 {
 	return PhotoActor.Get() && CapturedSRV;
+}
+
+bool FPhotoOverlay::IsFlashVisible()
+{
+	return FlashTime < PhotoFlashSeconds;
 }
 
 ID3D11ShaderResourceView* FPhotoOverlay::GetSRV()
@@ -320,6 +385,11 @@ ID3D11ShaderResourceView* FPhotoOverlay::GetFrameSRV()
 float FPhotoOverlay::GetDisplayTime()
 {
 	return DisplayTime;
+}
+
+float FPhotoOverlay::GetFlashTime()
+{
+	return FlashTime;
 }
 
 float FPhotoOverlay::GetDevelopTime()
