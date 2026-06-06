@@ -2,6 +2,7 @@ local PISTOL_IDLE_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_
 local PISTOL_WALK_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Walk.uasset"
 local PISTOL_FIRE_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Fire.uasset"
 local CAMERA_MESH_PATH = "Content/Data/camera/camera_StaticMesh.uasset"
+local GameManager = require("GameManager")
 
 local FPS_SPEED_THRESHOLD = 0.5
 local FPS_IDLE_TO_WALK_BLEND = 0.15
@@ -16,7 +17,6 @@ local MUZZLE_SOCKET = "Muzzle"
 local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemplate"
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
-local FAKE_TARGET_TAG = "Fake"
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
@@ -139,7 +139,7 @@ local function spawn_projectile_from_muzzle()
     return projectile
 end
 
-local function is_aiming_at_fake_target()
+local function report_anomaly_shot_from_camera()
     if World == nil or World.LineTraceObjects == nil then
         return false
     end
@@ -161,7 +161,11 @@ local function is_aiming_at_fake_target()
         return false
     end
 
-    return hit.Actor:HasTag(FAKE_TARGET_TAG)
+    if GameManager == nil or GameManager.ReportAnomalyShot == nil then
+        return false
+    end
+
+    return GameManager:ReportAnomalyShot(hit.Actor)
 end
 
 local function show_pistol()
@@ -305,7 +309,7 @@ function update(self, dt)
                 update_switch_to_pistol(self, 0.0)
             end
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
-            if is_aiming_at_fake_target() then
+            if report_anomaly_shot_from_camera() then
                 self.ActionTime = 0.0
                 self.ActionPhase = ACTION_PISTOL_FIRE
             else
