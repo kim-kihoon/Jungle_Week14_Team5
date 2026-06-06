@@ -772,6 +772,10 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 			{
 				MaterialInfo.DiffuseColor = FVector(1.0f, 0.0f, 0.0f);
 			}
+			else if (MaterialInfo.Name == "Material.009_Emissive")
+			{
+				MaterialInfo.DiffuseColor = FVector(196.0f / 255.0f, 125.0f / 255.0f, 124.0f / 255.0f);
+			}
 		}
 
 		FbxProperty NormalProp = Material->FindProperty(FbxSurfaceMaterial::sNormalMap);
@@ -961,6 +965,7 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 		: FVector4(1.0f, 1.0f, 1.0f, 1.0f);
 	const FString DiffuseTex = MaterialInfo.DiffuseTexturePath.empty() ? FString() : FPaths::MakeProjectRelative(MaterialInfo.DiffuseTexturePath);
 	const FString NormalTex  = MaterialInfo.NormalTexturePath.empty()  ? FString() : FPaths::MakeProjectRelative(MaterialInfo.NormalTexturePath);
+	const float EmissiveIntensity = MaterialInfo.Name == "Material.009_Emissive" ? 1.0f : 4.0f;
 
 	// JSON 없이 머티리얼을 직접 빌드해 .uasset(바이너리)으로 저장.
 	FMaterialManager::Get().CreateImportedMaterialAsset(
@@ -969,7 +974,7 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 		DiffuseTex,
 		NormalTex,
 		MaterialInfo.bEmissive,
-		4.0f,
+		EmissiveIntensity,
 		MaterialInfo.bTransparent,
 		MaterialInfo.Opacity,
 		MaterialInfo.bTwoSided,

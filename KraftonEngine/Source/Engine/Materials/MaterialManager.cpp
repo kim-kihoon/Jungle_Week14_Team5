@@ -45,6 +45,26 @@ namespace
 		bool bDirty = false;
 		const bool bEmissive = Material->GetScalarParameterValue("bEmissive") >= 0.5f;
 
+		if (bEmissive && AssetPath.find("Material.009_Emissive.uasset") != FString::npos)
+		{
+			const FVector4 TargetColor(196.0f / 255.0f, 125.0f / 255.0f, 124.0f / 255.0f, 1.0f);
+			const FVector4 CurrentColor = Material->GetVector4ParameterValue("SectionColor");
+			if (std::fabs(CurrentColor.X - TargetColor.X) > 0.001f ||
+				std::fabs(CurrentColor.Y - TargetColor.Y) > 0.001f ||
+				std::fabs(CurrentColor.Z - TargetColor.Z) > 0.001f ||
+				std::fabs(CurrentColor.W - TargetColor.W) > 0.001f)
+			{
+				Material->SetVector4Parameter("SectionColor", TargetColor);
+				bDirty = true;
+			}
+
+			if (std::fabs(Material->GetScalarParameterValue("EmissiveIntensity") - 1.0f) > 0.001f)
+			{
+				Material->SetScalarParameter("EmissiveIntensity", 1.0f);
+				bDirty = true;
+			}
+		}
+
 		UTexture2D* NormalTex = Material->GetTextureParameterValue("NormalTexture");
 		const FString NormalPath = NormalTex ? NormalTex->GetSourcePath() : FString();
 		if (Material->GetScalarParameterValue("HasNormalMap") >= 0.5f && NormalPath.empty())
