@@ -1,0 +1,19 @@
+#pragma once
+
+#include "Core/Types/CoreTypes.h"
+
+#include <d3d11.h>
+
+class FPhotoOverlay
+{
+public:
+	static void RequestCapture();
+	static void CapturePendingFromViewport(ID3D11Texture2D* SourceTexture);
+	static void Tick();
+	static bool IsVisible();
+	static ID3D11ShaderResourceView* GetSRV();
+
+private:
+	static bool EnsureResources(ID3D11Texture2D* SourceTexture);
+	static void ReleaseResources();
+};

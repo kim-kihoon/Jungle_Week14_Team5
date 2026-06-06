@@ -27,8 +27,11 @@ UWorld* FEditorViewportClient::GetWorld() const
 #include "Editor/EditorEngine.h"
 #include "GameFramework/AActor.h"
 #include "Viewport/GameViewportClient.h"
+#include "UI/PhotoOverlay.h"
 #include "ImGui/imgui.h"
 #include "Component/Light/LightComponentBase.h"
+
+#include <algorithm>
 
 namespace
 {
@@ -795,7 +798,29 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 	ImVec2 Min(R.X, R.Y);
 	ImVec2 Max(R.X + R.Width, R.Y + R.Height);
 
+	if (bIsActiveViewport)
+	{
+		FPhotoOverlay::CapturePendingFromViewport(Viewport->GetRTTexture());
+	}
+
 	DrawList->AddImage((ImTextureID)Viewport->GetSRV(), Min, Max);
+
+	if (bIsActiveViewport && FPhotoOverlay::IsVisible())
+	{
+		const float Padding = 16.0f;
+		const float PhotoWidth = (std::min)(R.Width * 0.28f, 320.0f);
+		const float PhotoHeight = PhotoWidth * 9.0f / 16.0f;
+		ImVec2 PhotoMin(R.X + Padding, R.Y + Padding);
+		ImVec2 PhotoMax(PhotoMin.x + PhotoWidth, PhotoMin.y + PhotoHeight);
+		DrawList->AddRectFilled(
+			ImVec2(PhotoMin.x - 4.0f, PhotoMin.y - 4.0f),
+			ImVec2(PhotoMax.x + 4.0f, PhotoMax.y + 4.0f),
+			IM_COL32(0, 0, 0, 90),
+			2.0f);
+		DrawList->AddImage((ImTextureID)FPhotoOverlay::GetSRV(), PhotoMin, PhotoMax);
+		DrawList->AddRect(PhotoMin, PhotoMax, IM_COL32(255, 255, 255, 230), 0.0f, 0, 2.0f);
+		FPhotoOverlay::Tick();
+	}
 
 	// 활성 뷰포트 테두리 강조
 	if (bIsActiveViewport)
