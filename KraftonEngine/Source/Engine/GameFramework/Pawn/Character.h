@@ -122,6 +122,7 @@ public:
 
 	// 자동 WASD 매핑/binding — SetupInputComponent 가 InputComponent 에 등록.
 	// 게임에선 보통 false 로 끄고 자식이 자기 매핑/binding 추가. 데모 편의용 기본 true.
+	UPROPERTY(Edit, Save, Category="Character|Input", DisplayName="Auto Input WASD")
 	bool bAutoInputWASD = true;
 
 	// 자동 Space jump 매핑/binding. FPS처럼 Space를 장비 전환에 쓰는 캐릭터는 false로 둔다.

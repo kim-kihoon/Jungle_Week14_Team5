@@ -4710,6 +4710,19 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         {
             if (IsValid(Component)) Component->SetMass(Mass);
         },
+        "GetCollisionEnabled",
+        [](UPrimitiveComponent* Component) -> int32
+        {
+            return IsValid(Component) ? static_cast<int32>(Component->GetCollisionEnabled()) : 0;
+        },
+        "SetCollisionEnabled",
+        [](UPrimitiveComponent* Component, int32 Mode)
+        {
+            if (IsValid(Component))
+            {
+                Component->SetCollisionEnabled(static_cast<ECollisionEnabled>(std::clamp(Mode, 0, 3)));
+            }
+        },
         "GetGenerateOverlapEvents",
         [](UPrimitiveComponent* Component) -> bool
         {
@@ -5119,6 +5132,15 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
                 return;
             }
             Actor.SetActorLocation(Location);
+        },
+
+        "AddMovementInput",
+        [](AActor& Actor, const FVector& Direction, sol::optional<float> Scale)
+        {
+            if (ACharacter* Character = Cast<ACharacter>(&Actor))
+            {
+                Character->AddMovementInput(Direction, Scale.value_or(1.0f));
+            }
         },
 
         "AddWorldOffset",

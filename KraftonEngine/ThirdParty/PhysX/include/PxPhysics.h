@@ -412,7 +412,7 @@ public:
 	@see getShapes()
 	*/
 	virtual PxU32				getNbShapes() const = 0;
-
+	  
 	/**
 	\brief Writes the array of shape pointers to a user buffer.
 	
