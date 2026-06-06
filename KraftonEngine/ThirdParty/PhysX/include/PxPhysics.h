@@ -432,7 +432,7 @@ public:
 	//@}
 	/** @name Constraints and Articulations
 	*/
-	//@{
+	//@{d
 
 	/**
 	\brief Creates a constraint shader.
