@@ -272,23 +272,40 @@ void FShadowMapPass::PatchLightBuffer(const FPassContext& Ctx)
 
 	FLightInfo* Lights = static_cast<FLightInfo*>(Mapped.pData);
 
-	// Point lights: index [0, NumPoints)
+	uint32 ActivePointIndex = 0;
+
+	// Point lights: visible lights are packed into [0, NumActivePointLights)
 	for (uint32 i = 0; i < NumPoints; ++i)
 	{
-		if (Lights[i].bCastShadow)
+		const auto& PointLight = Env.GetPointLight(i);
+		if (!PointLight.bVisible)
+		{
+			continue;
+		}
+
+		FLightInfo& L = Lights[ActivePointIndex++];
+		if (L.bCastShadow)
 		{
 			int32 ShadowIdx = (i < static_cast<uint32>(PointShadowIndexMap.size())) ? PointShadowIndexMap[i] : -1;
 			if (ShadowIdx >= 0)
-				Lights[i].ShadowMapIndex = static_cast<uint32>(ShadowIdx);
+				L.ShadowMapIndex = static_cast<uint32>(ShadowIdx);
 			else
-				Lights[i].bCastShadow = 0;
+				L.bCastShadow = 0;
 		}
 	}
 
-	// Spot lights: index [NumPoints, NumPoints + NumSpots)
+	uint32 ActiveSpotIndex = 0;
+
+	// Spot lights: visible lights are packed after active point lights.
 	for (uint32 i = 0; i < NumSpots; ++i)
 	{
-		FLightInfo& L = Lights[NumPoints + i];
+		const auto& SpotLight = Env.GetSpotLight(i);
+		if (!SpotLight.bVisible)
+		{
+			continue;
+		}
+
+		FLightInfo& L = Lights[ActivePointIndex + ActiveSpotIndex++];
 		if (L.bCastShadow)
 		{
 			int32 ShadowIdx = (i < static_cast<uint32>(SpotShadowIndexMap.size())) ? SpotShadowIndexMap[i] : -1;
@@ -453,11 +470,18 @@ void FShadowMapPass::EnsureResources(const FPassContext& Ctx)
 	if (Env.HasGlobalDirectionalLight())
 	{
 		const FGlobalDirectionalLightParams& DirectionalParams = Env.GetGlobalDirectionalLightParams();
-		const float ScaledResolution = static_cast<float>(ProjShadow.CSMResolution) * DirectionalParams.ShadowResolutionScale;
-		uint32 Resolution = static_cast<uint32>((std::max)(64.0f, (std::min)(ScaledResolution, 8192.0f)));
-		
-		Res.EnsureCSM(Dev, Resolution);
-		if (bVSM) Res.EnsureCSM_VSM(Dev, Resolution);
+		if (DirectionalParams.bVisible && DirectionalParams.bCastShadows)
+		{
+			const float ScaledResolution = static_cast<float>(ProjShadow.CSMResolution) * DirectionalParams.ShadowResolutionScale;
+			uint32 Resolution = static_cast<uint32>((std::max)(64.0f, (std::min)(ScaledResolution, 8192.0f)));
+
+			Res.EnsureCSM(Dev, Resolution);
+			if (bVSM) Res.EnsureCSM_VSM(Dev, Resolution);
+		}
+		else if (Res.CSM.IsValid())
+		{
+			Res.CSM.Release();
+		}
 	}
 	else if (Res.CSM.IsValid())
 	{
@@ -476,6 +500,7 @@ void FShadowMapPass::EnsureResources(const FPassContext& Ctx)
 	for (uint32 i = 0; i < NumSpots; ++i)
 	{
 		const auto& Light = Env.GetSpotLight(i);
+		if (!Light.bVisible) continue;
 		if (!Light.bCastShadows) continue;
 		if (!CameraFrustum.IntersectSphere(Light.Position, Light.AttenuationRadius)) continue;
 		VisibleShadowSpotIndices.push_back(i);
@@ -562,6 +587,7 @@ void FShadowMapPass::EnsureResources(const FPassContext& Ctx)
 	for (uint32 i = 0; i < NumPoints; ++i)
 	{
 		const auto& Light = Env.GetPointLight(i);
+		if (!Light.bVisible) continue;
 		if (!Light.bCastShadows) continue;
 		if (!CameraFrustum.IntersectSphere(Light.Position, Light.AttenuationRadius * 2.0f)) continue;
 		VisibleShadowPointIndices.push_back(i);
@@ -976,6 +1002,8 @@ void FShadowMapPass::RenderDirectionalShadows(const FPassContext& Ctx, FShadowMa
 	constexpr int32 NumCascades = MAX_SHADOW_CASCADES;
 
 	FGlobalDirectionalLightParams DirectionalParams = Env.GetGlobalDirectionalLightParams();
+	if (!DirectionalParams.bVisible) return;
+	if (!DirectionalParams.bCastShadows) return;
 
 	// b5 Bias/SlopeBias/Sharpen: FShadowSettings override > per-light 값
 	const auto& Settings = FShadowSettings::Get();

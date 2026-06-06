@@ -2,9 +2,9 @@
 #include "Render/Types/ForwardLightData.h"
 struct LightBaseParams
 {
-	float Intensity; //4
-	FVector4 LightColor; //16
-	bool bVisible; // 4
+	float Intensity = 1.0f; //4
+	FVector4 LightColor = { 1.0f, 1.0f, 1.0f, 1.0f }; //16
+	bool bVisible = true; // 4
 	bool bCastShadows = true;
 
 	// Per-light shadow parameters (FShadowSettings override 시 무시됨)

@@ -47,6 +47,7 @@ namespace
 	uint32 FrameHeight = 0;
 	ID3D11ShaderResourceView* FrameSRV = nullptr;
 	TArray<TWeakObjectPtr<AActor>> CaptureHiddenActors;
+	TArray<TWeakObjectPtr<UStaticMeshComponent>> CaptureHiddenComponents;
 	TWeakObjectPtr<UWorld> PendingCaptureWorld;
 	TWeakObjectPtr<AActor> PhotoActor;
 	TWeakObjectPtr<UPhotoPolaroidComponent> PhotoComponent;
@@ -252,6 +253,18 @@ namespace
 		DevelopTime = 0.0f;
 		DestroyPhotoActor();
 	}
+
+	void HideHeldCameraForCapture(UWorld* World)
+	{
+		UStaticMeshComponent* HeldCamera = GetHeldCameraMeshComponent(World);
+		if (!HeldCamera || !HeldCamera->IsVisible())
+		{
+			return;
+		}
+
+		HeldCamera->SetVisibility(false);
+		CaptureHiddenComponents.push_back(TWeakObjectPtr<UStaticMeshComponent>(HeldCamera));
+	}
 }
 
 void FPhotoOverlay::RequestCapture()
@@ -284,6 +297,8 @@ void FPhotoOverlay::RequestCapture(UWorld* World, const FName& ExcludeActorTag)
 			CaptureHiddenActors.push_back(TWeakObjectPtr<AActor>(Actor));
 		}
 	}
+
+	HideHeldCameraForCapture(World);
 
 	bCaptureRequested = true;
 }
@@ -414,6 +429,15 @@ float FPhotoOverlay::GetFrameAspectRatio()
 
 void FPhotoOverlay::RestoreHiddenActors()
 {
+	for (TWeakObjectPtr<UStaticMeshComponent>& ComponentPtr : CaptureHiddenComponents)
+	{
+		if (UStaticMeshComponent* Component = ComponentPtr.Get())
+		{
+			Component->SetVisibility(true);
+		}
+	}
+	CaptureHiddenComponents.clear();
+
 	for (TWeakObjectPtr<AActor>& ActorPtr : CaptureHiddenActors)
 	{
 		if (AActor* Actor = ActorPtr.Get())

@@ -6,6 +6,7 @@
 #include "Core/Logging/Notification.h"
 
 #include <algorithm>
+#include <chrono>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -5768,6 +5769,14 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         {
             UWorld* CurrentWorld = GEngine ? GEngine->GetWorld() : nullptr;
             return CurrentWorld ? CurrentWorld->GetGameTimeSeconds() : 0.0f;
+        }
+    );
+    World.set_function(
+        "GetRealTimeSeconds",
+        []() -> double
+        {
+            using Clock = std::chrono::system_clock;
+            return std::chrono::duration<double>(Clock::now().time_since_epoch()).count();
         }
     );
     World.set_function(

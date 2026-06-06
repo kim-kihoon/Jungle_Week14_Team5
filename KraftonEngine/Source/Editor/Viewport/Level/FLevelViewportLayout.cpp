@@ -31,6 +31,7 @@
 #include "Platform/Paths.h"
 #include "ImGui/imgui.h"
 #include "Component/Camera/CameraComponent.h"
+#include "Component/SceneComponent.h"
 #include "Render/Types/MinimalViewInfo.h"
 #include "Component/Debug/GizmoComponent.h"
 #include "Component/Light/LightComponentBase.h"
@@ -1763,6 +1764,8 @@ void FLevelViewportLayout::RenderViewportPlaceActorPopup()
 			}
 		};
 
+		PlaceActorMenuItem("Empty Actor", EViewportPlaceActorType::EmptyActor);
+		ImGui::Separator();
 		PlaceActorMenuItem("Cube", EViewportPlaceActorType::Cube);
 		PlaceActorMenuItem("Sphere", EViewportPlaceActorType::Sphere);
 		PlaceActorMenuItem("Cylinder", EViewportPlaceActorType::Cylinder);
@@ -1927,6 +1930,20 @@ AActor* FLevelViewportLayout::SpawnActorFromViewportMenu(EViewportPlaceActorType
 
 	switch (Type)
 	{
+	case EViewportPlaceActorType::EmptyActor:
+	{
+		AActor* Actor = World->SpawnActor<AActor>();
+		if (Actor)
+		{
+			USceneComponent* RootComponent = Actor->AddComponent<USceneComponent>();
+			if (RootComponent)
+			{
+				Actor->SetRootComponent(RootComponent);
+				SpawnedActor = Actor;
+			}
+		}
+		break;
+	}
 	case EViewportPlaceActorType::Cube:
 	{
 		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();

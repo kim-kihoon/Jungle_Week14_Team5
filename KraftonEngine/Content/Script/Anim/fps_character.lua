@@ -18,6 +18,7 @@ local MUZZLE_SOCKET = "Muzzle"
 local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemplate"
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
+local FAKE_TARGET_TAG = "Fake"
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
@@ -285,42 +286,64 @@ local function spawn_projectile_from_muzzle()
     return projectile
 end
 
+local function play_pistol_fire_effect(owner)
+    if HospitalPlayer ~= nil and HospitalPlayer.play_pistol_fire_effect ~= nil then
+        HospitalPlayer.play_pistol_fire_effect(owner)
+    end
+end
+
 local function start_pistol_fire_action(self)
     self.ActionTime = 0.0
     self.ActionPhase = ACTION_PISTOL_FIRE
+    local owner = Anim.get_owner_actor()
+
+    play_pistol_fire_effect(owner)
 
     if Anim.play_pistol_fire_audio ~= nil then
         Anim.play_pistol_fire_audio()
     end
 end
 
-local function report_anomaly_shot_from_camera()
+local function get_camera_trace_actor()
     if World == nil or World.LineTraceObjects == nil then
-        return false
+        return nil
     end
 
     local owner = Anim.get_owner_actor()
     if owner == nil then
-        return false
+        return nil
     end
 
     local camera = owner:GetCamera()
     if camera == nil then
-        return false
+        return nil
     end
 
     local start = camera:GetLocation()
     local direction = camera.Forward
     local hit = World.LineTraceObjects(start, start + direction * CAMERA_TRACE_DISTANCE, owner)
     if hit == nil or not hit.Hit or hit.Actor == nil then
+        return nil
+    end
+
+    return hit.Actor
+end
+
+local function should_play_pistol_fire_from_camera()
+    local hitActor = get_camera_trace_actor()
+    if hitActor == nil then
         return false
     end
 
-    if GameManager == nil or GameManager.ReportAnomalyShot == nil then
-        return false
+    if GameManager ~= nil and GameManager.ReportAnomalyShot ~= nil and GameManager:ReportAnomalyShot(hitActor) then
+        return true
     end
 
-    return GameManager:ReportAnomalyShot(hit.Actor)
+    if hitActor.HasTag ~= nil and hitActor:HasTag(FAKE_TARGET_TAG) then
+        return true
+    end
+
+    return false
 end
 
 local function show_pistol()
@@ -512,9 +535,9 @@ function update(self, dt)
             else
                 self.SwitchPhase = SWITCH_TO_PISTOL
                 update_switch_to_pistol(self, 0.0)
-        end
+            end
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
-            if report_anomaly_shot_from_camera() then
+            if should_play_pistol_fire_from_camera() then
                 start_pistol_fire_action(self)
             else
                 spawn_projectile_from_muzzle()

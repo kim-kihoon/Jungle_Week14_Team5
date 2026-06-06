@@ -1,7 +1,7 @@
 local OffscreenAnimation = {}
 
 OffscreenAnimation.Name = "OffscreenAnimation"
-OffscreenAnimation.AnimationPath = "Content/Data/Samba Dancing/YeoulDance.uasset"
+OffscreenAnimation.AnimationPath = "Content/Data/slendyTubbie/slendyTubbie_classic_newborn_newborn_ref_skeleton_classic_newborn_newborn_ref_skeleton_attack.uasset"
 
 local function get_skeletal_mesh(actor)
     if actor == nil or actor.GetSkeletalMeshComponent == nil then
@@ -66,19 +66,23 @@ function OffscreenAnimation:Despawn(context)
     end
 
     local originalPath = context.State.OriginalAnimationPath
-    if originalPath ~= nil and originalPath ~= "" and originalPath ~= "None" and mesh.SetAnimationByPath ~= nil then
-        mesh:SetAnimationByPath(originalPath)
+    local bHasOriginalAnimation = originalPath ~= nil and originalPath ~= "" and originalPath ~= "None"
+    local bRestoredOriginalAnimation = false
+    if bHasOriginalAnimation and mesh.SetAnimationByPath ~= nil then
+        bRestoredOriginalAnimation = mesh:SetAnimationByPath(originalPath) == true
     end
+    if not bRestoredOriginalAnimation and mesh.StopAnimation ~= nil then
+        mesh:StopAnimation()
+    end
+
     if context.State.OriginalPlayRate ~= nil and mesh.SetPlayRate ~= nil then
         mesh:SetPlayRate(context.State.OriginalPlayRate)
     end
     if context.State.OriginalLooping ~= nil and mesh.SetLooping ~= nil then
         mesh:SetLooping(context.State.OriginalLooping)
     end
-    if context.State.OriginalPlaying ~= nil and mesh.SetPlaying ~= nil then
+    if bRestoredOriginalAnimation and context.State.OriginalPlaying ~= nil and mesh.SetPlaying ~= nil then
         mesh:SetPlaying(context.State.OriginalPlaying)
-    elseif mesh.StopAnimation ~= nil then
-        mesh:StopAnimation()
     end
 end
 

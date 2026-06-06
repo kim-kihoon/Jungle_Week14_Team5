@@ -38,6 +38,8 @@ local EntryCoroutineGeneration = 0
 local bAnimationPlaying = false
 local bMissingMeshLogged = false
 local PressureChangedHandle = nil
+local LoopStoppedHandle = nil
+local LoopRestedHandle = nil
 
 local function clamp(value, minimum, maximum)
     value = tonumber(value) or minimum
@@ -196,6 +198,10 @@ local function stop_animation()
     CurrentState = STATE_NONE
 end
 
+local function is_loop_stopped()
+    return GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped()
+end
+
 local function set_state(state, force)
     if not force and CurrentState == state and bAnimationPlaying then
         return true
@@ -246,6 +252,7 @@ end
 local function is_pressure_one_coroutine_valid(generation)
     return generation == EntryCoroutineGeneration and
         GameManager:IsPlaying() and
+        not is_loop_stopped() and
         CurrentPressure == PRESSURE_ENTRY_STRIKE
 end
 
@@ -354,6 +361,11 @@ end
 local function handle_pressure_changed(pressure)
     pressure = normalize_pressure(pressure) or PRESSURE_ENTRY_STRIKE
 
+    if is_loop_stopped() then
+        CurrentPressure = pressure
+        return
+    end
+
     if GameManager:IsPlaying() then
         enter_pressure(pressure)
         return
@@ -379,6 +391,48 @@ local function unregister_pressure_listener()
     if PressureChangedHandle ~= nil then
         GameManager:RemoveListener("PressureChanged", PressureChangedHandle)
         PressureChangedHandle = nil
+    end
+end
+
+local function handle_loop_rested()
+    if not GameManager:IsPlaying() or is_loop_stopped() then
+        return false
+    end
+
+    CurrentPressure = get_game_manager_pressure()
+    return enter_pressure(CurrentPressure)
+end
+
+local function register_loop_listeners()
+    if LoopStoppedHandle ~= nil then
+        GameManager:RemoveListener("LoopStopped", LoopStoppedHandle)
+        LoopStoppedHandle = nil
+    end
+    if LoopRestedHandle ~= nil then
+        GameManager:RemoveListener("LoopRested", LoopRestedHandle)
+        LoopRestedHandle = nil
+    end
+
+    if GameManager.OnLoopStopped ~= nil then
+        LoopStoppedHandle = GameManager:OnLoopStopped(function()
+            stop_animation()
+        end)
+    end
+    if GameManager.OnLoopRested ~= nil then
+        LoopRestedHandle = GameManager:OnLoopRested(function()
+            handle_loop_rested()
+        end)
+    end
+end
+
+local function unregister_loop_listeners()
+    if LoopStoppedHandle ~= nil then
+        GameManager:RemoveListener("LoopStopped", LoopStoppedHandle)
+        LoopStoppedHandle = nil
+    end
+    if LoopRestedHandle ~= nil then
+        GameManager:RemoveListener("LoopRested", LoopRestedHandle)
+        LoopRestedHandle = nil
     end
 end
 
@@ -483,6 +537,10 @@ function InitializeFromGameManager()
     CurrentEntryInterval = calculate_entry_interval()
     bAnimationPlaying = false
 
+    if is_loop_stopped() then
+        return true
+    end
+
     if GameManager:IsPlaying() then
         print("[CymbalMonkey] InitializeFromGameManager pressure=" .. tostring(CurrentPressure))
         return enter_pressure(CurrentPressure)
@@ -497,6 +555,7 @@ function BeginPlay()
     bMissingMeshLogged = false
     cache_mesh()
     register_pressure_listener()
+    register_loop_listeners()
 
     CurrentPressure = get_game_manager_pressure()
     CurrentState = STATE_NONE
@@ -504,13 +563,14 @@ function BeginPlay()
     bAnimationPlaying = false
     stop_pressure_one_coroutine()
 
-    if GameManager:IsPlaying() then
+    if GameManager:IsPlaying() and not is_loop_stopped() then
         enter_pressure(CurrentPressure)
     end
 end
 
 function EndPlay()
     unregister_pressure_listener()
+    unregister_loop_listeners()
     stop_animation()
     Mesh = nil
     CurrentPressure = PRESSURE_ENTRY_STRIKE
@@ -522,6 +582,13 @@ end
 function Tick(dt)
     if not GameManager:IsPlaying() then
         stop_animation()
+        return
+    end
+
+    if is_loop_stopped() then
+        if CurrentState ~= STATE_NONE or bAnimationPlaying or EntryCoroutine ~= nil then
+            stop_animation()
+        end
         return
     end
 

@@ -21,20 +21,28 @@ AnomalyManager.LastError = nil
 
 local seeded = false
 
+local function make_seed(timeSeconds)
+    local rawSeed = math.floor((tonumber(timeSeconds) or 0) * 1000000)
+    if rawSeed <= 0 then
+        return nil
+    end
+    return (rawSeed % 2147483646) + 1
+end
+
 local function seed_random_once()
     if seeded then
         return
     end
-    seeded = true
 
-    local seed = 1
-    if World ~= nil and World.GetGameTime ~= nil then
-        seed = math.floor((tonumber(World.GetGameTime()) or 0) * 1000)
+    local seed = nil
+    if World ~= nil and World.GetRealTimeSeconds ~= nil then
+        seed = make_seed(World.GetRealTimeSeconds())
     end
-    if seed <= 0 then
-        seed = 1
+
+    if seed ~= nil then
+        math.randomseed(seed)
+        seeded = true
     end
-    math.randomseed(seed)
 end
 
 local function is_valid_actor(actor)
@@ -248,6 +256,10 @@ function AnomalyManager:Tick(dt)
         return
     end
 
+    if active.bCleared then
+        return
+    end
+
     active.Context.DeltaTime = dt
     safe_call(active.Rule, "Tick", active.Context)
 
@@ -259,8 +271,21 @@ function AnomalyManager:Tick(dt)
     end)
 
     if ok and cleared then
-        active.bCleared = true
+        self:OnClear(active, "RuleCleared")
     end
+end
+
+function AnomalyManager:OnClear(active, reason)
+    if active == nil or active.bCleared then
+        return false
+    end
+
+    active.bCleared = true
+    if active.Context ~= nil and active.Context.State ~= nil then
+        active.Context.State.bCleared = true
+        active.Context.ClearReason = reason or "Clear"
+    end
+    return true
 end
 
 function AnomalyManager:ReportShot(actor)
@@ -274,14 +299,16 @@ function AnomalyManager:ReportShot(actor)
         return false
     end
 
-    if actor ~= active.Target then
+    local bHitActiveTarget = actor == active.Target
+    if not bHitActiveTarget and actor.HasTag ~= nil then
+        bHitActiveTarget = actor:HasTag(self.Tags.ActiveTarget)
+    end
+
+    if not bHitActiveTarget then
         return false
     end
 
-    active.bCleared = true
-    active.Context.State.bCleared = true
-    self:DespawnCurrent("Shot")
-    return true
+    return self:OnClear(active, "Shot")
 end
 
 function AnomalyManager:Reset()

@@ -5,8 +5,9 @@
 - 플레이어가 루프 지점에 도달했을 때 새로운 이상현상을 하나 활성화한다.
 - 이상현상 대상은 `AnomalyCandidate` 태그가 붙은 액터 중에서 선택한다.
 - 한 루프에는 액터 하나와 규칙 하나만 활성화한다.
-- 플레이어가 현재 활성 이상현상 대상을 총으로 맞추면 이상현상을 클리어한다.
-- 게임 종료, 클리어, 리셋 시 활성 이상현상은 원상 복구한다.
+- 플레이어가 현재 활성 이상현상 대상을 총으로 맞추면 이상현상을 클리어 상태로 표시하고 루프를 정지한다.
+- 정지된 루프에서는 게임 시간이 흐르지 않고 `CymbalMonkey` 애니메이션도 멈춘다.
+- 다음 루프 또는 게임 시작 시 루프를 복구하고 새 이상현상을 로드한다.
 
 ## 전체 구조
 
@@ -14,6 +15,7 @@
 GameManager
   ├─ 루프 진입점 제공
   ├─ 총격 판정 보고 진입점 제공
+  ├─ StopLoop / RestLoop으로 루프 정지와 복구 처리
   └─ 게임 상태 리셋 시 이상현상 정리
 
 AnomalyManager
@@ -45,7 +47,7 @@ AnomalyCandidate
 
 ### 루프 이벤트에서 호출
 
-플레이어 위치 리셋 직후 아래 함수를 호출한다.
+플레이어 위치 리셋 직후 아래 함수를 호출한다. 게임 시작 시에도 같은 흐름으로 초기 이상현상을 로드한다.
 
 ```lua
 local GameManager = require("GameManager")
@@ -66,7 +68,7 @@ GameManager:AdvanceAnomalyLoop()
 GameManager:ReportAnomalyShot(hit.Actor)
 ```
 
-현재 활성 이상현상 대상과 같은 액터를 맞추면 `true`를 반환하고, 활성 이상현상을 즉시 해제한다. 대상이 아니면 `false`를 반환하며 기존 투사체 스폰 흐름을 계속 진행하면 된다.
+현재 활성 이상현상 대상과 같은 액터를 맞추면 `true`를 반환하고 `GameManager:StopLoop()`을 호출한다. 이때 활성 이상현상은 즉시 원복하지 않고, 게임 시간과 `CymbalMonkey` 애니메이션만 정지한다. 대상이 아니면 `false`를 반환하며 기존 투사체 스폰 흐름을 계속 진행하면 된다.
 
 ### 디버그 키
 
@@ -86,6 +88,7 @@ GameManager:ReportAnomalyShot(hit.Actor)
 
 ```txt
 GameManager:AdvanceAnomalyLoop()
+  ├─ GameManager:RestLoop()
   └─ AnomalyManager:SelectAndSpawn()
        ├─ 기존 활성 이상현상 Despawn
        ├─ AnomalyCandidate 후보 수집
@@ -112,17 +115,34 @@ DebugManager:Tick(dt, GameManager)
 
 ```txt
 GameManager:ReportAnomalyShot(actor)
-  └─ AnomalyManager:ReportShot(actor)
-       ├─ 활성 대상과 같은 액터인지 확인
-       ├─ context.State.bCleared = true
-       └─ DespawnCurrent("Shot")
+  ├─ AnomalyManager:ReportShot(actor)
+  │    ├─ 활성 대상과 같은 액터인지 확인
+  │    └─ AnomalyManager:OnClear(active, "Shot")
+  └─ 정답이면 GameManager:StopLoop()
+       ├─ elapsedTime / remainingTime 갱신 정지
+       └─ LoopStopped 이벤트로 CymbalMonkey 애니메이션 정지
+```
+
+### 루프 복구
+
+```txt
+GameManager:AdvanceAnomalyLoop()
+  ├─ GameManager:RestLoop()
+  │    ├─ remainingTime을 timeLimit 초기값으로 복구
+  │    ├─ 시간 갱신 재개
+  │    └─ LoopRested 이벤트로 CymbalMonkey 애니메이션 재개
+  └─ AnomalyManager:SelectAndSpawn()
+       ├─ 이전 이상현상 Despawn
+       └─ 새 이상현상 Spawn
 ```
 
 ### 리셋과 복구
 
 `GameManager:Reset()`, `GameManager:GameOver()`, `GameManager:ClearGame()`은 모두 `AnomalyManager:Reset()`을 호출한다.
 
-`AnomalyManager:Reset()`은 현재 활성 이상현상이 있으면 규칙의 `Despawn(context)`을 호출해서 태그, 그림자, 애니메이션 상태를 복구한다.
+`AnomalyManager:Reset()`은 현재 활성 이상현상이 있으면 규칙의 `Despawn(context)`을 호출해서 태그, 그림자, 애니메이션 상태를 복구한다. `GameManager`는 이때 루프 정지 상태도 함께 정리한다.
+
+새 이상현상을 로드하는 `AnomalyManager:SelectAndSpawn()`과 `AnomalyManager:SelectAndSpawnRule(ruleName)`도 시작 시 기존 활성 이상현상을 `Despawn`한다. 따라서 총격으로 클리어된 이상현상은 다음 루프 진입이나 디버그 규칙 전환 시 복구된 뒤 새 이상현상이 적용된다.
 
 ## Anomaly Rule 인터페이스
 
@@ -245,6 +265,7 @@ Content/Data/Samba Dancing/YeoulDance.uasset
 - 기존 애니메이션 정보를 저장했다가 가능한 범위에서 되돌린다.
 - 기존 재생 상태가 있으면 `SetPlaying(OriginalPlaying)`으로 복구한다.
 - 기존 애니메이션 경로가 없으면 강제로 새 애니메이션을 지정하지 않는다.
+- 기존 애니메이션 경로가 없으면 `StopAnimation()`으로 애니메이션을 비워 reference pose로 돌아가게 한다.
 
 ## C++ / Lua 연결 지점
 
@@ -268,12 +289,12 @@ SkeletalMeshComponent:GetAnimationPath()
 SkeletalMeshComponent:GetPlayRate()
 SkeletalMeshComponent:GetLooping()
 SkeletalMeshComponent:IsPlaying()
-
 World.IsActorInViewFrustum(actor)
 World.GetGameTime()
+World.GetRealTimeSeconds()
 ```
 
-`AnomalyManager`의 랜덤 시드는 `os.time()`을 쓰지 않는다. 이 엔진 Lua는 `os` 라이브러리를 열지 않기 때문에 `World.GetGameTime()`을 사용한다.
+`AnomalyManager`의 랜덤 시드는 `os.time()`을 쓰지 않는다. 이 엔진 Lua는 `os` 라이브러리를 열지 않기 때문에, 엔진에서 안전하게 노출한 `World.GetRealTimeSeconds()`만 사용한다. 해당 바인딩이 없는 런타임에서는 고정 시드로 대체하지 않는다.
 
 ## 신규 규칙 추가 방법
 
@@ -297,4 +318,6 @@ World.GetGameTime()
 - `2`를 눌렀을 때 대상 본체는 보이고 그림자만 사라지는지 확인한다.
 - `3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
 - 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어되는지 확인한다.
+- 활성 대상을 쏘면 게임 시간이 멈추고 `CymbalMonkey` 애니메이션도 정지하는지 확인한다.
+- 다음 루프를 돌면 `remainingTime`이 초기값으로 복구되고, 시간이 다시 흐르며 `CymbalMonkey` 애니메이션이 재개되는지 확인한다.
 - 씬을 재시작하거나 게임이 리셋될 때 이전 이상현상 상태가 복구되는지 확인한다.

@@ -21,6 +21,7 @@ GameManager.elapsedTime = 0
 GameManager.remainingTime = 0
 GameManager.timeLimit = nil
 GameManager.isPlayerDead = false
+GameManager.bLoopStopped = false
 GameManager.pressureStage = GameManager.Pressure.EntryStrike
 GameManager.manualPressureStage = nil
 
@@ -29,7 +30,9 @@ GameManager._listeners = {
     ScoreChanged = {},
     PlayerDead = {},
     TimeExpired = {},
-    PressureChanged = {}
+    PressureChanged = {},
+    LoopStopped = {},
+    LoopRested = {}
 }
 
 local WARNING_REMAINING_RATIO = 0.1
@@ -198,12 +201,43 @@ function GameManager:OnPressureChanged(callback)
     return self:AddListener("PressureChanged", callback)
 end
 
+function GameManager:OnLoopStopped(callback)
+    return self:AddListener("LoopStopped", callback)
+end
+
+function GameManager:OnLoopRested(callback)
+    return self:AddListener("LoopRested", callback)
+end
+
+function GameManager:IsLoopStopped()
+    return self.bLoopStopped == true
+end
+
+function GameManager:StopLoop(reason)
+    if self.bLoopStopped then
+        return false
+    end
+
+    self.bLoopStopped = true
+    self:_FireEvent("LoopStopped", reason or "StopLoop")
+    return true
+end
+
+function GameManager:RestLoop(reason)
+    self.bLoopStopped = false
+    self.remainingTime = self.timeLimit or 0
+    self:_RefreshPressureStage(reason or "RestLoop", true)
+    self:_FireEvent("LoopRested", reason or "RestLoop")
+    return true
+end
+
 function GameManager:Reset()
     AnomalyManager:Reset()
     self.score = 0
     self.elapsedTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
+    self.bLoopStopped = false
     self.manualPressureStage = nil
     self:_SetPressureStage(self.Pressure.EntryStrike, "Reset", false)
     self:_SetState(self.State.Ready, "Reset")
@@ -215,6 +249,7 @@ function GameManager:StartGame()
     self.isPlayerDead = false
     self:_SetState(self.State.Playing, "StartGame")
     self:_RefreshPressureStage("StartGame", true)
+    self:AdvanceAnomalyLoop()
 end
 
 function GameManager:PauseGame()
@@ -239,6 +274,7 @@ function GameManager:GameOver(reason)
     end
 
     AnomalyManager:Reset()
+    self.bLoopStopped = false
     self:_SetPressureStage(self.Pressure.EntryStrike, reason or "GameOver", false)
     return self:_SetState(self.State.GameOver, reason or "GameOver")
 end
@@ -249,6 +285,7 @@ function GameManager:ClearGame(reason)
     end
 
     AnomalyManager:Reset()
+    self.bLoopStopped = false
     self:_SetPressureStage(self.Pressure.EntryStrike, reason or "ClearGame", false)
     return self:_SetState(self.State.Clear, reason or "ClearGame")
 end
@@ -269,6 +306,10 @@ function GameManager:Tick(dt)
     end
 
     AnomalyManager:Tick(dt)
+    if self.bLoopStopped then
+        return
+    end
+
     self.elapsedTime = self.elapsedTime + dt
 
     if self.timeLimit ~= nil then
@@ -380,11 +421,16 @@ function GameManager:AdvanceAnomalyLoop()
         return false
     end
 
+    self:RestLoop("AdvanceAnomalyLoop")
     return AnomalyManager:SelectAndSpawn()
 end
 
 function GameManager:ReportAnomalyShot(actor)
-    return AnomalyManager:ReportShot(actor)
+    local bHitAnomaly = AnomalyManager:ReportShot(actor)
+    if bHitAnomaly then
+        self:StopLoop("AnomalyShot")
+    end
+    return bHitAnomaly
 end
 
 function GameManager:GetActiveAnomalyTarget()
