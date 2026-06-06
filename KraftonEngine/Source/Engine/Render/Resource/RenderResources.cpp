@@ -872,8 +872,11 @@ void FSystemResources::UpdateLightBuffer(FD3DDevice& Device, const FScene& Scene
 	if (Env.HasGlobalAmbientLight())
 	{
 		FGlobalAmbientLightParams DirLightParams = Env.GetGlobalAmbientLightParams();
-		GlobalLightingData.Ambient.Intensity = DirLightParams.Intensity;
-		GlobalLightingData.Ambient.Color = DirLightParams.LightColor;
+		if (DirLightParams.bVisible)
+		{
+			GlobalLightingData.Ambient.Intensity = DirLightParams.Intensity;
+			GlobalLightingData.Ambient.Color = DirLightParams.LightColor;
+		}
 	}
 	else
 	{
@@ -884,15 +887,16 @@ void FSystemResources::UpdateLightBuffer(FD3DDevice& Device, const FScene& Scene
 	if (Env.HasGlobalDirectionalLight())
 	{
 		FGlobalDirectionalLightParams DirLightParams = Env.GetGlobalDirectionalLightParams();
-		GlobalLightingData.Directional.Intensity = DirLightParams.Intensity;
-		GlobalLightingData.Directional.Color = DirLightParams.LightColor;
-		GlobalLightingData.Directional.Direction = DirLightParams.Direction;
+		if (DirLightParams.bVisible)
+		{
+			GlobalLightingData.Directional.Intensity = DirLightParams.Intensity;
+			GlobalLightingData.Directional.Color = DirLightParams.LightColor;
+			GlobalLightingData.Directional.Direction = DirLightParams.Direction;
+		}
 	}
 
 	const uint32 NumPointLights = Env.GetNumPointLights();
 	const uint32 NumSpotLights  = Env.GetNumSpotLights();
-	GlobalLightingData.NumActivePointLights = NumPointLights;
-	GlobalLightingData.NumActiveSpotLights  = NumSpotLights;
 
 	TArray<FLightInfo> Infos;
 	Infos.reserve(NumPointLights + NumSpotLights);
@@ -900,17 +904,31 @@ void FSystemResources::UpdateLightBuffer(FD3DDevice& Device, const FScene& Scene
 	// Point lights — ShadowMapIndex는 ShadowMapPass::EndPass에서 패치
 	for (uint32 i = 0; i < NumPointLights; ++i)
 	{
-		FLightInfo Info = Env.GetPointLight(i).ToLightInfo();
+		const FPointLightParams& PointLight = Env.GetPointLight(i);
+		if (!PointLight.bVisible)
+		{
+			continue;
+		}
+
+		FLightInfo Info = PointLight.ToLightInfo();
 		Info.ShadowMapIndex = 0;
 		Infos.emplace_back(Info);
+		++GlobalLightingData.NumActivePointLights;
 	}
 
 	// Spot lights — ShadowMapIndex는 ShadowMapPass::EndPass에서 패치
 	for (uint32 i = 0; i < NumSpotLights; ++i)
 	{
-		FLightInfo Info = Env.GetSpotLight(i).ToLightInfo();
+		const FSpotLightParams& SpotLight = Env.GetSpotLight(i);
+		if (!SpotLight.bVisible)
+		{
+			continue;
+		}
+
+		FLightInfo Info = SpotLight.ToLightInfo();
 		Info.ShadowMapIndex = 0;
 		Infos.emplace_back(Info);
+		++GlobalLightingData.NumActiveSpotLights;
 	}
 
 	LastNumLights = static_cast<uint32>(Infos.size());
