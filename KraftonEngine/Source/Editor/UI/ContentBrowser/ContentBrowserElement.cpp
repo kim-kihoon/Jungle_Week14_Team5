@@ -582,6 +582,18 @@ void SceneElement::OnDoubleLeftClicked(ContentBrowserContext& Context)
 	EditorEngine->LoadSceneFromPath(FilePath);
 }
 
+void RmlDocumentElement::OnDoubleLeftClicked(ContentBrowserContext& Context)
+{
+	if (!Context.EditorEngine)
+	{
+		ShellExecuteW(nullptr, L"open", ContentItem.Path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+		return;
+	}
+
+	const FString PackagePath = FPaths::ToUtf8(ContentItem.Path.lexically_relative(FPaths::RootDir()).generic_wstring());
+	Context.EditorEngine->GetRmlUiManager().OpenDocument(PackagePath);
+}
+
 void ObjectElement::RenderContextMenu(ContentBrowserContext& Context)
 {
 	FString Extension = FPaths::ToUtf8(ContentItem.Path.extension());

@@ -135,4 +135,5 @@ private:
 	uint32 AxisMask = 0x7; // 비트 0=X, 1=Y, 2=Z — LineTrace용 (렌더링은 Proxy가 직접 계산)
 	FPrimitiveSceneProxy* InnerProxy = nullptr;	// GizmoInner 전용 프록시
 	FScene* RegisteredScene = nullptr;			// Actor 없이 독립 생성 시 사용
+	FScene* RenderStateScene = nullptr;
 };

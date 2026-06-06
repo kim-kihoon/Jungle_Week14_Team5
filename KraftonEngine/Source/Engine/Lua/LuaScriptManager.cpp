@@ -1970,6 +1970,26 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         }
     );
     Engine.set_function(
+        "TransitionToScene",
+        [](const FString& ScenePath)
+        {
+            if (GEngine)
+            {
+                GEngine->RequestTransitionToScene(ScenePath);
+            }
+        }
+    );
+    Engine.set_function(
+        "RequestTransitionToScene",
+        [](const FString& ScenePath)
+        {
+            if (GEngine)
+            {
+                GEngine->RequestTransitionToScene(ScenePath);
+            }
+        }
+    );
+    Engine.set_function(
         "Exit",
         []()
         {
@@ -5596,7 +5616,27 @@ void FLuaScriptManager::RegisterUIBindings(sol::state& Lua)
         "SetWantsMouse",
         &UUserWidget::SetWantsMouse,
         "WantsMouse",
-        &UUserWidget::WantsMouse
+        &UUserWidget::WantsMouse,
+        "SetWantsKeyboard",
+        &UUserWidget::SetWantsKeyboard,
+        "WantsKeyboard",
+        &UUserWidget::WantsKeyboard,
+        "SetWantsTextInput",
+        &UUserWidget::SetWantsTextInput,
+        "WantsTextInput",
+        &UUserWidget::WantsTextInput,
+        "SetBlocksGameInput",
+        &UUserWidget::SetBlocksGameInput,
+        "BlocksGameInput",
+        &UUserWidget::BlocksGameInput,
+        "SetBlocksGameKeyboard",
+        &UUserWidget::SetBlocksGameKeyboard,
+        "BlocksGameKeyboard",
+        &UUserWidget::BlocksGameKeyboard,
+        "SetBlocksGameMouseLook",
+        &UUserWidget::SetBlocksGameMouseLook,
+        "BlocksGameMouseLook",
+        &UUserWidget::BlocksGameMouseLook
     );
 
     sol::table UI = Lua.create_named_table("UI");

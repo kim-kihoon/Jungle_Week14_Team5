@@ -43,7 +43,7 @@ cbuffer PerShader1 : register(b2)
 
 // 머티리얼 확장 파라미터 — 팀원 A CB 시스템 완성 후 b2 확장 예정
 static const float4 g_DefaultEmissive = float4(0, 0, 0, 0);
-static const float g_DefaultShininess = 32.0f;
+static const float g_DefaultShininess = 8.0f;
 
 // =============================================================================
 // VS ↔ PS 인터페이스

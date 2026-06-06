@@ -81,6 +81,8 @@ private:
 	int32 CollectClothOverlayLODIndex = -1;
 	int32 CollectClothOverlayIndex = -1;
 	float CollectClothMaxDistanceOverlayAlpha = 0.8f;
+	bool bCollectEditorIcons = true;
+	bool bCollectSelectionOutline = true;
 
 	// Transparent depth-first 정렬용 — BeginCollect에서 캐싱.
 	FVector CollectCameraPosition = { 0, 0, 0 };
