@@ -12,6 +12,7 @@ local FPS_FIRE_ENTER_BLEND = 0.05
 local FPS_FIRE_EXIT_BLEND = 0.1
 
 local KEY_SPACE = 0x20
+local KEY_RBUTTON = 0x02
 local PISTOL_SOCKET = "PistolSocket"
 local MUZZLE_SOCKET = "Muzzle"
 local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemplate"
@@ -45,6 +46,12 @@ local CAMERA_BOB_SMOOTH = 8.0
 local CAMERA_BOB_FORWARD_AMOUNT = 0.010
 local CAMERA_BOB_SIDE_AMOUNT = 0.010
 local CAMERA_BOB_UP_AMOUNT = 0.015
+local HEAD_BOB_ROLL_DEGREES = 1.3
+local HEAD_BOB_PITCH_DEGREES = 0.64
+local HEAD_BOB_OFFSET_Z = 0.006
+local HEAD_BOB_ROLL_PHASE_OFFSET = 0.3
+local HEAD_BOB_SMOOTH = 12.0
+local HEAD_BOB_AIM_SCALE = 0.15
 local FOOTSTEP_PHASE_HALF = math.pi
 local TWO_PI = math.pi * 2.0
 
@@ -117,6 +124,84 @@ local function update_camera_hold_motion(self)
     local bobZ = math.abs(math.sin(phase)) * CAMERA_BOB_UP_AMOUNT * weight
 
     set_camera_mesh_position(1.0, bobX, bobY, bobZ)
+end
+
+local function sharpen_step_wave(value)
+    value = clamp01(math.abs(value))
+    return value * value
+end
+
+local function is_aiming(self)
+    if self.CurrentTool ~= TOOL_PISTOL then
+        return false
+    end
+
+    if Input == nil or Input.GetKey == nil then
+        return false
+    end
+
+    local ok, down = pcall(function()
+        return Input.GetKey(KEY_RBUTTON)
+    end)
+    return ok and down == true
+end
+
+local function get_head_bob_amplitude_scale(self)
+    local scale = self.WalkBobWeight
+    if scale <= 0.0 then
+        return 0.0
+    end
+
+    if is_aiming(self) then
+        scale = scale * HEAD_BOB_AIM_SCALE
+    end
+
+    return scale
+end
+
+local function get_head_bob_targets(self)
+    local phase = self.WalkBobTime
+    local scale = get_head_bob_amplitude_scale(self)
+    local stepWave = sharpen_step_wave(math.sin(phase))
+    local roll = math.sin(phase + HEAD_BOB_ROLL_PHASE_OFFSET) * HEAD_BOB_ROLL_DEGREES * scale
+    local pitch = -stepWave * HEAD_BOB_PITCH_DEGREES * scale
+    local offsetZ = -stepWave * HEAD_BOB_OFFSET_Z * scale
+    return roll, pitch, offsetZ
+end
+
+local function apply_head_bob_to_camera(self)
+    if Anim.apply_head_bob == nil then
+        return
+    end
+
+    Anim.apply_head_bob(self.HeadBobRoll, self.HeadBobPitch, self.HeadBobOffsetZ)
+end
+
+local function reset_head_bob(self)
+    self.HeadBobRoll = 0.0
+    self.HeadBobPitch = 0.0
+    self.HeadBobOffsetZ = 0.0
+    apply_head_bob_to_camera(self)
+end
+
+local function update_head_bob(self, dt)
+    if Anim.apply_head_bob == nil then
+        return
+    end
+
+    local smoothAlpha = clamp01((tonumber(dt) or 0.0) * HEAD_BOB_SMOOTH)
+    local targetRoll = 0.0
+    local targetPitch = 0.0
+    local targetOffsetZ = 0.0
+
+    if self.Speed > self.SpeedThreshold and self.WalkBobWeight > 0.01 then
+        targetRoll, targetPitch, targetOffsetZ = get_head_bob_targets(self)
+    end
+
+    self.HeadBobRoll = lerp(self.HeadBobRoll, targetRoll, smoothAlpha)
+    self.HeadBobPitch = lerp(self.HeadBobPitch, targetPitch, smoothAlpha)
+    self.HeadBobOffsetZ = lerp(self.HeadBobOffsetZ, targetOffsetZ, smoothAlpha)
+    apply_head_bob_to_camera(self)
 end
 
 local function get_pistol_walk_play_rate(self)
@@ -324,6 +409,9 @@ function init(self)
     self.ActionTime = 0.0
     self.WalkBobTime = 0.0
     self.WalkBobWeight = 0.0
+    self.HeadBobRoll = 0.0
+    self.HeadBobPitch = 0.0
+    self.HeadBobOffsetZ = 0.0
     self.PistolFireDuration = Anim.get_sequence_length(PISTOL_FIRE_PATH)
     self.PistolWalkLength = Anim.get_sequence_length(PISTOL_WALK_PATH)
     reset_footstep_tracking(self)
@@ -439,6 +527,7 @@ function update(self, dt)
 
         update_walk_bob(self, dt)
         update_pistol_walk_play_rate(self)
+        update_head_bob(self, dt)
         if self.CurrentTool == TOOL_CAMERA then
             update_camera_hold_motion(self)
         end
@@ -447,6 +536,7 @@ function update(self, dt)
     end
 
     reset_footstep_tracking(self)
+    reset_head_bob(self)
     self.SwitchTime = self.SwitchTime + dt
     local alpha = clamp01(self.SwitchTime / TOOL_SWITCH_DURATION)
 

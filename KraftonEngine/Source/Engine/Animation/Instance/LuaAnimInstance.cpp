@@ -223,6 +223,7 @@ void ULuaAnimInstance::ReloadScript()
 void ULuaAnimInstance::ClearGraph()
 {
 	FCrosshairOverlay::SetVisible(false);
+	CachedViewCamera.Reset();
 
 	// 이전 graph 에 걸려 있던 transition 람다가 새 Lua runtime 을 보지 않도록 세대를 먼저 넘긴다.
 	++LuaRuntimeGeneration;
@@ -607,6 +608,26 @@ void ULuaAnimInstance::InstallBindings()
 			Settings3D.MinDistance = 0.25f;
 			Settings3D.MaxDistance = 8.0f;
 			FAudioManager::Get().PlayAudio(FootstepKeys[Index], 3.0f, 1.0f, &Settings3D);
+		});
+	Anim.set_function(
+		"apply_head_bob",
+		[this](float RollDegrees, float PitchDegrees, float LocalOffsetZ)
+		{
+			if (!CachedViewCamera.IsValid())
+			{
+				AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
+				if (!Owner)
+				{
+					return;
+				}
+
+				CachedViewCamera = Owner->GetComponentByClass<UCameraComponent>();
+			}
+
+			if (UCameraComponent* Camera = CachedViewCamera.Get())
+			{
+				Camera->SetViewBob(RollDegrees, PitchDegrees, LocalOffsetZ);
+			}
 		});
 	Anim.set_function("set_crosshair_visible",
 		[](bool bVisible)
