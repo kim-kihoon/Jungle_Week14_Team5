@@ -82,9 +82,9 @@ void FAudioManager::Shutdown()
 
 	for (auto& Pair : Audios)
 	{
-		if (Pair.second)
+		if (Pair.second.Sound)
 		{
-			Pair.second->release();
+			Pair.second.Sound->release();
 		}
 	}
 	Audios.clear();
@@ -141,10 +141,33 @@ bool FAudioManager::UpdateListenerFromWorld(UWorld* World)
 	return true;
 }
 
+FMOD::Sound* FAudioManager::FindSound(const FString& Key) const
+{
+	if (!Audios.contains(Key))
+	{
+		return nullptr;
+	}
+
+	return Audios.at(Key).Sound;
+}
+
 bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoop, bool b3D)
 {
-	if (!System)
+	if (!System || Key.empty() || Path.empty())
 	{
+		return false;
+	}
+
+	if (Audios.contains(Key))
+	{
+		FAudioSoundEntry& Existing = Audios[Key];
+		if (Existing.Sound && Existing.Path == Path && Existing.bLoop == bLoop && Existing.b3D == b3D)
+		{
+			Existing.RefCount++;
+			return true;
+		}
+
+		UE_LOG("[AudioManager] LoadAudio key collision with different settings. Key=%s", Key.c_str());
 		return false;
 	}
 
@@ -162,13 +185,35 @@ bool FAudioManager::LoadAudio(const FString& Key, const FString& Path, bool bLoo
 		return false;
 	}
 
-	if (Audios.contains(Key) && Audios[Key])
+	FAudioSoundEntry Entry;
+	Entry.Sound = Sound;
+	Entry.RefCount = 1;
+	Entry.bLoop = bLoop;
+	Entry.b3D = b3D;
+	Entry.Path = Path;
+	Audios[Key] = Entry;
+	return true;
+}
+
+void FAudioManager::ReleaseAudio(const FString& Key)
+{
+	if (!Audios.contains(Key))
 	{
-		Audios[Key]->release();
+		return;
 	}
 
-	Audios[Key] = Sound;
-	return true;
+	FAudioSoundEntry& Entry = Audios[Key];
+	Entry.RefCount = std::max(0, Entry.RefCount - 1);
+	if (Entry.RefCount > 0)
+	{
+		return;
+	}
+
+	if (Entry.Sound)
+	{
+		Entry.Sound->release();
+	}
+	Audios.erase(Key);
 }
 
 void FAudioManager::Apply3DSettingsToChannel(FMOD::Channel* Channel, const FAudio3DPlaySettings& Settings3D) const
@@ -189,13 +234,14 @@ void FAudioManager::Apply3DSettingsToChannel(FMOD::Channel* Channel, const FAudi
 
 void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch, const FAudio3DPlaySettings* Settings3D)
 {
-	if (!System || !Audios.contains(Key))
+	FMOD::Sound* Sound = FindSound(Key);
+	if (!System || !Sound)
 	{
 		return;
 	}
 
 	FMOD::Channel* Channel = nullptr;
-	System->playSound(Audios[Key], nullptr, false, &Channel);
+	System->playSound(Sound, nullptr, false, &Channel);
 
 	if (Channel)
 	{
@@ -210,13 +256,14 @@ void FAudioManager::PlayAudio(const FString& Key, float Volume, float Pitch, con
 
 void FAudioManager::PlayBGM(const FString& Key, float Volume)
 {
-	if (!System || !Audios.contains(Key))
+	FMOD::Sound* Sound = FindSound(Key);
+	if (!System || !Sound)
 	{
 		return;
 	}
 
 	StopBGM();
-	System->playSound(Audios[Key], nullptr, false, &BGMChannel);
+	System->playSound(Sound, nullptr, false, &BGMChannel);
 
 	if (BGMChannel)
 	{
@@ -235,7 +282,8 @@ void FAudioManager::StopBGM()
 
 void FAudioManager::PlayLoop(const FString& Key, const FString& LoopName, float Volume, float Pitch, const FAudio3DPlaySettings* Settings3D)
 {
-	if (!System || !Audios.contains(Key) || LoopName.empty())
+	FMOD::Sound* Sound = FindSound(Key);
+	if (!System || !Sound || LoopName.empty())
 	{
 		return;
 	}
@@ -253,7 +301,7 @@ void FAudioManager::PlayLoop(const FString& Key, const FString& LoopName, float 
 	}
 
 	FMOD::Channel* Channel = nullptr;
-	System->playSound(Audios[Key], nullptr, false, &Channel);
+	System->playSound(Sound, nullptr, false, &Channel);
 
 	if (Channel)
 	{

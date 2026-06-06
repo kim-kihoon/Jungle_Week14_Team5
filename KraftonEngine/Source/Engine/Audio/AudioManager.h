@@ -25,6 +25,7 @@ public:
 	void Tick();
 
 	bool LoadAudio(const FString& Key, const FString& Path, bool bLoop = false, bool b3D = false);
+	void ReleaseAudio(const FString& Key);
 	void PlayAudio(const FString& Key, float Volume = 1.0f, float Pitch = 1.0f, const FAudio3DPlaySettings* Settings3D = nullptr);
 	void PlayBGM(const FString& Key, float Volume = 1.0f);
 	void StopBGM();
@@ -49,9 +50,19 @@ private:
 	};
 
 	void LoadDefaultAudios();
+	FMOD::Sound* FindSound(const FString& Key) const;
 	FMOD::Channel* FindPlayingLoopChannel(const FString& LoopName, bool* bOut3D = nullptr);
 	void Apply3DSettingsToChannel(FMOD::Channel* Channel, const FAudio3DPlaySettings& Settings3D) const;
 	static FMOD_VECTOR ToFmodVector(const FVector& Value);
+
+	struct FAudioSoundEntry
+	{
+		FMOD::Sound* Sound = nullptr;
+		int32 RefCount = 0;
+		bool bLoop = false;
+		bool b3D = false;
+		FString Path;
+	};
 
 private:
 	FAudioManager() = default;
@@ -61,6 +72,6 @@ private:
 	FMOD::ChannelGroup* MasterGroup = nullptr;
 	FMOD::Channel* BGMChannel = nullptr;
 
-	TMap<FString, FMOD::Sound*> Audios;
+	TMap<FString, FAudioSoundEntry> Audios;
 	TMap<FString, FLoopChannelEntry> LoopChannels;
 };

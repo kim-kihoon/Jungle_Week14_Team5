@@ -48,6 +48,11 @@ void UAudioComponent::BeginPlay()
 void UAudioComponent::EndPlay()
 {
 	Stop();
+	if (bLoaded)
+	{
+		FAudioManager::Get().ReleaseAudio(GetAudioKey());
+		bLoaded = false;
+	}
 	Super::EndPlay();
 }
 
@@ -202,8 +207,10 @@ FVector UAudioComponent::ResolveListenerLocation() const
 
 FString UAudioComponent::GetAudioKey() const
 {
-	FString Key = "AudioComponent:";
+	FString Key = "Audio:";
 	Key += SoundPath;
+	Key += bLoop ? ":L" : ":O";
+	Key += bSpatialize ? ":3D" : ":2D";
 	return Key;
 }
 
