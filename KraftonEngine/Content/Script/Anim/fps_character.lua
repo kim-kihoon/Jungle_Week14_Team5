@@ -17,6 +17,7 @@ local MUZZLE_SOCKET = "Muzzle"
 local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemplate"
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
+local FAKE_TARGET_TAG = "Fake"
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
@@ -110,6 +111,27 @@ local function update_camera_hold_motion(self, dt)
     set_camera_mesh_position(1.0, bobX, bobY, bobZ)
 end
 
+local function get_crosshair_aim_target(owner)
+    if World == nil or World.LineTraceObjects == nil or owner == nil then
+        return nil
+    end
+
+    local camera = owner:GetCamera()
+    if camera == nil then
+        return nil
+    end
+
+    local start = camera:GetLocation()
+    local direction = camera.Forward
+    local fallbackTarget = start + direction * CAMERA_TRACE_DISTANCE
+    local hit = World.LineTraceObjects(start, fallbackTarget, owner)
+    if hit ~= nil and hit.Hit and hit.Location ~= nil then
+        return hit.Location
+    end
+
+    return fallbackTarget
+end
+
 local function spawn_projectile_from_muzzle()
     if World == nil or World.SpawnActorTemplate == nil then
         return nil
@@ -123,6 +145,7 @@ local function spawn_projectile_from_muzzle()
     local rotation = Anim.get_socket_rotation(MUZZLE_SOCKET)
     local forward = Anim.get_socket_forward(MUZZLE_SOCKET)
     local spawnLocation = location + forward * PROJECTILE_SPAWN_OFFSET
+    local owner = Anim.get_owner_actor()
 
     local projectile = World.SpawnActorTemplate(
         PROJECTILE_TEMPLATE_PATH,
@@ -132,43 +155,74 @@ local function spawn_projectile_from_muzzle()
     if projectile ~= nil then
         local movement = projectile:GetProjectileMovementComponent()
         if movement ~= nil then
-            movement:SetIgnoredActor(Anim.get_owner_actor())
+            movement:SetIgnoredActor(owner)
+
+            local aimTarget = get_crosshair_aim_target(owner)
+            if aimTarget ~= nil then
+                local aimDirection = Math.Normalize(aimTarget - spawnLocation)
+                if aimDirection:Length() > 0.0001 then
+                    movement:SetVelocity(aimDirection)
+                end
+            end
         end
     end
 
     return projectile
 end
 
-local function report_anomaly_shot_from_camera()
+local function start_pistol_fire_action(self)
+    self.ActionTime = 0.0
+    self.ActionPhase = ACTION_PISTOL_FIRE
+
+    if Anim.play_pistol_fire_audio ~= nil then
+        Anim.play_pistol_fire_audio()
+    end
+end
+
+local function get_camera_trace_actor()
     if World == nil or World.LineTraceObjects == nil then
-        return false
+        return nil
     end
 
     local owner = Anim.get_owner_actor()
     if owner == nil then
-        return false
+        return nil
     end
 
     local camera = owner:GetCamera()
     if camera == nil then
-        return false
+        return nil
     end
 
     local start = camera:GetLocation()
     local direction = camera.Forward
     local hit = World.LineTraceObjects(start, start + direction * CAMERA_TRACE_DISTANCE, owner)
     if hit == nil or not hit.Hit or hit.Actor == nil then
+        return nil
+    end
+
+    return hit.Actor
+end
+
+local function should_play_pistol_fire_from_camera()
+    local hitActor = get_camera_trace_actor()
+    if hitActor == nil then
         return false
     end
 
-    if GameManager == nil or GameManager.ReportAnomalyShot == nil then
-        return false
+    if GameManager ~= nil and GameManager.ReportAnomalyShot ~= nil and GameManager:ReportAnomalyShot(hitActor) then
+        return true
     end
 
-    return GameManager:ReportAnomalyShot(hit.Actor)
+    if hitActor.HasTag ~= nil and hitActor:HasTag(FAKE_TARGET_TAG) then
+        return true
+    end
+
+    return false
 end
 
 local function show_pistol()
+    Anim.set_crosshair_visible(true)
     Anim.set_owner_mesh_pitch(ARMS_READY_PITCH)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -177,6 +231,7 @@ local function show_pistol()
 end
 
 local function show_camera()
+    Anim.set_crosshair_visible(false)
     Anim.set_owner_mesh_pitch(ARMS_DOWN_PITCH)
     Anim.set_owner_mesh_visibility(false)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, false)
@@ -185,6 +240,7 @@ local function show_camera()
 end
 
 local function update_switch_to_camera(self, alpha)
+    Anim.set_crosshair_visible(false)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -194,6 +250,7 @@ local function update_switch_to_camera(self, alpha)
 end
 
 local function update_switch_to_pistol(self, alpha)
+    Anim.set_crosshair_visible(false)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -309,9 +366,8 @@ function update(self, dt)
                 update_switch_to_pistol(self, 0.0)
             end
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
-            if report_anomaly_shot_from_camera() then
-                self.ActionTime = 0.0
-                self.ActionPhase = ACTION_PISTOL_FIRE
+            if should_play_pistol_fire_from_camera() then
+                start_pistol_fire_action(self)
             else
                 spawn_projectile_from_muzzle()
             end

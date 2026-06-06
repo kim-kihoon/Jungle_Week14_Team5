@@ -215,6 +215,7 @@ function GameManager:StartGame()
     self.isPlayerDead = false
     self:_SetState(self.State.Playing, "StartGame")
     self:_RefreshPressureStage("StartGame", true)
+    self:AdvanceAnomalyLoop()
 end
 
 function GameManager:PauseGame()

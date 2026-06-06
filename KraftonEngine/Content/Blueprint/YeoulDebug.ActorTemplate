@@ -33,7 +33,7 @@
         "BackStandUpAnimationPath" : "None",
         "CachedEditRotator" : [-0.000000, 0.000000, 0.000000],
         "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
-        "CollisionEnabled" : 0,
+        "CollisionEnabled" : 3,
         "DirectHitFullBodyThreshold" : 0.850000,
         "FrontStandUpAnimationPath" : "None",
         "FullBodyLaunchImpulseMagnitude" : 900.000000,

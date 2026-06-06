@@ -11,6 +11,7 @@
 #include "Animation/Nodes/AnimNode_Slot.h"
 #include "Animation/Nodes/AnimNode_StateMachine.h"
 #include "Animation/Nodes/AnimNode_SequencePlayer.h"
+#include "Audio/AudioManager.h"
 #include "Component/Camera/CameraComponent.h"
 #include "Component/Movement/CharacterMovementComponent.h"
 #include "Component/PrimitiveComponent.h"
@@ -27,6 +28,7 @@
 #include "Object/Object.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Serialization/Archive.h"
+#include "UI/CrosshairOverlay.h"
 #include "UI/PhotoOverlay.h"
 
 #include <Windows.h>
@@ -192,6 +194,8 @@ void ULuaAnimInstance::ReloadScript()
 
 void ULuaAnimInstance::ClearGraph()
 {
+	FCrosshairOverlay::SetVisible(false);
+
 	// 이전 graph 에 걸려 있던 transition 람다가 새 Lua runtime 을 보지 않도록 세대를 먼저 넘긴다.
 	++LuaRuntimeGeneration;
 
@@ -528,6 +532,17 @@ void ULuaAnimInstance::InstallBindings()
 		{
 			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
 			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("PhotoInvisible"));
+		});
+	Anim.set_function("play_pistol_fire_audio",
+		[]()
+		{
+			FAudioManager::Get().PlayAudio("PistolFire", 1.0f);
+			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.75f, 2.0f);
+		});
+	Anim.set_function("set_crosshair_visible",
+		[](bool bVisible)
+		{
+			FCrosshairOverlay::SetVisible(bVisible);
 		});
 
 	Anim.set_function("get_owner_actor",

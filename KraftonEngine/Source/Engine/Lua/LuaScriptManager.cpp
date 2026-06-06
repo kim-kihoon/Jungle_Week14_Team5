@@ -5104,9 +5104,32 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             }
         ),
 
-        "AddWorldOffset",
-        [](AActor& Actor, const FVector& Offset)
+        "GetLocation",
+        [](AActor& Actor)
         {
+            return Actor.GetActorLocation();
+        },
+        "SetLocation",
+        [](AActor& Actor, sol::object LocationObject)
+        {
+            FVector Location;
+            if (!LuaObjectToVector(LocationObject, Location))
+            {
+                UE_LOG("[Lua] Actor.SetLocation ignored: expected Vector or {X,Y,Z}");
+                return;
+            }
+            Actor.SetActorLocation(Location);
+        },
+
+        "AddWorldOffset",
+        [](AActor& Actor, sol::object OffsetObject)
+        {
+            FVector Offset;
+            if (!LuaObjectToVector(OffsetObject, Offset))
+            {
+                UE_LOG("[Lua] Actor.AddWorldOffset ignored: expected Vector or {X,Y,Z}");
+                return;
+            }
             Actor.AddActorWorldOffset(Offset);
         },
 
