@@ -253,6 +253,7 @@ void FEditorRenderPipeline::BuildFrame(FLevelEditorViewportClient* VC, const FMi
 	}
 
 	UCameraComponent* ActiveCamera = CamManager ? CamManager->GetActiveCamera() : nullptr;
+	Frame.CameraPostProcessMaterial = ActiveCamera ? ActiveCamera->GetPostProcessMaterial() : nullptr;
 	if (ActiveCamera)
 	{
 		const FCameraLetterboxState& LetterboxSettings = ActiveCamera->GetLetterboxSettings();

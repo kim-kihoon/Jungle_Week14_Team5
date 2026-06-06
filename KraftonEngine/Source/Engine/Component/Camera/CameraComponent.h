@@ -4,8 +4,12 @@
 #include "Math/MathUtils.h"
 #include "Math/Vector.h"
 #include "GameFramework/Camera/CameraTypes.h"
+#include "Object/Ptr/SoftObjectPtr.h"
 
 struct FMinimalViewInfo;
+class FReferenceCollector;
+class UMaterial;
+class UTexture2D;
 
 struct FCameraState
 {
@@ -29,6 +33,8 @@ public:
 
 	void BeginPlay() override;
 	void EndPlay() override;
+	void PostEditProperty(const char* PropertyName) override;
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
 
 
 	UFUNCTION(Callable, Category="Camera")
@@ -72,6 +78,21 @@ public:
 	UFUNCTION(Pure, Category="Camera|Letterbox")
 	FLinearColor GetLetterboxColor() const { return Letterbox.Color; }
 
+	UFUNCTION(Callable, Exec, Category="Camera|PostProcess")
+	void SetPostProcessMaterial(UMaterial* InMaterial);
+	UFUNCTION(Callable, Exec, Category="Camera|PostProcess")
+	bool SetPostProcessMaterialByPath(const FString& MaterialPath);
+	UFUNCTION(Pure, Category="Camera|PostProcess")
+	UMaterial* GetPostProcessMaterial() const;
+	UFUNCTION(Callable, Exec, Category="Camera|PostProcess")
+	void ClearPostProcessMaterial();
+	UFUNCTION(Callable, Exec, Category="Camera|PostProcess")
+	bool SetPostProcessScalarParameter(const FString& ParamName, float Value);
+	UFUNCTION(Callable, Exec, Category="Camera|PostProcess")
+	bool SetPostProcessVectorParameter(const FString& ParamName, const FVector4& Value);
+	UFUNCTION(Callable, Exec, Category="Camera|PostProcess")
+	bool SetPostProcessTextureParameter(const FString& ParamName, UTexture2D* Texture);
+
 	UFUNCTION(Callable, Exec, Category="Camera")
 	void OnResize(int32 Width, int32 Height);
 
@@ -100,4 +121,8 @@ private:
 	UPROPERTY(Edit, Save, Category="Camera|Letterbox", DisplayName="Letterbox Thickness", Member=Letterbox.Thickness, Type=Float, Min=0.0f, Max=0.5f, Speed=0.01f);
 	UPROPERTY(Edit, Save, Category="Camera|Letterbox", DisplayName="Letterbox Color", Member=Letterbox.Color, Type=Color4);
 	FCameraLetterboxState Letterbox;
+
+	UPROPERTY(Edit, Save, Category="Camera|PostProcess", DisplayName="Post Process Material", AssetType="Material")
+	FSoftObjectPtr PostProcessMaterialPath = "None";
+	mutable UMaterial* PostProcessMaterial = nullptr;
 };
