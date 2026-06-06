@@ -1,4 +1,5 @@
 local GameManager = {}
+local AnomalyManager = require("AnomalyManager")
 
 GameManager.State = {
     Ready = "Ready",
@@ -198,6 +199,7 @@ function GameManager:OnPressureChanged(callback)
 end
 
 function GameManager:Reset()
+    AnomalyManager:Reset()
     self.score = 0
     self.elapsedTime = 0
     self.remainingTime = self.timeLimit or 0
@@ -236,6 +238,7 @@ function GameManager:GameOver(reason)
         return false
     end
 
+    AnomalyManager:Reset()
     self:_SetPressureStage(self.Pressure.EntryStrike, reason or "GameOver", false)
     return self:_SetState(self.State.GameOver, reason or "GameOver")
 end
@@ -245,6 +248,7 @@ function GameManager:ClearGame(reason)
         return false
     end
 
+    AnomalyManager:Reset()
     self:_SetPressureStage(self.Pressure.EntryStrike, reason or "ClearGame", false)
     return self:_SetState(self.State.Clear, reason or "ClearGame")
 end
@@ -264,6 +268,7 @@ function GameManager:Tick(dt)
         dt = 0
     end
 
+    AnomalyManager:Tick(dt)
     self.elapsedTime = self.elapsedTime + dt
 
     if self.timeLimit ~= nil then
@@ -368,6 +373,39 @@ end
 
 function GameManager:GetState()
     return self.state
+end
+
+function GameManager:AdvanceAnomalyLoop()
+    if self.state ~= self.State.Playing then
+        return false
+    end
+
+    return AnomalyManager:SelectAndSpawn()
+end
+
+function GameManager:ReportAnomalyShot(actor)
+    return AnomalyManager:ReportShot(actor)
+end
+
+function GameManager:GetActiveAnomalyTarget()
+    return AnomalyManager:GetActiveTarget()
+end
+
+function GameManager:GetActiveAnomalyRuleName()
+    return AnomalyManager:GetActiveRuleName()
+end
+
+function GameManager:GetLastAnomalyError()
+    return AnomalyManager:GetLastError()
+end
+
+function GameManager:DebugSpawnAnomalyRule(ruleName)
+    if self.state ~= self.State.Playing then
+        print("[GameManager] DebugSpawnAnomalyRule ignored: game is not playing")
+        return false
+    end
+
+    return AnomalyManager:SelectAndSpawnRule(ruleName)
 end
 
 return GameManager

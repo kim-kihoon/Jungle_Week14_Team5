@@ -27,6 +27,7 @@ public:
 	bool LoadAudio(const FString& Key, const FString& Path, bool bLoop = false, bool b3D = false);
 	void ReleaseAudio(const FString& Key);
 	void PlayAudio(const FString& Key, float Volume = 1.0f, float Pitch = 1.0f, const FAudio3DPlaySettings* Settings3D = nullptr);
+	void PlayAudioFadeOut(const FString& Key, float Volume = 1.0f, float FadeOutSeconds = 1.0f, float Pitch = 1.0f, const FAudio3DPlaySettings* Settings3D = nullptr);
 	void PlayBGM(const FString& Key, float Volume = 1.0f);
 	void StopBGM();
 	void PlayLoop(const FString& Key, const FString& LoopName, float Volume = 1.0f, float Pitch = 1.0f, const FAudio3DPlaySettings* Settings3D = nullptr);
