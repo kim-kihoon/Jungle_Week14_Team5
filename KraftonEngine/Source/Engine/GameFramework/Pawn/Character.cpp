@@ -240,10 +240,32 @@ void ACharacter::InitDefaultComponents(const FString& SkeletalMeshFileName)
 void ACharacter::PostDuplicate()
 {
 	Super::PostDuplicate();
-	// 컴포넌트 트리 재발견 — Duplicate 후 멤버 포인터 복원.
+	RefreshCharacterComponentReferences();
+}
+
+void ACharacter::OnPostLoad(FArchive& Ar)
+{
+	Super::OnPostLoad(Ar);
+	RefreshCharacterComponentReferences();
+}
+
+void ACharacter::RefreshCharacterComponentReferences()
+{
 	CapsuleComponent  = Cast<UCapsuleComponent>(GetRootComponent());
 	Mesh              = GetComponentByClass<USkeletalMeshComponent>();
 	CharacterMovement = GetComponentByClass<UCharacterMovementComponent>();
+
+	if (CharacterMovement && !CharacterMovement->HasValidUpdatedComponent())
+	{
+		if (CapsuleComponent)
+		{
+			CharacterMovement->SetUpdatedComponent(CapsuleComponent);
+		}
+		else
+		{
+			CharacterMovement->ResolveUpdatedComponent();
+		}
+	}
 }
 
 bool ACharacter::EnterRagdoll()
@@ -467,6 +489,11 @@ void ACharacter::AddMovementInput(const FVector& WorldDirection, float ScaleValu
 	if (IsInRagdoll())
 	{
 		return;
+	}
+
+	if (!CharacterMovement || !CharacterMovement->HasValidUpdatedComponent())
+	{
+		RefreshCharacterComponentReferences();
 	}
 
 	if (CharacterMovement)

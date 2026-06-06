@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <PxPhysicsAPI.h>
+#include <extensions/PxDefaultStreams.h>
 
 using namespace physx;
 
@@ -140,6 +141,7 @@ PxShape* FPhysXBodyBuilder::CreateShape(PxPhysics* Physics, PxMaterial* DefaultM
     PxGeometryHolder Geometry;
     bool bHasGeometry = false;
     PxQuat ShapeAxisRotation(PxIdentity);
+    PxTriangleMesh* TriangleMeshRef = nullptr;
 
     if (Desc.Type == EPhysicsShapeType::Box)
     {
@@ -182,6 +184,68 @@ PxShape* FPhysXBodyBuilder::CreateShape(PxPhysics* Physics, PxMaterial* DefaultM
         ShapeAxisRotation = PxQuat(-PxHalfPi, PxVec3(0.0f, 1.0f, 0.0f));
         bHasGeometry = true;
     }
+    else if (Desc.Type == EPhysicsShapeType::TriangleMesh)
+    {
+        if (!Desc.TriangleMeshData ||
+            Desc.TriangleMeshData->Vertices.size() < 3 ||
+            Desc.TriangleMeshData->Indices.size() < 3 ||
+            (Desc.TriangleMeshData->Indices.size() % 3) != 0)
+        {
+            return nullptr;
+        }
+
+        TArray<PxVec3> Points;
+        Points.reserve(Desc.TriangleMeshData->Vertices.size());
+        for (const FVector& Vertex : Desc.TriangleMeshData->Vertices)
+        {
+            if (!IsFiniteGeometryValue(Vertex.X) ||
+                !IsFiniteGeometryValue(Vertex.Y) ||
+                !IsFiniteGeometryValue(Vertex.Z))
+            {
+                return nullptr;
+            }
+            Points.push_back(PxVec3(Vertex.X, Vertex.Y, Vertex.Z));
+        }
+
+        PxTriangleMeshDesc MeshDesc;
+        MeshDesc.points.count = static_cast<PxU32>(Points.size());
+        MeshDesc.points.stride = sizeof(PxVec3);
+        MeshDesc.points.data = Points.data();
+        MeshDesc.triangles.count = static_cast<PxU32>(Desc.TriangleMeshData->Indices.size() / 3);
+        MeshDesc.triangles.stride = sizeof(uint32) * 3;
+        MeshDesc.triangles.data = Desc.TriangleMeshData->Indices.data();
+
+        PxTolerancesScale Scale;
+        PxCookingParams CookingParams(Scale);
+        CookingParams.meshPreprocessParams |= PxMeshPreprocessingFlag::eDISABLE_CLEAN_MESH;
+        CookingParams.meshPreprocessParams |= PxMeshPreprocessingFlag::eDISABLE_ACTIVE_EDGES_PRECOMPUTE;
+
+        PxCooking* Cooking = PxCreateCooking(PX_PHYSICS_VERSION, PxGetFoundation(), CookingParams);
+        if (!Cooking)
+        {
+            return nullptr;
+        }
+
+        PxDefaultMemoryOutputStream CookedData;
+        PxTriangleMeshCookingResult::Enum CookingResult = PxTriangleMeshCookingResult::eFAILURE;
+        const bool bCooked = Cooking->cookTriangleMesh(MeshDesc, CookedData, &CookingResult);
+        Cooking->release();
+
+        if (!bCooked || CookingResult == PxTriangleMeshCookingResult::eFAILURE)
+        {
+            return nullptr;
+        }
+
+        PxDefaultMemoryInputData Input(CookedData.getData(), CookedData.getSize());
+        TriangleMeshRef = Physics->createTriangleMesh(Input);
+        if (!TriangleMeshRef)
+        {
+            return nullptr;
+        }
+
+        Geometry = PxTriangleMeshGeometry(TriangleMeshRef);
+        bHasGeometry = true;
+    }
 
     if (!bHasGeometry)
     {
@@ -189,6 +253,11 @@ PxShape* FPhysXBodyBuilder::CreateShape(PxPhysics* Physics, PxMaterial* DefaultM
     }
 
     PxShape* Shape = Physics->createShape(Geometry.any(), *DefaultMaterial, true);
+    if (TriangleMeshRef)
+    {
+        TriangleMeshRef->release();
+        TriangleMeshRef = nullptr;
+    }
     if (!Shape)
     {
         return nullptr;

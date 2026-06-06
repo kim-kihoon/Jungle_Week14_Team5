@@ -59,6 +59,8 @@ struct FCharacterCollisionOwnershipSnapshot
 
 #include "Source/Engine/GameFramework/Pawn/Character.generated.h"
 
+class FArchive;
+
 UCLASS()
 class ACharacter : public APawn
 {
@@ -71,6 +73,7 @@ public:
 	// 자식 (예: ALuaCharacter) 이 Super 호출 후 자기 컴포넌트 추가 가능.
 	virtual void InitDefaultComponents(const FString& SkeletalMeshFileName);
 
+	void OnPostLoad(FArchive& Ar) override;
 	void PostDuplicate() override;
 
 	// CharacterMovement->AddInputVector 의 액터 레벨 wrapper. UE 의 APawn::AddMovementInput 대응.
@@ -159,6 +162,7 @@ protected:
 	void FinalizePendingRagdollEntry();
 	void CacheRagdollRestoreLocation();
 	void RestoreCharacterAfterRagdoll();
+	void RefreshCharacterComponentReferences();
 
 	TWeakObjectPtr<UCapsuleComponent>           CapsuleComponent  = nullptr;
 	TWeakObjectPtr<USkeletalMeshComponent>      Mesh              = nullptr;
