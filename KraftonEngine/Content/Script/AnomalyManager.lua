@@ -285,7 +285,6 @@ function AnomalyManager:ReportShot(actor)
 
     active.bCleared = true
     active.Context.State.bCleared = true
-    self:DespawnCurrent("Shot")
     return true
 end
 

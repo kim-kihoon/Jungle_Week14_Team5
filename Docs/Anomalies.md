@@ -5,8 +5,8 @@
 - 플레이어가 루프 지점에 도달했을 때 새로운 이상현상을 하나 활성화한다.
 - 이상현상 대상은 `AnomalyCandidate` 태그가 붙은 액터 중에서 선택한다.
 - 한 루프에는 액터 하나와 규칙 하나만 활성화한다.
-- 플레이어가 현재 활성 이상현상 대상을 총으로 맞추면 이상현상을 클리어한다.
-- 게임 종료, 클리어, 리셋 시 활성 이상현상은 원상 복구한다.
+- 플레이어가 현재 활성 이상현상 대상을 총으로 맞추면 이상현상을 클리어 상태로 표시한다.
+- 클리어된 이상현상은 즉시 원복하지 않고, 다음 이상현상 로드 또는 게임 종료/리셋 시 원상 복구한다.
 
 ## 전체 구조
 
@@ -66,7 +66,7 @@ GameManager:AdvanceAnomalyLoop()
 GameManager:ReportAnomalyShot(hit.Actor)
 ```
 
-현재 활성 이상현상 대상과 같은 액터를 맞추면 `true`를 반환하고, 활성 이상현상을 즉시 해제한다. 대상이 아니면 `false`를 반환하며 기존 투사체 스폰 흐름을 계속 진행하면 된다.
+현재 활성 이상현상 대상과 같은 액터를 맞추면 `true`를 반환하고, 활성 이상현상을 클리어 상태로 표시한다. 이때 태그, 그림자, 애니메이션 상태는 즉시 원복하지 않는다. 대상이 아니면 `false`를 반환하며 기존 투사체 스폰 흐름을 계속 진행하면 된다.
 
 ### 디버그 키
 
@@ -115,7 +115,7 @@ GameManager:ReportAnomalyShot(actor)
   └─ AnomalyManager:ReportShot(actor)
        ├─ 활성 대상과 같은 액터인지 확인
        ├─ context.State.bCleared = true
-       └─ DespawnCurrent("Shot")
+       └─ 현재 이상현상은 다음 로드/리셋 전까지 유지
 ```
 
 ### 리셋과 복구
@@ -123,6 +123,8 @@ GameManager:ReportAnomalyShot(actor)
 `GameManager:Reset()`, `GameManager:GameOver()`, `GameManager:ClearGame()`은 모두 `AnomalyManager:Reset()`을 호출한다.
 
 `AnomalyManager:Reset()`은 현재 활성 이상현상이 있으면 규칙의 `Despawn(context)`을 호출해서 태그, 그림자, 애니메이션 상태를 복구한다.
+
+새 이상현상을 로드하는 `AnomalyManager:SelectAndSpawn()`과 `AnomalyManager:SelectAndSpawnRule(ruleName)`도 시작 시 기존 활성 이상현상을 `Despawn`한다. 따라서 총격으로 클리어된 이상현상은 다음 루프 진입이나 디버그 규칙 전환 시 복구된 뒤 새 이상현상이 적용된다.
 
 ## Anomaly Rule 인터페이스
 
@@ -296,5 +298,5 @@ World.GetGameTime()
 - `1`을 눌렀을 때 활성 대상에 `PhotoInvisible` 태그가 붙는지 확인한다.
 - `2`를 눌렀을 때 대상 본체는 보이고 그림자만 사라지는지 확인한다.
 - `3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
-- 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어되는지 확인한다.
-- 씬을 재시작하거나 게임이 리셋될 때 이전 이상현상 상태가 복구되는지 확인한다.
+- 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어 상태가 되는지 확인한다.
+- 활성 대상을 쏜 직후에는 이상현상 효과가 유지되고, 다음 이상현상 로드 또는 게임 리셋 때 이전 이상현상 상태가 복구되는지 확인한다.
