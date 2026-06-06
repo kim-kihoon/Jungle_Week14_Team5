@@ -53,6 +53,6 @@ function EndPlay()
 end
 
 function Tick(dt)
-    DebugManager:Tick(dt)
+    DebugManager:Tick(dt, GameManager)
     GameManager:Tick(dt)
 end

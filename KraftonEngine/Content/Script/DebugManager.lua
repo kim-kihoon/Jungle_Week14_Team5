@@ -1,5 +1,3 @@
-local GameManager = require("GameManager")
-
 local DebugManager = {}
 
 DebugManager.bEnabled = true
@@ -27,7 +25,8 @@ function DebugManager:IsEnabled()
     return self.bEnabled == true
 end
 
-function DebugManager:LoadAnomalyScenario(ruleName)
+function DebugManager:LoadAnomalyScenario(gameManager, ruleName)
+    local GameManager = gameManager
     if GameManager == nil or GameManager.DebugSpawnAnomalyRule == nil then
         print("[DebugManager] GameManager.DebugSpawnAnomalyRule unavailable")
         return false
@@ -47,7 +46,7 @@ function DebugManager:LoadAnomalyScenario(ruleName)
     return false
 end
 
-function DebugManager:Tick(dt)
+function DebugManager:Tick(dt, gameManager)
     if not self:IsEnabled() then
         return
     end
@@ -57,7 +56,7 @@ function DebugManager:Tick(dt)
 
     for _, scenario in ipairs(self.Scenarios) do
         if Input.GetKeyDown(scenario.Key) then
-            self:LoadAnomalyScenario(scenario.RuleName)
+            self:LoadAnomalyScenario(gameManager, scenario.RuleName)
             return
         end
     end
