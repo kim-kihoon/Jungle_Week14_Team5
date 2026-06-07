@@ -43,7 +43,7 @@ namespace
 		Light->SetRelativeLocation(FVector::ZeroVector);
 		Light->SetRelativeRotation(FVector::ZeroVector);
 
-		Light->SetIntensity(PistolMuzzleFlashIntensity);
+		Light->SetIntensity(PistolMuzzleFlashIntensity);  
 		Light->SetLightColor(FVector4(1.0f, 0.90f, 0.72f, 1.0f));
 		Light->SetAttenuationRadius(PistolMuzzleFlashAttenuationRadius);
 		Light->SetInnerConeAngle(PistolMuzzleFlashInnerConeHalfAngleDegrees);

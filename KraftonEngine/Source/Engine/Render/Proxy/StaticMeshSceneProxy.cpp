@@ -3,6 +3,7 @@
 #include "Mesh/Static/StaticMesh.h"
 #include "Mesh/Static/StaticMeshAsset.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialManager.h"
 
 #include <algorithm>
 
@@ -164,6 +165,7 @@ void FStaticMeshSceneProxy::RebuildSectionDraws()
 		for (const FStaticMeshSection& Section : Sections)
 		{
 			FMeshSectionDraw Draw;
+			Draw.Material = nullptr;
 			Draw.FirstIndex = Section.FirstIndex;
 			Draw.IndexCount = Section.NumTriangles * 3;
 
@@ -174,6 +176,11 @@ void FStaticMeshSceneProxy::RebuildSectionDraws()
 					Draw.Material = Overrides[i];
 				else if (IsValid(Slots[i].MaterialInterface))
 					Draw.Material = Slots[i].MaterialInterface;
+			}
+
+			if (!Draw.Material)
+			{
+				Draw.Material = FMaterialManager::Get().GetOrCreateMaterial("None");
 			}
 
 			if (Draw.Material && Draw.Material->GetRenderPass() == ERenderPass::Transparent)

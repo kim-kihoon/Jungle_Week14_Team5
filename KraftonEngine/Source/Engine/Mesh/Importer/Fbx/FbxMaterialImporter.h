@@ -12,5 +12,5 @@ public:
 	static int32 GetMaterialIndex(FbxMesh* Mesh, int32 PolygonIndex);
 	static void BuildStaticMaterials(const FFbxImportContext& Context, TArray<FStaticMaterial>& OutMaterials);
 	static void BuildSkeletalMaterials(const FFbxImportContext& Context, const TArray<FSkeletalMeshSection>& Sections, TArray<FSkeletalMaterial>& OutMaterials, TArray<FSkeletalMeshSection>& InOutSections);
-	static FString CreateOrUpdateMaterialAsset(const FFbxImportedMaterialInfo& MaterialInfo);
+	static FString CreateOrUpdateMaterialAsset(const FFbxImportedMaterialInfo& MaterialInfo, const FString& SourcePath);
 };

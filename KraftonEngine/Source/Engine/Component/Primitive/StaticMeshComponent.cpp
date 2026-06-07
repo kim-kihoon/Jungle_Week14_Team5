@@ -15,6 +15,27 @@
 #include "Serialization/Archive.h"
 #include "Object/GarbageCollection.h"
 
+namespace
+{
+	bool IsHospitalImportedStaticMeshPath(const FString& MeshPath)
+	{
+		return MeshPath.find("Content/Data/hospital-map-data/") != FString::npos ||
+			MeshPath.find("Content/Data/hospital-objects/") != FString::npos;
+	}
+
+	bool IsLegacyFlatAutoMaterialPath(const FString& MaterialPath)
+	{
+		const FString Prefix = "Content/Material/Auto/";
+		if (MaterialPath.rfind(Prefix, 0) != 0)
+		{
+			return false;
+		}
+
+		const FString Remainder = MaterialPath.substr(Prefix.size());
+		return Remainder.find('/') == FString::npos && Remainder.find('\\') == FString::npos;
+	}
+}
+
 FPrimitiveSceneProxy* UStaticMeshComponent::CreateSceneProxy()
 {
 	return new FStaticMeshSceneProxy(this);
@@ -278,42 +299,64 @@ primitive AABB 기준으로 후보만 추립니다.
 	return false; // bHit;
 }
 
+void UStaticMeshComponent::ReloadMeshAndSerializedMaterials()
+{
+	if (StaticMeshPath.empty() || StaticMeshPath == "None")
+	{
+		return;
+	}
+
+	if (!GEngine)
+	{
+		return;
+	}
+
+	ID3D11Device* Device = GEngine->GetRenderer().GetFD3DDevice().GetDevice();
+	UStaticMesh* Loaded = FMeshManager::LoadStaticMesh(StaticMeshPath, Device);
+	if (!Loaded)
+	{
+		return;
+	}
+
+	// SetStaticMesh는 MaterialSlots를 덮어쓰므로, 직렬화된 슬롯 정보를 백업·복원한다.
+	TArray<FSoftObjectPtr> SavedSlots = MaterialSlots;
+	SetStaticMesh(Loaded);
+
+	const int32 SlotCount = static_cast<int32>((std::min)(MaterialSlots.size(), SavedSlots.size()));
+	for (int32 i = 0; i < SlotCount; ++i)
+	{
+		const FString& SavedMatPath = SavedSlots[i];
+		if (IsHospitalImportedStaticMeshPath(StaticMeshPath) && IsLegacyFlatAutoMaterialPath(SavedMatPath))
+		{
+			continue;
+		}
+
+		MaterialSlots[i] = SavedSlots[i];
+		const FString& MatPath = MaterialSlots[i];
+		if (MatPath.empty() || MatPath == "None")
+		{
+			OverrideMaterials[i] = nullptr;
+		}
+		else
+		{
+			OverrideMaterials[i] = FMaterialManager::Get().GetOrCreateMaterial(MatPath);
+		}
+	}
+}
+
 void UStaticMeshComponent::PostDuplicate()
 {
 	UMeshComponent::PostDuplicate();
-
-	// 메시 에셋 재로딩
-	if (!StaticMeshPath.empty() && StaticMeshPath != "None")
-	{
-		ID3D11Device* Device = GEngine->GetRenderer().GetFD3DDevice().GetDevice();
-		UStaticMesh* Loaded = FMeshManager::LoadStaticMesh(StaticMeshPath, Device);
-		if (Loaded)
-		{
-			// SetStaticMesh는 MaterialSlots를 덮어쓰므로, 직렬화된 슬롯 정보를 백업·복원한다.
-			TArray<FSoftObjectPtr> SavedSlots = MaterialSlots;
-			SetStaticMesh(Loaded);
-
-			// Override material 재로딩
-			for (int32 i = 0; i < (int32)MaterialSlots.size() && i < (int32)SavedSlots.size(); ++i)
-			{
-				MaterialSlots[i] = SavedSlots[i];
-				const FString& MatPath = MaterialSlots[i];
-				if (MatPath.empty() || MatPath == "None")
-				{
-					OverrideMaterials[i] = nullptr;
-				}
-				else
-				{
-					UMaterial* LoadedMat = FMaterialManager::Get().GetOrCreateMaterial(MatPath);
-					OverrideMaterials[i] = LoadedMat;
-				}
-			}
-		}
-	}
-
+	ReloadMeshAndSerializedMaterials();
 	CacheLocalBounds();
 	MarkRenderStateDirty();
 	MarkWorldBoundsDirty();
+}
+
+void UStaticMeshComponent::OnPostLoad(FArchive& Ar)
+{
+	USceneComponent::OnPostLoad(Ar);
+	ReloadMeshAndSerializedMaterials();
 }
 
 void UStaticMeshComponent::PostEditProperty(const char* PropertyName)

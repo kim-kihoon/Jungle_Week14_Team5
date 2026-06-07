@@ -54,6 +54,21 @@ void UStaticMesh::CacheSectionMaterialIndices()
                 break;
             }
         }
+
+        if (Section.MaterialIndex < 0 && !Section.MaterialSlotName.empty())
+        {
+            const FString& SectionSlot = Section.MaterialSlotName;
+            for (int32 i = 0; i < static_cast<int32>(StaticMaterials.size()); ++i)
+            {
+                const FString& MaterialSlot = StaticMaterials[i].MaterialSlotName;
+                if (MaterialSlot.size() > 0 && MaterialSlot.back() == '$'
+                    && MaterialSlot.substr(0, MaterialSlot.size() - 1) == SectionSlot)
+                {
+                    Section.MaterialIndex = i;
+                    break;
+                }
+            }
+        }
 	}
 }
 

@@ -136,6 +136,14 @@ namespace
 		return Value.empty() ? FString("Material") : Value;
 	}
 
+	FString BuildImportedMaterialAssetPath(const FString& SourcePath, const FString& MaterialName)
+	{
+		const fs::path FbxPath = ToFilesystemPath(SourcePath);
+		const FString SourceStem = MakeSafeFileStem(FPaths::ToUtf8(FbxPath.stem().wstring()));
+		const FString MaterialStem = MakeSafeFileStem(MaterialName);
+		return "Content/Material/Auto/" + SourceStem + "/" + MaterialStem + ".uasset";
+	}
+
 	void LogUnsupportedTexture(const FTextureResolveContext& Context, const fs::path& TexturePath)
 	{
 		UE_LOG(
@@ -1022,7 +1030,7 @@ void FFbxMaterialImporter::BuildStaticMaterials(const FFbxImportContext& Context
 	{
 		FStaticMaterial NewMaterial;
 		NewMaterial.MaterialSlotName = MaterialInfo.Name;
-		NewMaterial.MaterialInterface = FMaterialManager::Get().GetOrCreateMaterial(CreateOrUpdateMaterialAsset(MaterialInfo));
+		NewMaterial.MaterialInterface = FMaterialManager::Get().GetOrCreateMaterial(CreateOrUpdateMaterialAsset(MaterialInfo, Context.SourcePath));
 		OutMaterials.push_back(NewMaterial);
 	}
 }
@@ -1034,7 +1042,7 @@ void FFbxMaterialImporter::BuildSkeletalMaterials(const FFbxImportContext& Conte
 
 	for (const FFbxImportedMaterialInfo& MaterialInfo : Context.Materials)
 	{
-		const FString MaterialPath = CreateOrUpdateMaterialAsset(MaterialInfo);
+		const FString MaterialPath = CreateOrUpdateMaterialAsset(MaterialInfo, Context.SourcePath);
 		UMaterial* MaterialObject = FMaterialManager::Get().GetOrCreateMaterial(MaterialPath);
 
 		FSkeletalMaterial NewMaterial;
@@ -1075,11 +1083,11 @@ void FFbxMaterialImporter::BuildSkeletalMaterials(const FFbxImportContext& Conte
 	}
 }
 
-FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMaterialInfo& MaterialInfo)
+FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMaterialInfo& MaterialInfo, const FString& SourcePath)
 {
-	const FString UassetPath = "Content/Material/Auto/" + MaterialInfo.Name + ".uasset";
+	const FString UassetPath = BuildImportedMaterialAssetPath(SourcePath, MaterialInfo.Name);
 
-	std::filesystem::create_directories(FPaths::ToWide("Content/Material/Auto"));
+	std::filesystem::create_directories(std::filesystem::path(FPaths::ToWide(UassetPath)).parent_path());
 
 	// Diffuse 텍스처가 있으면 SectionColor는 흰색(텍스처 알베도 유지). Emissive/무텍스처만 FBX 색 사용.
 	const bool bUseImportedColor = MaterialInfo.DiffuseTexturePath.empty() || MaterialInfo.bEmissive;

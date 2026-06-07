@@ -59,6 +59,7 @@ public:
 	void AddReferencedObjects(FReferenceCollector& Collector) override;
 
 	void PostDuplicate() override;
+	void OnPostLoad(FArchive& Ar) override;
 
 	// Property Editor 지원
 	void PostEditProperty(const char* PropertyName) override;
@@ -67,6 +68,7 @@ public:
 
 private:
 	void CacheLocalBounds();
+	void ReloadMeshAndSerializedMaterials();
 
 	TObjectPtr<UStaticMesh> StaticMesh;
 	UPROPERTY(Edit, Save, Category="Mesh", DisplayName="Static Mesh", AssetType="StaticMesh")
