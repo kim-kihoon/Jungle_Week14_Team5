@@ -22,6 +22,10 @@ DebugManager.Scenarios = {
     {
         Key = "5",
         RuleName = "BlackPhoto"
+    },
+    {
+        Key = "6",
+        RuleName = "NearSilentCymbalMonkey"
     }
 }
 
