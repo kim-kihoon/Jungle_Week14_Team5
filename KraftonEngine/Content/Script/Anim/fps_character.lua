@@ -20,6 +20,8 @@ local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
 local FAKE_TARGET_TAG = "Fake"
 local TOY_PROJECTILE_TAG = "ToyProjectile"
+local PARTY_BLOWER_SOUND_KEY = "PartyBlower"
+local PARTY_BLOWER_SOUND_VOLUME = 0.25
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
@@ -254,6 +256,16 @@ local function get_crosshair_aim_target(owner)
     end
 
     return fallbackTarget
+end
+
+local function play_party_blower_audio()
+    if Audio == nil or Audio.Play == nil then
+        return
+    end
+
+    pcall(function()
+        Audio.Play(PARTY_BLOWER_SOUND_KEY, PARTY_BLOWER_SOUND_VOLUME)
+    end)
 end
 
 local function spawn_projectile_from_muzzle()
@@ -556,6 +568,7 @@ function update(self, dt)
             if handledHit then
                 start_pistol_fire_action(self)
             else
+                play_party_blower_audio()
                 spawn_projectile_from_muzzle()
             end
         elseif self.CurrentTool == TOOL_CAMERA then
