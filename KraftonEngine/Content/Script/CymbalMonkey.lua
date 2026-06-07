@@ -24,6 +24,12 @@ local WARNING_ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_Wa
 local FINAL_WARNING_ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_FinalWarning.uasset"
 
 local FINISH_EPSILON = 0.0001
+local INIT_POSITION_TAG = "CymbalsMonkeyInitPosition"
+local POSITION_CANDIDATE_TAG = "CymbalsMonkeyPositionCandidate"
+local TELEPORT_TRACE_HEIGHT_OFFSET = 0.2
+local TELEPORT_FLOOR_TRACE_UP = 2.0
+local TELEPORT_FLOOR_TRACE_DOWN = 20.0
+local RAD_TO_DEG = 57.29577951308232
 local PlayRate = 1.0
 local EntryTimeRate = 0.5
 local ENTRY_TIME_RATE_MIN = 0.1
@@ -40,6 +46,8 @@ local bMissingMeshLogged = false
 local PressureChangedHandle = nil
 local LoopStoppedHandle = nil
 local LoopRestedHandle = nil
+local bObservedSinceTeleport = false
+local bMonkeyAtInitPosition = true
 
 local function clamp(value, minimum, maximum)
     value = tonumber(value) or minimum
@@ -200,6 +208,312 @@ end
 
 local function is_loop_stopped()
     return GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped()
+end
+
+local function is_valid_actor(actor)
+    if actor == nil then
+        return false
+    end
+    if actor.IsValid == nil then
+        return true
+    end
+    return actor:IsValid()
+end
+
+local function get_actor_location(actor)
+    if actor == nil then
+        return nil
+    end
+    if actor.GetLocation ~= nil then
+        return actor:GetLocation()
+    end
+    return actor.Location
+end
+
+local function get_actor_rotation(actor)
+    if actor == nil then
+        return nil
+    end
+    if actor.GetRotation ~= nil then
+        return actor:GetRotation()
+    end
+    return actor.Rotation
+end
+
+local function set_actor_location(actor, location)
+    if actor == nil or location == nil then
+        return false
+    end
+    if actor.SetLocation ~= nil then
+        actor:SetLocation(location)
+    else
+        actor.Location = location
+    end
+    return true
+end
+
+local function set_actor_rotation(actor, rotation)
+    if actor == nil or rotation == nil then
+        return false
+    end
+    actor.Rotation = rotation
+    return true
+end
+
+local function get_trace_location(actor)
+    local location = get_actor_location(actor)
+    if location == nil then
+        return nil
+    end
+    return location + Vec3(0.0, 0.0, TELEPORT_TRACE_HEIGHT_OFFSET)
+end
+
+local function snap_location_to_floor(location)
+    if World == nil or World.LineTrace == nil or location == nil then
+        return location
+    end
+
+    local startLocation = location + Vec3(0.0, 0.0, TELEPORT_FLOOR_TRACE_UP)
+    local endLocation = location - Vec3(0.0, 0.0, TELEPORT_FLOOR_TRACE_DOWN)
+    local hit = World.LineTrace(startLocation, endLocation, obj)
+    if hit ~= nil and hit.Hit and hit.Location ~= nil then
+        return Vec3(location.X, location.Y, hit.Location.Z)
+    end
+
+    return location
+end
+
+local function get_player_pawn()
+    if World == nil or World.GetFirstPlayerController == nil then
+        return nil
+    end
+
+    local controller = World.GetFirstPlayerController()
+    if controller == nil or controller.GetPossessedPawn == nil then
+        return nil
+    end
+    return controller:GetPossessedPawn()
+end
+
+local function atan2(y, x)
+    if math.atan2 ~= nil then
+        return math.atan2(y, x)
+    end
+    return math.atan(y, x)
+end
+
+local function make_yaw_rotation_to_player(location)
+    local player = get_player_pawn()
+    local playerLocation = get_actor_location(player)
+    if location == nil or playerLocation == nil then
+        return Vec3(0.0, 0.0, 0.0)
+    end
+
+    local delta = playerLocation - location
+    if math.abs(delta.X) < 0.0001 and math.abs(delta.Y) < 0.0001 then
+        return Vec3(0.0, 0.0, 0.0)
+    end
+
+    return Vec3(0.0, 0.0, atan2(delta.Y, delta.X) * RAD_TO_DEG)
+end
+
+local function get_player_camera()
+    if CameraManager ~= nil and CameraManager.GetActiveCamera ~= nil then
+        local activeCamera = CameraManager.GetActiveCamera()
+        if activeCamera ~= nil then
+            return activeCamera
+        end
+    end
+
+    local player = get_player_pawn()
+    if player ~= nil and player.GetCamera ~= nil then
+        return player:GetCamera()
+    end
+    return nil
+end
+
+local function is_location_in_player_view_frustum(location)
+    local camera = get_player_camera()
+    if camera == nil or location == nil or camera.GetLocation == nil then
+        return false
+    end
+
+    local forward = camera.Forward
+    local right = camera.Right
+    local up = camera.Up
+    if forward == nil or right == nil or up == nil then
+        return false
+    end
+
+    local diff = location - camera:GetLocation()
+    local depth = diff:Dot(forward)
+    if depth <= 0.0 then
+        return false
+    end
+
+    local fov = 1.0471975511965976
+    if camera.GetFOV ~= nil then
+        fov = tonumber(camera:GetFOV()) or fov
+    end
+
+    local aspect = 16.0 / 9.0
+    if camera.GetAspectRatio ~= nil then
+        aspect = tonumber(camera:GetAspectRatio()) or aspect
+    end
+
+    local verticalExtent = math.tan(fov * 0.5) * depth
+    local horizontalExtent = verticalExtent * aspect
+    return math.abs(diff:Dot(up)) <= verticalExtent and
+        math.abs(diff:Dot(right)) <= horizontalExtent
+end
+
+local function is_trace_clear_to_actor(startLocation, targetActor, ignoreActor)
+    if World == nil or World.LineTraceObjects == nil then
+        return false
+    end
+    if startLocation == nil or not is_valid_actor(targetActor) then
+        return false
+    end
+
+    local targetLocation = get_trace_location(targetActor)
+    if targetLocation == nil then
+        return false
+    end
+
+    local hit = World.LineTraceObjects(startLocation, targetLocation, ignoreActor)
+    if hit == nil or not hit.Hit then
+        return true
+    end
+    return hit.Actor == targetActor
+end
+
+local function is_monkey_in_view_frustum()
+    if obj == nil or World == nil or World.IsActorInViewFrustum == nil then
+        return false
+    end
+    return World.IsActorInViewFrustum(obj)
+end
+
+local function is_monkey_observed_by_player()
+    if not is_monkey_in_view_frustum() then
+        return false
+    end
+
+    local camera = get_player_camera()
+    if camera == nil or camera.GetLocation == nil then
+        return false
+    end
+
+    return is_trace_clear_to_actor(camera:GetLocation(), obj, get_player_pawn())
+end
+
+local function face_player_until_observed()
+    if bMonkeyAtInitPosition or bObservedSinceTeleport then
+        return
+    end
+
+    local location = get_actor_location(obj)
+    if location ~= nil then
+        set_actor_rotation(obj, make_yaw_rotation_to_player(location))
+    end
+end
+
+local function move_monkey_to_actor(target, rotation)
+    if obj == nil or not is_valid_actor(target) then
+        return false
+    end
+
+    local location = get_actor_location(target)
+    if location == nil then
+        return false
+    end
+
+    local snappedLocation = snap_location_to_floor(location)
+    set_actor_location(obj, snappedLocation)
+    set_actor_rotation(obj, rotation or Vec3(0.0, 0.0, 0.0))
+    bObservedSinceTeleport = false
+    return true
+end
+
+local function reset_monkey_teleport_position()
+    if World == nil or World.FindFirstActorByTag == nil then
+        bObservedSinceTeleport = false
+        return false
+    end
+
+    local initActor = World.FindFirstActorByTag(INIT_POSITION_TAG)
+    if not move_monkey_to_actor(initActor, get_actor_rotation(initActor)) then
+        bObservedSinceTeleport = false
+        return false
+    end
+    bMonkeyAtInitPosition = true
+    return true
+end
+
+local function find_nearest_unblocked_candidate()
+    if World == nil or World.FindActorsByTag == nil then
+        return nil
+    end
+
+    local player = get_player_pawn()
+    local playerLocation = get_actor_location(player)
+    local traceStart = get_trace_location(player) or playerLocation
+    if playerLocation == nil then
+        return nil
+    end
+
+    local candidates = World.FindActorsByTag(POSITION_CANDIDATE_TAG)
+    if candidates == nil then
+        return nil
+    end
+
+    local bestCandidate = nil
+    local bestDistance = nil
+    for _, candidate in pairs(candidates) do
+        if is_valid_actor(candidate) then
+            local candidateLocation = get_actor_location(candidate)
+            if candidateLocation ~= nil and
+                not is_location_in_player_view_frustum(candidateLocation) and
+                is_trace_clear_to_actor(traceStart, candidate, player) then
+                local distance = (candidateLocation - playerLocation):Length()
+                if bestDistance == nil or distance < bestDistance then
+                    bestDistance = distance
+                    bestCandidate = candidate
+                end
+            end
+        end
+    end
+
+    return bestCandidate
+end
+
+local function teleport_to_candidate()
+    local candidate = find_nearest_unblocked_candidate()
+    if candidate == nil then
+        return false
+    end
+
+    local candidateLocation = snap_location_to_floor(get_actor_location(candidate))
+    if move_monkey_to_actor(candidate, make_yaw_rotation_to_player(candidateLocation)) then
+        bMonkeyAtInitPosition = false
+        return true
+    end
+    return false
+end
+
+local function update_monkey_teleport()
+    face_player_until_observed()
+
+    if is_monkey_in_view_frustum() then
+        if is_monkey_observed_by_player() then
+            bObservedSinceTeleport = true
+        end
+        return
+    end
+
+    if bObservedSinceTeleport then
+        teleport_to_candidate()
+    end
 end
 
 local function set_state(state, force)
@@ -399,6 +713,7 @@ local function handle_loop_rested()
         return false
     end
 
+    reset_monkey_teleport_position()
     CurrentPressure = get_game_manager_pressure()
     return enter_pressure(CurrentPressure)
 end
@@ -531,6 +846,7 @@ function InitializeFromGameManager()
     cache_mesh()
 
     stop_animation()
+    reset_monkey_teleport_position()
 
     CurrentPressure = get_game_manager_pressure()
     CurrentState = STATE_NONE
@@ -562,6 +878,7 @@ function BeginPlay()
     CurrentEntryInterval = calculate_entry_interval()
     bAnimationPlaying = false
     stop_pressure_one_coroutine()
+    reset_monkey_teleport_position()
 
     if GameManager:IsPlaying() and not is_loop_stopped() then
         enter_pressure(CurrentPressure)
@@ -573,6 +890,8 @@ function EndPlay()
     unregister_loop_listeners()
     stop_animation()
     Mesh = nil
+    bObservedSinceTeleport = false
+    bMonkeyAtInitPosition = true
     CurrentPressure = PRESSURE_ENTRY_STRIKE
     CurrentState = STATE_NONE
     CurrentEntryInterval = ENTRY_INTERVAL_MAX
@@ -591,6 +910,8 @@ function Tick(dt)
         end
         return
     end
+
+    update_monkey_teleport()
 
     local nextPressure = get_game_manager_pressure()
     if nextPressure ~= CurrentPressure then

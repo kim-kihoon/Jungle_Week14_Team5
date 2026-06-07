@@ -82,6 +82,19 @@ GameManager:ReportAnomalyShot(hit.Actor)
 
 디버그 키는 랜덤 규칙 선택을 거치지 않고 지정한 규칙만 강제로 적용한다. 단, 대상 액터는 `AnomalyCandidate` 후보 중에서 선택한다.
 
+### CymbalsMonkey 위치 마커
+
+`CymbalMonkey.lua`는 아래 태그를 가진 마커 액터로 순간이동 위치를 결정한다.
+
+```txt
+CymbalsMonkeyInitPosition
+CymbalsMonkeyPositionCandidate
+```
+
+- `CymbalsMonkeyInitPosition`: 게임 시작, 초기화, 루프 복구 시 원숭이가 돌아갈 위치/회전이다.
+- `CymbalsMonkeyPositionCandidate`: 원숭이가 관측 후 시야에서 벗어났을 때 이동할 후보 위치/회전이다.
+- 후보가 없거나 플레이어 위치에서 후보 위치까지 라인트레이스가 장애물에 막히지 않는 후보가 없으면 이동하지 않는다.
+
 ## 구현 흐름
 
 ### 일반 루프
@@ -135,6 +148,21 @@ GameManager:AdvanceAnomalyLoop()
        ├─ 이전 이상현상 Despawn
        └─ 새 이상현상 Spawn
 ```
+
+### CymbalsMonkey 순간이동
+
+```txt
+CymbalMonkey:Tick(dt)
+  ├─ 프러스텀 + 라인트레이스로 원숭이 관측 여부 확인
+  ├─ 한 번 관측되면 bObservedSinceTeleport = true
+  └─ 관측된 뒤 프러스텀 밖으로 벗어나면 후보 위치 검색
+       ├─ CymbalsMonkeyPositionCandidate 후보 수집
+       ├─ 플레이어 위치에서 후보 위치까지 LineTraceObjects 검사
+       ├─ 막히지 않은 후보 중 플레이어와 가장 가까운 후보 선택
+       └─ 원숭이를 후보 위치/회전으로 이동 후 관측 상태 초기화
+```
+
+시야에 들어옴과 시야에서 나감은 모두 `World.IsActorInViewFrustum(obj)`와 `World.LineTraceObjects(...)`를 함께 사용한다. 프러스텀 안에 있으면 라인트레이스가 막혀도 이동하지 않는다. 프러스텀 안에 있어도 카메라에서 원숭이 위치까지 라인트레이스가 장애물에 막히면 관측되지 않은 상태로 본다. 라인트레이스가 아무 것도 맞추지 않으면 대상까지 막힘이 없는 것으로 처리한다.
 
 ### 리셋과 복구
 

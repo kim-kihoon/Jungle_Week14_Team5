@@ -1,14 +1,13 @@
 #include "AnimNotify_RandomSound.h"
 
-#include "Audio/AudioManager.h"
-#include "Core/Logging/Log.h"
+#include "Component/Audio/AudioComponent.h"
+#include "Component/Primitive/SkeletalMeshComponent.h"
+#include "GameFramework/AActor.h"
 
 #include <random>
 
 namespace
 {
-	static TSet<FString> GLoadedRandomSoundPaths;
-
 	const FAnimNotifySoundEntry* PickRandomSoundEntry(const TArray<FAnimNotifySoundEntry>& Sounds)
 	{
 		TArray<const FAnimNotifySoundEntry*> Candidates;
@@ -55,34 +54,44 @@ namespace
 		return Result;
 	}
 
-	bool PlayRandomNotifySound(const FAnimNotifySoundEntry& Sound)
+	UAudioComponent* ResolveNotifyAudioComponent(USkeletalMeshComponent* MeshComp)
 	{
-		if (Sound.SoundPath.empty())
+		if (!IsValid(MeshComp))
 		{
-			return false;
+			return nullptr;
 		}
 
-		const FString Key = FString("AnimNotifyRandom:") + Sound.SoundPath;
-		if (GLoadedRandomSoundPaths.find(Sound.SoundPath) == GLoadedRandomSoundPaths.end())
+		AActor* Owner = MeshComp->GetOwner();
+		if (!IsValid(Owner))
 		{
-			if (FAudioManager::Get().LoadAudio(Key, Sound.SoundPath, /*bLoop=*/false))
-			{
-				GLoadedRandomSoundPaths.insert(Sound.SoundPath);
-			}
-			else
-			{
-				UE_LOG("[AnimNotify_RandomSound] LoadAudio failed: %s", Sound.SoundPath.c_str());
-				return false;
-			}
+			return nullptr;
 		}
 
-		FAudioManager::Get().PlayAudio(Key, Sound.Volume, Sound.Pitch);
-		return true;
+		if (UAudioComponent* ExistingAudioComponent = Owner->GetComponentByClass<UAudioComponent>())
+		{
+			return ExistingAudioComponent;
+		}
+
+		UAudioComponent* NewAudioComponent = Owner->AddComponent<UAudioComponent>();
+		if (IsValid(NewAudioComponent))
+		{
+			NewAudioComponent->SetAutoActivate(false);
+			NewAudioComponent->SetHiddenInComponentTree(true);
+			NewAudioComponent->SetComponentTickEnabled(false);
+			NewAudioComponent->AttachToComponent(MeshComp);
+		}
+		return NewAudioComponent;
 	}
 }
 
-void UAnimNotify_RandomSound::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnimSequenceBase* /*Anim*/)
+void UAnimNotify_RandomSound::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* /*Anim*/)
 {
+	UAudioComponent* AudioComponent = ResolveNotifyAudioComponent(MeshComp);
+	if (!AudioComponent)
+	{
+		return;
+	}
+
 	const float TrackVolumeScale = GetDispatchVolumeScale();
 	if (!Sounds.empty())
 	{
@@ -90,12 +99,15 @@ void UAnimNotify_RandomSound::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnim
 		{
 			FAnimNotifySoundEntry ScaledSound = *Sound;
 			ScaledSound.Volume *= TrackVolumeScale;
-			PlayRandomNotifySound(ScaledSound);
+			AudioComponent->PlayOneShot(ScaledSound.SoundPath, ScaledSound.Volume, ScaledSound.Pitch);
 		}
 		return;
 	}
 
 	FAnimNotifySoundEntry LegacySound = PickLegacyRandomSoundEntry(SoundPaths, Volume);
 	LegacySound.Volume *= TrackVolumeScale;
-	PlayRandomNotifySound(LegacySound);
+	if (!LegacySound.SoundPath.empty())
+	{
+		AudioComponent->PlayOneShot(LegacySound.SoundPath, LegacySound.Volume, LegacySound.Pitch);
+	}
 }
