@@ -48,6 +48,12 @@ void UAudioComponent::BeginPlay()
 void UAudioComponent::EndPlay()
 {
 	Stop();
+	for (const FString& OneShotKey : OneShotAudioKeys)
+	{
+		FAudioManager::Get().ReleaseAudio(OneShotKey);
+	}
+	OneShotAudioKeys.clear();
+
 	if (bLoaded)
 	{
 		FAudioManager::Get().ReleaseAudio(GetAudioKey());
@@ -109,6 +115,39 @@ void UAudioComponent::Play()
 		FAudioManager::Get().PlayAudio(GetAudioKey(), PlayVolume, Pitch, Settings3DPtr);
 		bPlaying = false;
 	}
+}
+
+void UAudioComponent::PlayOneShot(const FString& InSoundPath, float InVolume, float InPitch, bool bInSpatialize)
+{
+	if (InSoundPath.empty())
+	{
+		return;
+	}
+
+	const FString Key = GetOneShotAudioKey(InSoundPath, bInSpatialize);
+	if (OneShotAudioKeys.find(Key) == OneShotAudioKeys.end())
+	{
+		if (!FAudioManager::Get().LoadAudio(Key, InSoundPath, /*bLoop=*/false, bInSpatialize))
+		{
+			return;
+		}
+		OneShotAudioKeys.insert(Key);
+	}
+
+	FAudio3DPlaySettings Settings3D;
+	if (bInSpatialize)
+	{
+		Settings3D.bEnabled = true;
+		Settings3D.Position = GetWorldLocation();
+		Settings3D.MinDistance = MinDistance;
+		Settings3D.MaxDistance = std::max(MaxDistance, MinDistance);
+	}
+
+	FAudioManager::Get().PlayAudio(
+		Key,
+		ClampVolumeGain(InVolume),
+		InPitch,
+		bInSpatialize ? &Settings3D : nullptr);
 }
 
 void UAudioComponent::Stop()
@@ -211,6 +250,16 @@ FString UAudioComponent::GetAudioKey() const
 	Key += SoundPath;
 	Key += bLoop ? ":L" : ":O";
 	Key += bSpatialize ? ":3D" : ":2D";
+	return Key;
+}
+
+FString UAudioComponent::GetOneShotAudioKey(const FString& InSoundPath, bool bInSpatialize) const
+{
+	FString Key = "AudioOneShot:";
+	Key += MakeObjectScopedName(this);
+	Key += ":";
+	Key += InSoundPath;
+	Key += bInSpatialize ? ":3D" : ":2D";
 	return Key;
 }
 

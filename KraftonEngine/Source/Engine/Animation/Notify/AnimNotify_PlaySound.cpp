@@ -1,46 +1,66 @@
 #include "AnimNotify_PlaySound.h"
 
-#include "Audio/AudioManager.h"
-#include "Core/Logging/Log.h"
+#include "Component/Audio/AudioComponent.h"
+#include "Component/Primitive/SkeletalMeshComponent.h"
+#include "GameFramework/AActor.h"
 
 namespace
 {
-	static TSet<FString> GLoadedPlaySoundPaths;
-
-	bool PlayNotifySoundPath(const FString& SoundPath, float Volume, float Pitch)
+	UAudioComponent* ResolveNotifyAudioComponent(USkeletalMeshComponent* MeshComp)
 	{
-		if (SoundPath.empty())
+		if (!IsValid(MeshComp))
+		{
+			return nullptr;
+		}
+
+		AActor* Owner = MeshComp->GetOwner();
+		if (!IsValid(Owner))
+		{
+			return nullptr;
+		}
+
+		if (UAudioComponent* ExistingAudioComponent = Owner->GetComponentByClass<UAudioComponent>())
+		{
+			return ExistingAudioComponent;
+		}
+
+		UAudioComponent* NewAudioComponent = Owner->AddComponent<UAudioComponent>();
+		if (IsValid(NewAudioComponent))
+		{
+			NewAudioComponent->SetAutoActivate(false);
+			NewAudioComponent->SetHiddenInComponentTree(true);
+			NewAudioComponent->SetComponentTickEnabled(false);
+			NewAudioComponent->AttachToComponent(MeshComp);
+		}
+		return NewAudioComponent;
+	}
+
+	bool PlayNotifySoundPath(UAudioComponent* AudioComponent, const FString& SoundPath, float Volume, float Pitch)
+	{
+		if (!IsValid(AudioComponent) || SoundPath.empty())
 		{
 			return false;
 		}
 
-		const FString Key = FString("AnimNotify:") + SoundPath;
-		if (GLoadedPlaySoundPaths.find(SoundPath) == GLoadedPlaySoundPaths.end())
-		{
-			if (FAudioManager::Get().LoadAudio(Key, SoundPath, /*bLoop=*/false))
-			{
-				GLoadedPlaySoundPaths.insert(SoundPath);
-			}
-			else
-			{
-				UE_LOG("[AnimNotify_PlaySound] LoadAudio failed: %s", SoundPath.c_str());
-				return false;
-			}
-		}
-
-		FAudioManager::Get().PlayAudio(Key, Volume, Pitch);
+		AudioComponent->PlayOneShot(SoundPath, Volume, Pitch);
 		return true;
 	}
 }
 
-void UAnimNotify_PlaySound::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnimSequenceBase* /*Anim*/)
+void UAnimNotify_PlaySound::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* /*Anim*/)
 {
+	UAudioComponent* AudioComponent = ResolveNotifyAudioComponent(MeshComp);
+	if (!AudioComponent)
+	{
+		return;
+	}
+
 	const float TrackVolumeScale = GetDispatchVolumeScale();
 	if (!Sounds.empty())
 	{
 		for (const FAnimNotifySoundEntry& Sound : Sounds)
 		{
-			PlayNotifySoundPath(Sound.SoundPath, Sound.Volume * TrackVolumeScale, Sound.Pitch);
+			PlayNotifySoundPath(AudioComponent, Sound.SoundPath, Sound.Volume * TrackVolumeScale, Sound.Pitch);
 		}
 		return;
 	}
@@ -48,11 +68,11 @@ void UAnimNotify_PlaySound::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnimSe
 	bool bPlayedAny = false;
 	for (const FString& Path : SoundPaths)
 	{
-		bPlayedAny = PlayNotifySoundPath(Path, Volume * TrackVolumeScale, 1.0f) || bPlayedAny;
+		bPlayedAny = PlayNotifySoundPath(AudioComponent, Path, Volume * TrackVolumeScale, 1.0f) || bPlayedAny;
 	}
 
 	if (!bPlayedAny)
 	{
-		PlayNotifySoundPath(SoundPath, Volume * TrackVolumeScale, 1.0f);
+		PlayNotifySoundPath(AudioComponent, SoundPath, Volume * TrackVolumeScale, 1.0f);
 	}
 }
