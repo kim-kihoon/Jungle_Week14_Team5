@@ -21,6 +21,14 @@ local bDoorPromptVisible = false
 local ControlPromptWidget = nil
 local bControlPromptVisible = false
 local LastControlPromptText = nil
+local TimerPromptWidget = nil
+local bTimerPromptVisible = false
+local LastTimerDisplaySeconds = nil
+local LastTimerColor = nil
+local bTimerUIEverStarted = false
+local bTimerUIWasRunning = false
+local TimerUIFrozenSeconds = nil
+local TimerUILastLiveSeconds = 0
 local bExitDoorsUnlockedForCurrentLoop = false
 local bLastLoopStopped = false
 
@@ -49,6 +57,11 @@ local DOOR_PROMPT_DOCUMENT_PATH = "Content/UI/HospitalDoorPrompt.rml"
 local DOOR_PROMPT_ELEMENT_ID = "door_prompt"
 local CONTROL_PROMPT_DOCUMENT_PATH = "Content/UI/HospitalControlPrompt.rml"
 local CONTROL_PROMPT_ELEMENT_ID = "control_prompt"
+local TIMER_PROMPT_DOCUMENT_PATH = "Content/UI/HospitalTimer.rml"
+local TIMER_PROMPT_ELEMENT_ID = "timer_display"
+local TIMER_COLOR_NORMAL = "rgb(71, 255, 105)"
+local TIMER_COLOR_WARNING = "rgb(255, 71, 71)"
+local TIMER_WARNING_SECONDS = 30
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
 local CONTROL_PROMPT_PISTOL_TEXT = "[LMB] Shoot<br/>[Space] Camera"
@@ -1037,6 +1050,144 @@ local function UpdateControlPrompt()
     SetControlPromptVisible(true)
 end
 
+local function FormatCountdownSeconds(totalSeconds)
+    totalSeconds = math.max(0, math.floor(tonumber(totalSeconds) or 0))
+    local minutes = math.floor(totalSeconds / 60)
+    local seconds = totalSeconds % 60
+    return string.format("%d:%02d", minutes, seconds)
+end
+
+local function GetTimerDisplaySeconds()
+    if GameManager == nil or GameManager.GetRemainingTime == nil then
+        return 0
+    end
+
+    local remainingTime = tonumber(GameManager:GetRemainingTime()) or 0
+    return math.max(0, math.ceil(remainingTime - 0.001))
+end
+
+local function IsTimerRunning()
+    return GameManager ~= nil
+        and GameManager.IsPlaying ~= nil
+        and GameManager:IsPlaying()
+        and GameManager.IsCymbalMonkeyCycleStarted ~= nil
+        and GameManager:IsCymbalMonkeyCycleStarted()
+        and GameManager.IsLoopStopped ~= nil
+        and not GameManager:IsLoopStopped()
+end
+
+local function GetTimerColorForSeconds(displaySeconds, bApplyWarningColor)
+    if bApplyWarningColor and displaySeconds <= TIMER_WARNING_SECONDS then
+        return TIMER_COLOR_WARNING
+    end
+    return TIMER_COLOR_NORMAL
+end
+
+local function EnsureTimerPromptWidget()
+    if TimerPromptWidget ~= nil then
+        return TimerPromptWidget
+    end
+
+    if UI == nil or UI.CreateWidget == nil then
+        return nil
+    end
+
+    local ok, widget = pcall(function()
+        return UI.CreateWidget(TIMER_PROMPT_DOCUMENT_PATH)
+    end)
+    if not ok or widget == nil then
+        return nil
+    end
+
+    TimerPromptWidget = widget
+    pcall(function()
+        TimerPromptWidget:SetWantsMouse(false)
+    end)
+    pcall(function()
+        TimerPromptWidget:SetWantsKeyboard(false)
+    end)
+    pcall(function()
+        TimerPromptWidget:SetBlocksGameInput(false)
+    end)
+    pcall(function()
+        TimerPromptWidget:SetBlocksGameMouseLook(false)
+    end)
+    pcall(function()
+        TimerPromptWidget:AddToViewportZ(85)
+    end)
+    pcall(function()
+        TimerPromptWidget:SetText(TIMER_PROMPT_ELEMENT_ID, "0:00")
+    end)
+    pcall(function()
+        TimerPromptWidget:SetProperty(TIMER_PROMPT_ELEMENT_ID, "color", TIMER_COLOR_NORMAL)
+    end)
+
+    return TimerPromptWidget
+end
+
+local function SetTimerPromptVisible(bVisible)
+    local widget = EnsureTimerPromptWidget()
+    if widget == nil or bTimerPromptVisible == bVisible then
+        return
+    end
+
+    bTimerPromptVisible = bVisible
+    pcall(function()
+        widget:SetProperty(TIMER_PROMPT_ELEMENT_ID, "display", bVisible and "block" or "none")
+    end)
+end
+
+local function UpdateTimerPrompt()
+    local widget = EnsureTimerPromptWidget()
+    if widget == nil then
+        return
+    end
+
+    local bTimerRunning = IsTimerRunning()
+    local displaySeconds = 0
+    local bApplyWarningColor = false
+
+    if bTimerRunning then
+        bTimerUIEverStarted = true
+        bTimerUIWasRunning = true
+        displaySeconds = GetTimerDisplaySeconds()
+        TimerUILastLiveSeconds = displaySeconds
+        bApplyWarningColor = true
+    else
+        if bTimerUIWasRunning then
+            TimerUIFrozenSeconds = TimerUILastLiveSeconds
+            bTimerUIWasRunning = false
+        end
+
+        if bTimerUIEverStarted then
+            displaySeconds = TimerUIFrozenSeconds or 0
+            bApplyWarningColor = true
+        else
+            displaySeconds = 0
+            bApplyWarningColor = false
+        end
+    end
+
+    local displayText = FormatCountdownSeconds(displaySeconds)
+    local displayColor = GetTimerColorForSeconds(displaySeconds, bApplyWarningColor)
+
+    if LastTimerDisplaySeconds ~= displaySeconds then
+        LastTimerDisplaySeconds = displaySeconds
+        pcall(function()
+            widget:SetText(TIMER_PROMPT_ELEMENT_ID, displayText)
+        end)
+    end
+
+    if LastTimerColor ~= displayColor then
+        LastTimerColor = displayColor
+        pcall(function()
+            widget:SetProperty(TIMER_PROMPT_ELEMENT_ID, "color", displayColor)
+        end)
+    end
+
+    SetTimerPromptVisible(true)
+end
+
 function BeginPlay()
     bCanWarp = true
     PendingDoorCloseSounds = {}
@@ -1047,6 +1198,14 @@ function BeginPlay()
     ControlPromptWidget = nil
     bControlPromptVisible = false
     LastControlPromptText = nil
+    TimerPromptWidget = nil
+    bTimerPromptVisible = false
+    LastTimerDisplaySeconds = nil
+    LastTimerColor = nil
+    bTimerUIEverStarted = false
+    bTimerUIWasRunning = false
+    TimerUIFrozenSeconds = nil
+    TimerUILastLiveSeconds = 0
     bExitDoorsUnlockedForCurrentLoop = false
     bLastLoopStopped = GameManager ~= nil and GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped()
 end
@@ -1073,6 +1232,19 @@ function EndPlay()
     ControlPromptWidget = nil
     bControlPromptVisible = false
     LastControlPromptText = nil
+    if TimerPromptWidget ~= nil then
+        pcall(function()
+            TimerPromptWidget:RemoveFromParent()
+        end)
+    end
+    TimerPromptWidget = nil
+    bTimerPromptVisible = false
+    LastTimerDisplaySeconds = nil
+    LastTimerColor = nil
+    bTimerUIEverStarted = false
+    bTimerUIWasRunning = false
+    TimerUIFrozenSeconds = nil
+    TimerUILastLiveSeconds = 0
     bExitDoorsUnlockedForCurrentLoop = false
     bLastLoopStopped = false
 end
@@ -1116,6 +1288,7 @@ function Tick(dt)
     end
 
     UpdateControlPrompt()
+    UpdateTimerPrompt()
 
     local targetedDoor = FindTargetedDoor()
     UpdateDoorPrompt(targetedDoor)

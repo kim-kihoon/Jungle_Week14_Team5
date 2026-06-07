@@ -6,6 +6,60 @@
 
 namespace
 {
+	FString SanitizeSoundPath(const FString& InPath)
+	{
+		FString Path = InPath;
+		auto IsSpace = [](char Character)
+		{
+			return Character == ' ' || Character == '\t' || Character == '\r' || Character == '\n';
+		};
+
+		while (!Path.empty() && IsSpace(Path.back()))
+		{
+			Path.pop_back();
+		}
+
+		size_t Start = 0;
+		while (Start < Path.size() && IsSpace(Path[Start]))
+		{
+			++Start;
+		}
+		if (Start > 0)
+		{
+			Path.erase(0, Start);
+		}
+		return Path;
+	}
+
+	bool PathsMatch(const FString& Left, const FString& Right)
+	{
+		return SanitizeSoundPath(Left) == SanitizeSoundPath(Right);
+	}
+
+	bool ContainsSoundPath(const TArray<FAnimNotifySoundEntry>& Sounds, const FString& Path)
+	{
+		for (const FAnimNotifySoundEntry& Sound : Sounds)
+		{
+			if (PathsMatch(Sound.SoundPath, Path))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool ContainsSoundPath(const TArray<FString>& Paths, const FString& Path)
+	{
+		for (const FString& Entry : Paths)
+		{
+			if (PathsMatch(Entry, Path))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	UAudioComponent* ResolveNotifyAudioComponent(USkeletalMeshComponent* MeshComp)
 	{
 		if (!IsValid(MeshComp))
@@ -35,8 +89,19 @@ namespace
 		return NewAudioComponent;
 	}
 
-	bool PlayNotifySoundPath(UAudioComponent* AudioComponent, const FString& SoundPath, float Volume, float Pitch)
+	float ResolvePlaybackVolume(float Volume, float TrackVolumeScale)
 	{
+		const float ScaledVolume = Volume * TrackVolumeScale;
+		if (ScaledVolume > 0.001f)
+		{
+			return ScaledVolume;
+		}
+		return TrackVolumeScale;
+	}
+
+	bool PlayNotifySoundPath(UAudioComponent* AudioComponent, const FString& InSoundPath, float Volume, float Pitch)
+	{
+		const FString SoundPath = SanitizeSoundPath(InSoundPath);
 		if (!IsValid(AudioComponent) || SoundPath.empty())
 		{
 			return false;
@@ -56,23 +121,41 @@ void UAnimNotify_PlaySound::Notify(USkeletalMeshComponent* MeshComp, UAnimSequen
 	}
 
 	const float TrackVolumeScale = GetDispatchVolumeScale();
-	if (!Sounds.empty())
+
+	for (const FAnimNotifySoundEntry& Sound : Sounds)
 	{
-		for (const FAnimNotifySoundEntry& Sound : Sounds)
+		if (Sound.SoundPath.empty())
 		{
-			PlayNotifySoundPath(AudioComponent, Sound.SoundPath, Sound.Volume * TrackVolumeScale, Sound.Pitch);
+			continue;
 		}
-		return;
+		PlayNotifySoundPath(
+			AudioComponent,
+			Sound.SoundPath,
+			ResolvePlaybackVolume(Sound.Volume, TrackVolumeScale),
+			Sound.Pitch);
 	}
 
-	bool bPlayedAny = false;
 	for (const FString& Path : SoundPaths)
 	{
-		bPlayedAny = PlayNotifySoundPath(AudioComponent, Path, Volume * TrackVolumeScale, 1.0f) || bPlayedAny;
+		if (Path.empty() || ContainsSoundPath(Sounds, Path))
+		{
+			continue;
+		}
+		PlayNotifySoundPath(
+			AudioComponent,
+			Path,
+			ResolvePlaybackVolume(Volume, TrackVolumeScale),
+			1.0f);
 	}
 
-	if (!bPlayedAny)
+	if (!SoundPath.empty() &&
+		!ContainsSoundPath(Sounds, SoundPath) &&
+		!ContainsSoundPath(SoundPaths, SoundPath))
 	{
-		PlayNotifySoundPath(AudioComponent, SoundPath, Volume * TrackVolumeScale, 1.0f);
+		PlayNotifySoundPath(
+			AudioComponent,
+			SoundPath,
+			ResolvePlaybackVolume(Volume, TrackVolumeScale),
+			1.0f);
 	}
 }

@@ -33,6 +33,26 @@ namespace
 		Name += std::to_string(reinterpret_cast<std::uintptr_t>(Object));
 		return Name;
 	}
+
+	FString SanitizeAudioPath(const FString& InPath)
+	{
+		FString Path = InPath;
+		while (!Path.empty() && (Path.back() == ' ' || Path.back() == '\t' || Path.back() == '\r' || Path.back() == '\n'))
+		{
+			Path.pop_back();
+		}
+
+		size_t Start = 0;
+		while (Start < Path.size() && (Path[Start] == ' ' || Path[Start] == '\t' || Path[Start] == '\r' || Path[Start] == '\n'))
+		{
+			++Start;
+		}
+		if (Start > 0)
+		{
+			Path.erase(0, Start);
+		}
+		return Path;
+	}
 }
 
 void UAudioComponent::BeginPlay()
@@ -119,15 +139,16 @@ void UAudioComponent::Play()
 
 void UAudioComponent::PlayOneShot(const FString& InSoundPath, float InVolume, float InPitch, bool bInSpatialize)
 {
-	if (InSoundPath.empty())
+	const FString SoundPath = SanitizeAudioPath(InSoundPath);
+	if (SoundPath.empty())
 	{
 		return;
 	}
 
-	const FString Key = GetOneShotAudioKey(InSoundPath, bInSpatialize);
+	const FString Key = GetOneShotAudioKey(SoundPath, bInSpatialize);
 	if (OneShotAudioKeys.find(Key) == OneShotAudioKeys.end())
 	{
-		if (!FAudioManager::Get().LoadAudio(Key, InSoundPath, /*bLoop=*/false, bInSpatialize))
+		if (!FAudioManager::Get().LoadAudio(Key, SoundPath, /*bLoop=*/false, bInSpatialize))
 		{
 			return;
 		}
