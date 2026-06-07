@@ -537,7 +537,8 @@ function update(self, dt)
                 update_switch_to_pistol(self, 0.0)
             end
         elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
-            if should_play_pistol_fire_from_camera() then
+            local handledHit = should_play_pistol_fire_from_camera()
+            if handledHit then
                 start_pistol_fire_action(self)
             else
                 spawn_projectile_from_muzzle()

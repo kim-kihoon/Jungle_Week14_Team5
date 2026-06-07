@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "GameFramework/Pawn/Character.h"
 #include "Object/Ptr/WeakObjectPtr.h"
@@ -6,6 +6,7 @@
 class ULuaScriptComponent;
 class USpringArmComponent;
 class UCameraComponent;
+class USpotLightComponent;
 
 // ACharacter + ULuaScriptComponent — Pawn-level 게임 로직 (BeginPlay/Tick/EndPlay) 을 lua 로 작성.
 // AnimInstance lua (ULuaAnimInstance) 와는 책임 분리:
@@ -36,6 +37,10 @@ public:
 	}
 
 	void PostDuplicate() override;
+	void BeginPlay() override;
+	void Tick(float DeltaTime) override;
+
+	void PlayPistolFireEffect();
 
 	ULuaScriptComponent* GetLuaScriptComponent() const { return LuaScriptComponent; }
 	USpringArmComponent* GetSpringArm()          const { return SpringArm; }
@@ -43,8 +48,13 @@ public:
 
 protected:
 	void ConfigureFirstPersonViewRig();
+	void EnsurePistolMuzzleFlashLight();
+	void SetPistolMuzzleFlashVisible(bool bVisible);
 
 	TWeakObjectPtr<ULuaScriptComponent> LuaScriptComponent = nullptr;
 	TWeakObjectPtr<USpringArmComponent> SpringArm          = nullptr;
 	TWeakObjectPtr<UCameraComponent>    Camera             = nullptr;
+	TWeakObjectPtr<USpotLightComponent> PistolMuzzleFlashLight = nullptr;
+	float PistolMuzzleFlashDuration = 0.09f;
+	float PistolMuzzleFlashRemaining = 0.0f;
 };
