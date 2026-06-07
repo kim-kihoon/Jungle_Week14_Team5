@@ -7,6 +7,7 @@
 #include <sol/sol.hpp>
 
 class UAnimSequenceBase;
+class UCameraComponent;
 
 // Lua 로 AnimGraph 트리를 정의하는 AnimInstance. UCharacterAnimInstance 의 sibling — 같은
 // AnimGraph 인프라 위에서 동작하지만 트리 build (SM 노드 / Slot / LayeredBlend 등) 와
@@ -82,6 +83,8 @@ private:
 	int32                         LuaCallDepth = 0;
 	bool                          bPendingLuaRuntimeRelease = false;
 	TArray<sol::protected_function> LuaTransitionConditions;
+
+	TWeakObjectPtr<UCameraComponent> CachedViewCamera;
 
 	struct FLuaCallScope
 	{

@@ -1476,12 +1476,37 @@ void FPhysXPhysicsScene::UnregisterComponent(UPrimitiveComponent* Comp)
     }
 }
 
+void FPhysXPhysicsScene::SyncComponentTransform(UPrimitiveComponent* Comp)
+{
+	if (!IsAliveObject(Comp) || !Comp->IsCollisionEnabled())
+	{
+		return;
+	}
+
+	FPhysicsComponentBinding* Binding = FindBinding_GameThread(Comp->GetUUID());
+	if (!Binding || Binding->bPendingDestroy || !Binding->Body.IsValid())
+	{
+		return;
+	}
+
+	if (Binding->SyncMode != EPhysicsSyncMode::EngineToPhysics &&
+		Binding->SyncMode != EPhysicsSyncMode::KinematicTarget)
+	{
+		return;
+	}
+
+	Runtime.SetBodyTransform(
+		Binding->Body,
+		GetComponentWorldTransform_GameThread(Comp),
+		EPhysicsTeleportMode::TeleportPhysics);
+}
+
 void FPhysXPhysicsScene::RebuildBody(UPrimitiveComponent* Comp)
 {
-    if (!IsAliveObject(Comp))
-    {
-        return;
-    }
+	if (!IsAliveObject(Comp))
+	{
+		return;
+	}
 
     AActor*      OwnerActor = Comp->GetOwner();
     const uint32 ActorId    = OwnerActor ? OwnerActor->GetUUID() : 0;

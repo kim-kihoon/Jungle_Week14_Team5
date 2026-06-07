@@ -412,7 +412,7 @@ public:
 	@see getShapes()
 	*/
 	virtual PxU32				getNbShapes() const = 0;
-
+	  
 	/**
 	\brief Writes the array of shape pointers to a user buffer.
 	
@@ -432,7 +432,7 @@ public:
 	//@}
 	/** @name Constraints and Articulations
 	*/
-	//@{
+	//@{d
 
 	/**
 	\brief Creates a constraint shader.

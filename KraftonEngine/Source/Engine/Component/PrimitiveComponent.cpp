@@ -458,8 +458,29 @@ void UPrimitiveComponent::EnsureWorldAABBUpdated() const
 
 // --- Collision Channel / Response ---
 
+void UPrimitiveComponent::SyncPhysicsTransform()
+{
+	if (!bComponentHasBegunPlay || !IsCollisionEnabled())
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (IPhysicsScene* PhysicsScene = World->GetPhysicsScene())
+		{
+			PhysicsScene->SyncComponentTransform(this);
+		}
+	}
+}
+
 void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled InEnabled)
 {
+	if (CollisionEnabled == InEnabled)
+	{
+		return;
+	}
+
 	bool bWasRegistered = IsCollisionEnabled();
 	CollisionEnabled = InEnabled;
 	bool bShouldRegister = IsCollisionEnabled();

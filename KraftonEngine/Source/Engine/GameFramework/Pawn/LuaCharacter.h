@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "GameFramework/Pawn/Character.h"
 #include "Object/Ptr/WeakObjectPtr.h"
@@ -6,6 +6,7 @@
 class ULuaScriptComponent;
 class USpringArmComponent;
 class UCameraComponent;
+class USpotLightComponent;
 
 // ACharacter + ULuaScriptComponent — Pawn-level 게임 로직 (BeginPlay/Tick/EndPlay) 을 lua 로 작성.
 // AnimInstance lua (ULuaAnimInstance) 와는 책임 분리:
@@ -13,7 +14,7 @@ class UCameraComponent;
 //   - ULuaAnimInstance     : Mesh 의 anim instance — pose 평가/FSM/notify
 // 둘 다 lua 라도 environment 가 분리돼 있어 변수 충돌 없음.
 //
-// 3인칭 카메라: Capsule(Root) → SpringArm → Camera 체인. SpringArm 이 lag 적용.
+// 1인칭 카메라: Capsule(Root) → SpringArm(view pivot) → Camera 체인.
 // Possess 시 APawn::PossessedBy 가 Camera 를 자동 ActiveCamera 로 잡음.
 
 #include "Source/Engine/GameFramework/Pawn/LuaCharacter.generated.h"
@@ -36,13 +37,24 @@ public:
 	}
 
 	void PostDuplicate() override;
+	void BeginPlay() override;
+	void Tick(float DeltaTime) override;
+
+	void PlayPistolFireEffect();
 
 	ULuaScriptComponent* GetLuaScriptComponent() const { return LuaScriptComponent; }
 	USpringArmComponent* GetSpringArm()          const { return SpringArm; }
 	UCameraComponent* GetCamera()             const { return Camera; }
 
 protected:
+	void ConfigureFirstPersonViewRig();
+	void EnsurePistolMuzzleFlashLight();
+	void SetPistolMuzzleFlashVisible(bool bVisible);
+
 	TWeakObjectPtr<ULuaScriptComponent> LuaScriptComponent = nullptr;
 	TWeakObjectPtr<USpringArmComponent> SpringArm          = nullptr;
 	TWeakObjectPtr<UCameraComponent>    Camera             = nullptr;
+	TWeakObjectPtr<USpotLightComponent> PistolMuzzleFlashLight = nullptr;
+	float PistolMuzzleFlashDuration = 0.09f;
+	float PistolMuzzleFlashRemaining = 0.0f;
 };

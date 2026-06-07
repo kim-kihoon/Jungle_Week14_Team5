@@ -45,6 +45,26 @@ namespace
 		bool bDirty = false;
 		const bool bEmissive = Material->GetScalarParameterValue("bEmissive") >= 0.5f;
 
+		if (bEmissive && AssetPath.find("Material.009_Emissive.uasset") != FString::npos)
+		{
+			const FVector4 TargetColor(196.0f / 255.0f, 125.0f / 255.0f, 124.0f / 255.0f, 1.0f);
+			const FVector4 CurrentColor = Material->GetVector4ParameterValue("SectionColor");
+			if (std::fabs(CurrentColor.X - TargetColor.X) > 0.001f ||
+				std::fabs(CurrentColor.Y - TargetColor.Y) > 0.001f ||
+				std::fabs(CurrentColor.Z - TargetColor.Z) > 0.001f ||
+				std::fabs(CurrentColor.W - TargetColor.W) > 0.001f)
+			{
+				Material->SetVector4Parameter("SectionColor", TargetColor);
+				bDirty = true;
+			}
+
+			if (std::fabs(Material->GetScalarParameterValue("EmissiveIntensity") - 1.0f) > 0.001f)
+			{
+				Material->SetScalarParameter("EmissiveIntensity", 1.0f);
+				bDirty = true;
+			}
+		}
+
 		UTexture2D* NormalTex = Material->GetTextureParameterValue("NormalTexture");
 		const FString NormalPath = NormalTex ? NormalTex->GetSourcePath() : FString();
 		if (Material->GetScalarParameterValue("HasNormalMap") >= 0.5f && NormalPath.empty())
@@ -343,8 +363,7 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	Material->Create(UassetPath, Template, EMaterialDomain::Surface, BlendMode, std::move(Buffers));
 	Material->SetShaderPathForSerialize(DefaultShaderPath);
 	Material->SetVector4Parameter("SectionColor", SectionColor);
-	const bool bUseNormalMap = !NormalTexturePath.empty();
-	Material->SetScalarParameter("HasNormalMap", bUseNormalMap ? 1.0f : 0.0f);
+	Material->SetScalarParameter("HasNormalMap", 0.0f);
 	Material->SetScalarParameter("Opacity", std::clamp(Opacity, 0.0f, 1.0f)); // CB zero-init=0(투명) 방지
 	Material->SetScalarParameter("bEmissive", bEmissive ? 1.0f : 0.0f);
 	Material->SetScalarParameter("EmissiveIntensity", bEmissive ? EmissiveIntensity : 1.0f);
@@ -356,9 +375,12 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	if (!DiffuseTexturePath.empty())
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(DiffuseTexturePath, Device, ETextureColorSpace::SRGB))
 			Material->SetTextureParameter("DiffuseTexture", Tex);
-	if (bUseNormalMap)
+	if (!NormalTexturePath.empty())
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(NormalTexturePath, Device, ETextureColorSpace::Linear))
+		{
 			Material->SetTextureParameter("NormalTexture", Tex);
+			Material->SetScalarParameter("HasNormalMap", 1.0f);
+		}
 
 	Material->RebuildCachedSRVs();
 	SaveMaterial(Material, UassetPath);

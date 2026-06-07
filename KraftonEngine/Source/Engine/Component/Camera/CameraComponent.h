@@ -109,6 +109,12 @@ public:
 	UFUNCTION(Pure, Category="Camera")
 	bool IsOrthogonal() const { return CameraState.bIsOrthogonal; }
 
+	// View-only head bob — applied in GetCameraView without moving the component transform.
+	UFUNCTION(Callable, Category="Camera|ViewBob")
+	void SetViewBob(float RollDegrees, float PitchDegrees, float LocalOffsetZ);
+	UFUNCTION(Callable, Category="Camera|ViewBob")
+	void ClearViewBob();
+
 private:
 	UPROPERTY(Edit, Save, Category="Camera", DisplayName="FOV", Member=CameraState.FOV, Type=Float, Min=0.1f, Max=3.14f, Speed=0.01f);
 	UPROPERTY(Edit, Save, Category="Camera", DisplayName="Near Z", Member=CameraState.NearZ, Type=Float, Min=0.01f, Max=100.0f, Speed=0.01f);
@@ -125,4 +131,8 @@ private:
 	UPROPERTY(Edit, Save, Category="Camera|PostProcess", DisplayName="Post Process Material", AssetType="Material")
 	FSoftObjectPtr PostProcessMaterialPath = "None";
 	mutable UMaterial* PostProcessMaterial = nullptr;
+
+	float ViewBobRollDegrees = 0.0f;
+	float ViewBobPitchDegrees = 0.0f;
+	float ViewBobLocalOffsetZ = 0.0f;
 };

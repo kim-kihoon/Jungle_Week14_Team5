@@ -1,4 +1,4 @@
-#include "LuaAnimInstance.h"
+﻿#include "LuaAnimInstance.h"
 
 #include "Animation/AnimationManager.h"
 #include "Animation/Sequence/AnimSequence.h"
@@ -33,8 +33,36 @@
 
 #include <Windows.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <cmath>
+
+namespace
+{
+	float GetStateMachineLocalTime(const FAnimNode_StateMachine* SM)
+	{
+		if (!SM)
+		{
+			return 0.0f;
+		}
+
+		UAnimState* State = SM->GetCurrentState();
+		if (!State)
+		{
+			return 0.0f;
+		}
+
+		if (State->SubGraphOverride)
+		{
+			if (FAnimNode_SequencePlayer* SequencePlayer = dynamic_cast<FAnimNode_SequencePlayer*>(State->SubGraphOverride))
+			{
+				return SequencePlayer->LocalTime;
+			}
+		}
+
+		return State->GetLocalTime();
+	}
+}
 ULuaAnimInstance::~ULuaAnimInstance()
 {
 	ReleaseLuaRuntimeForShutdown();
@@ -195,6 +223,7 @@ void ULuaAnimInstance::ReloadScript()
 void ULuaAnimInstance::ClearGraph()
 {
 	FCrosshairOverlay::SetVisible(false);
+	CachedViewCamera.Reset();
 
 	// 이전 graph 에 걸려 있던 transition 람다가 새 Lua runtime 을 보지 않도록 세대를 먼저 넘긴다.
 	++LuaRuntimeGeneration;
@@ -537,7 +566,68 @@ void ULuaAnimInstance::InstallBindings()
 		[]()
 		{
 			FAudioManager::Get().PlayAudio("PistolFire", 1.0f);
-			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.75f, 2.0f);
+			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.25f, 1.5f);
+		});
+	Anim.set_function("play_footstep_audio",
+		[this]()
+		{
+			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
+			if (!Owner)
+			{
+				return;
+			}
+
+			static const char* FootstepKeys[] = {
+				"ParquetFloor01",
+				"ParquetFloor02",
+				"ParquetFloor03",
+				"ParquetFloor04",
+				"ParquetFloor05",
+			};
+			constexpr int32 FootstepCount = 5;
+			static int32 LastFootstepIndex = -1;
+
+			int32 Index = 0;
+			if (LastFootstepIndex < 0)
+			{
+				Index = std::rand() % FootstepCount;
+			}
+			else
+			{
+				Index = std::rand() % (FootstepCount - 1);
+				if (Index >= LastFootstepIndex)
+				{
+					Index++;
+				}
+			}
+			LastFootstepIndex = Index;
+
+			FAudio3DPlaySettings Settings3D;
+			Settings3D.bEnabled = true;
+			Settings3D.Position = Owner->GetActorLocation();
+			Settings3D.MinDistance = 0.25f;
+			Settings3D.MaxDistance = 8.0f;
+			FAudioManager::Get().PlayAudio(FootstepKeys[Index], 0.7f, 1.0f, &Settings3D);
+		});
+	Anim.set_function(
+		"apply_head_bob",
+		[this](float RollDegrees, float PitchDegrees, float LocalOffsetZ)
+		{
+			if (!CachedViewCamera.IsValid())
+			{
+				AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
+				if (!Owner)
+				{
+					return;
+				}
+
+				CachedViewCamera = Owner->GetComponentByClass<UCameraComponent>();
+			}
+
+			if (UCameraComponent* Camera = CachedViewCamera.Get())
+			{
+				Camera->SetViewBob(RollDegrees, PitchDegrees, LocalOffsetZ);
+			}
 		});
 	Anim.set_function("set_crosshair_visible",
 		[](bool bVisible)
@@ -817,6 +907,15 @@ void ULuaAnimInstance::InstallBindings()
 			P->bLooping = Loop;
 			return P;
 		});
+	Anim.set_function(
+		"set_sequence_play_rate",
+		[](FAnimNode_SequencePlayer* Player, float Rate)
+		{
+			if (Player)
+			{
+				Player->PlayRate = Rate;
+			}
+		});
 
 	Anim.set_function("get_sequence_length",
 		[](std::string Path) -> float
@@ -877,6 +976,22 @@ void ULuaAnimInstance::InstallBindings()
 		[](FAnimNode_StateMachine* SM, std::string Name)
 		{
 			if (SM) SM->SetInitialState(FName(Name.c_str()));
+		});
+	Anim.set_function(
+		"sm_get_current_state_name",
+		[](FAnimNode_StateMachine* SM) -> std::string
+		{
+			if (!SM)
+			{
+				return "";
+			}
+			return SM->GetCurrentStateName().ToString();
+		});
+	Anim.set_function(
+		"sm_get_current_state_local_time",
+		[](FAnimNode_StateMachine* SM) -> float
+		{
+			return GetStateMachineLocalTime(SM);
 		});
 
 	// 트리의 root 박기 — UAnimInstance::SetRootNode 가 Initialize 호출.

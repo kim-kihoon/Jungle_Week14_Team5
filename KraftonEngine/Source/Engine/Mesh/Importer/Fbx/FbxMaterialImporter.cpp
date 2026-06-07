@@ -3,6 +3,7 @@
 #include "Materials/Material.h"
 #include "Platform/Paths.h"
 #include "Core/Logging/Log.h"
+#include "stb_image.h"
 
 #include <algorithm>
 #include <cctype>
@@ -120,6 +121,19 @@ namespace
 	bool HasUnsupportedTextureExtension(const fs::path& Path)
 	{
 		return !Path.extension().empty() && !IsSupportedTextureExtension(Path);
+	}
+
+	FString MakeSafeFileStem(FString Value)
+	{
+		for (char& Ch : Value)
+		{
+			const unsigned char U = static_cast<unsigned char>(Ch);
+			if (!std::isalnum(U) && Ch != '_' && Ch != '-' && Ch != '.')
+			{
+				Ch = '_';
+			}
+		}
+		return Value.empty() ? FString("Material") : Value;
 	}
 
 	void LogUnsupportedTexture(const FTextureResolveContext& Context, const fs::path& TexturePath)
@@ -382,6 +396,111 @@ namespace
 		}
 
 		const fs::path DestRelPath = DestRelDir / DestFileName;
+		return FPaths::ToUtf8(DestRelPath.generic_wstring());
+	}
+
+	FString GenerateNormalMapFromDiffuse(const FString& DiffuseTexturePath, const FTextureResolveContext& ResolveContext)
+	{
+		if (DiffuseTexturePath.empty())
+		{
+			return FString();
+		}
+
+		const fs::path DiffuseAbsPath = ToFilesystemPath(DiffuseTexturePath);
+		int Width = 0;
+		int Height = 0;
+		int Channels = 0;
+		stbi_uc* Pixels = stbi_load(FPaths::ToUtf8(DiffuseAbsPath.wstring()).c_str(), &Width, &Height, &Channels, 4);
+		if (!Pixels || Width <= 1 || Height <= 1)
+		{
+			if (Pixels)
+			{
+				stbi_image_free(Pixels);
+			}
+			return FString();
+		}
+
+		auto LumaAt = [&](int X, int Y) -> float
+		{
+			X = std::clamp(X, 0, Width - 1);
+			Y = std::clamp(Y, 0, Height - 1);
+			const int Index = (Y * Width + X) * 4;
+			const float R = Pixels[Index + 0] / 255.0f;
+			const float G = Pixels[Index + 1] / 255.0f;
+			const float B = Pixels[Index + 2] / 255.0f;
+			return R * 0.299f + G * 0.587f + B * 0.114f;
+		};
+
+		std::vector<unsigned char> NormalPixels(static_cast<size_t>(Width) * static_cast<size_t>(Height) * 3u);
+		constexpr float Strength = 3.0f;
+		for (int Y = 0; Y < Height; ++Y)
+		{
+			for (int X = 0; X < Width; ++X)
+			{
+				const float Dx = (LumaAt(X + 1, Y) - LumaAt(X - 1, Y)) * Strength;
+				const float Dy = (LumaAt(X, Y + 1) - LumaAt(X, Y - 1)) * Strength;
+				FVector N(-Dx, -Dy, 1.0f);
+				N.Normalize();
+
+				const int OutIndex = (Y * Width + X) * 3;
+				NormalPixels[OutIndex + 0] = static_cast<unsigned char>(std::clamp(N.X * 0.5f + 0.5f, 0.0f, 1.0f) * 255.0f);
+				NormalPixels[OutIndex + 1] = static_cast<unsigned char>(std::clamp(N.Y * 0.5f + 0.5f, 0.0f, 1.0f) * 255.0f);
+				NormalPixels[OutIndex + 2] = static_cast<unsigned char>(std::clamp(N.Z * 0.5f + 0.5f, 0.0f, 1.0f) * 255.0f);
+			}
+		}
+		stbi_image_free(Pixels);
+
+		const fs::path FbxPath = ToFilesystemPath(ResolveContext.FbxSourcePath);
+		const fs::path DestRelDir = fs::path(L"Content") / L"Texture" / L"Auto" / FbxPath.stem().wstring();
+		const fs::path DestAbsDir = fs::path(FPaths::RootDir()) / DestRelDir;
+		std::error_code Ec;
+		fs::create_directories(DestAbsDir, Ec);
+
+		const fs::path DestFileName = FPaths::ToWide(MakeSafeFileStem(ResolveContext.MaterialName) + "_generated_normal.tga");
+		const fs::path DestAbsPath = DestAbsDir / DestFileName;
+
+		std::ofstream File(DestAbsPath, std::ios::binary);
+		if (!File)
+		{
+			return FString();
+		}
+
+		unsigned char Header[18] = {};
+		Header[2] = 2; // uncompressed true-color
+		Header[12] = static_cast<unsigned char>(Width & 0xFF);
+		Header[13] = static_cast<unsigned char>((Width >> 8) & 0xFF);
+		Header[14] = static_cast<unsigned char>(Height & 0xFF);
+		Header[15] = static_cast<unsigned char>((Height >> 8) & 0xFF);
+		Header[16] = 24;
+		Header[17] = 0x20; // top-left origin
+		File.write(reinterpret_cast<const char*>(Header), sizeof(Header));
+
+		for (int Y = 0; Y < Height; ++Y)
+		{
+			for (int X = 0; X < Width; ++X)
+			{
+				const int Index = (Y * Width + X) * 3;
+				const unsigned char Bgr[3] = {
+					NormalPixels[Index + 2],
+					NormalPixels[Index + 1],
+					NormalPixels[Index + 0]
+				};
+				File.write(reinterpret_cast<const char*>(Bgr), sizeof(Bgr));
+			}
+		}
+
+		if (!File)
+		{
+			return FString();
+		}
+
+		const fs::path DestRelPath = DestRelDir / DestFileName;
+		UE_LOG(
+			"FBX generated fallback normal map: Material='%s' Diffuse='%s' Normal='%s'",
+			ResolveContext.MaterialName.c_str(),
+			DiffuseTexturePath.c_str(),
+			FPaths::ToUtf8(DestRelPath.generic_wstring()).c_str()
+		);
 		return FPaths::ToUtf8(DestRelPath.generic_wstring());
 	}
 
@@ -772,14 +891,21 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 			{
 				MaterialInfo.DiffuseColor = FVector(1.0f, 0.0f, 0.0f);
 			}
+			else if (MaterialInfo.Name == "Material.009_Emissive")
+			{
+				MaterialInfo.DiffuseColor = FVector(196.0f / 255.0f, 125.0f / 255.0f, 124.0f / 255.0f);
+			}
 		}
 
+		bool bHadExplicitNormalTexture = false;
 		FbxProperty NormalProp = Material->FindProperty(FbxSurfaceMaterial::sNormalMap);
+		bHadExplicitNormalTexture = bHadExplicitNormalTexture || (NormalProp.IsValid() && NormalProp.GetSrcObjectCount<FbxTexture>() > 0);
 		TryAssignNormalMapSlot(MaterialInfo, ReadFirstTextureFromProperty(NormalProp, ResolveContext));
 
 		if (MaterialInfo.NormalTexturePath.empty())
 		{
 			FbxProperty BumpProp = Material->FindProperty(FbxSurfaceMaterial::sBump);
+			bHadExplicitNormalTexture = bHadExplicitNormalTexture || (BumpProp.IsValid() && BumpProp.GetSrcObjectCount<FbxTexture>() > 0);
 			TryAssignNormalMapSlot(MaterialInfo, ReadFirstTextureFromProperty(BumpProp, ResolveContext));
 		}
 
@@ -790,6 +916,10 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 		if (MaterialInfo.NormalTexturePath.empty())
 		{
 			MaterialInfo.NormalTexturePath = FindBestTextureByRole(ResolveContext, true);
+		}
+		if (MaterialInfo.NormalTexturePath.empty() && bHadExplicitNormalTexture && !MaterialInfo.DiffuseTexturePath.empty())
+		{
+			MaterialInfo.NormalTexturePath = GenerateNormalMapFromDiffuse(MaterialInfo.DiffuseTexturePath, ResolveContext);
 		}
 
 		float RawOpacity = 1.0f;
@@ -961,6 +1091,7 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 		: FVector4(1.0f, 1.0f, 1.0f, 1.0f);
 	const FString DiffuseTex = MaterialInfo.DiffuseTexturePath.empty() ? FString() : FPaths::MakeProjectRelative(MaterialInfo.DiffuseTexturePath);
 	const FString NormalTex  = MaterialInfo.NormalTexturePath.empty()  ? FString() : FPaths::MakeProjectRelative(MaterialInfo.NormalTexturePath);
+	const float EmissiveIntensity = MaterialInfo.Name == "Material.009_Emissive" ? 1.0f : 4.0f;
 
 	// JSON 없이 머티리얼을 직접 빌드해 .uasset(바이너리)으로 저장.
 	FMaterialManager::Get().CreateImportedMaterialAsset(
@@ -969,7 +1100,7 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 		DiffuseTex,
 		NormalTex,
 		MaterialInfo.bEmissive,
-		4.0f,
+		EmissiveIntensity,
 		MaterialInfo.bTransparent,
 		MaterialInfo.Opacity,
 		MaterialInfo.bTwoSided,

@@ -34,12 +34,15 @@ public:
 	UFUNCTION(Pure, Category="Audio")
 	float GetVolume() const { return Volume; }
 
+	void PlayOneShot(const FString& InSoundPath, float InVolume, float InPitch, bool bInSpatialize = true);
+
 private:
 	bool EnsureLoaded();
 	float ComputeAttenuatedVolume() const;
 	FVector ResolveListenerLocation() const;
 	FString GetAudioKey() const;
 	FString GetLoopName() const;
+	FString GetOneShotAudioKey(const FString& InSoundPath, bool bInSpatialize) const;
 
 private:
 	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Sound Path", AssetType="Audio")
@@ -54,7 +57,7 @@ private:
 	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Spatialize")
 	bool bSpatialize = true;
 
-	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Volume", Min=0.0f, Max=1.0f, Speed=0.01f)
+	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Volume", Min=0.0f, Max=10.0f, Speed=0.01f)
 	float Volume = 1.0f;
 
 	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Pitch", Min=0.1f, Max=4.0f, Speed=0.01f)
@@ -71,4 +74,5 @@ private:
 
 	bool bLoaded = false;
 	bool bPlaying = false;
+	TSet<FString> OneShotAudioKeys;
 };

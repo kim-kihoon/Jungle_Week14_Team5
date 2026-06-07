@@ -94,8 +94,9 @@ void USpringArmComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		}
 	}
 
-	// (2) Desired attach point — 부모 위치 + desired 회전 기준 TargetOffset 적용.
-	const FVector DesiredAttachLoc = ParentWorldLoc + DesiredParentRot.RotateVector(TargetOffset);
+	// (2) Desired attach point — parent-space TargetOffset is anchored to the parent,
+	// not the look pitch. SocketOffset remains camera/look-space below.
+	const FVector DesiredAttachLoc = ParentWorldLoc + ParentActualRot.RotateVector(TargetOffset);
 	const FQuat DesiredAttachRot = DesiredParentRot;
 
 	// (3) Lag 적용 — 첫 Tick 은 desired 로 초기화 (아직 비교할 prev 없음).
