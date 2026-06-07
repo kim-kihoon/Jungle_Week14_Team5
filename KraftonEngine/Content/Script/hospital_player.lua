@@ -16,6 +16,11 @@ local DoorStateByName = {}
 local PendingDoorCloseSounds = {}
 local bDoorsInitialized = false
 local bInteractWasDown = false
+local DoorPromptWidget = nil
+local bDoorPromptVisible = false
+local ControlPromptWidget = nil
+local bControlPromptVisible = false
+local LastControlPromptText = nil
 
 local INTERACT_KEY = 0x45 -- E
 local KEY_W = 0x57
@@ -38,6 +43,14 @@ local DOOR_OPEN_SOUND_VOLUME = 0.7
 local DOOR_CONTACT_SLOP = 0.08
 local DOOR_CONTACT_RAY_COUNT = 16
 local DOOR_APPROACH_DOT_THRESHOLD = 1.0e-6
+local DOOR_PROMPT_DOCUMENT_PATH = "Content/UI/HospitalDoorPrompt.rml"
+local DOOR_PROMPT_ELEMENT_ID = "door_prompt"
+local CONTROL_PROMPT_DOCUMENT_PATH = "Content/UI/HospitalControlPrompt.rml"
+local CONTROL_PROMPT_ELEMENT_ID = "control_prompt"
+local TOOL_PISTOL = 0
+local TOOL_CAMERA = 1
+local CONTROL_PROMPT_PISTOL_TEXT = "[LMB] Shoot<br/>[Space] Camera"
+local CONTROL_PROMPT_CAMERA_TEXT = "[LMB] Shoot<br/>[Space] Pistol"
 
 local OPEN_PLUS_NAMES = {
     AStaticMeshActor_2 = true,
@@ -828,11 +841,153 @@ local function FindTargetedDoor()
     return door
 end
 
+local function EnsureDoorPromptWidget()
+    if DoorPromptWidget ~= nil then
+        return DoorPromptWidget
+    end
+
+    if UI == nil or UI.CreateWidget == nil then
+        return nil
+    end
+
+    local ok, widget = pcall(function()
+        return UI.CreateWidget(DOOR_PROMPT_DOCUMENT_PATH)
+    end)
+    if not ok or widget == nil then
+        return nil
+    end
+
+    DoorPromptWidget = widget
+    pcall(function()
+        DoorPromptWidget:SetWantsMouse(false)
+    end)
+    pcall(function()
+        DoorPromptWidget:SetWantsKeyboard(false)
+    end)
+    pcall(function()
+        DoorPromptWidget:SetBlocksGameInput(false)
+    end)
+    pcall(function()
+        DoorPromptWidget:SetBlocksGameMouseLook(false)
+    end)
+    pcall(function()
+        DoorPromptWidget:AddToViewportZ(80)
+    end)
+
+    return DoorPromptWidget
+end
+
+local function SetDoorPromptVisible(bVisible)
+    local widget = EnsureDoorPromptWidget()
+    if widget == nil or bDoorPromptVisible == bVisible then
+        return
+    end
+
+    bDoorPromptVisible = bVisible
+    pcall(function()
+        widget:SetProperty(DOOR_PROMPT_ELEMENT_ID, "display", bVisible and "block" or "none")
+    end)
+end
+
+local function UpdateDoorPrompt(door)
+    if door == nil or door.bPermanentlyLocked then
+        SetDoorPromptVisible(false)
+        return
+    end
+
+    local widget = EnsureDoorPromptWidget()
+    if widget == nil then
+        return
+    end
+
+    local promptText = door.IsOpen and "[E] Close" or "[E] Open"
+    pcall(function()
+        widget:SetText(DOOR_PROMPT_ELEMENT_ID, promptText)
+    end)
+    SetDoorPromptVisible(true)
+end
+
+local function EnsureControlPromptWidget()
+    if ControlPromptWidget ~= nil then
+        return ControlPromptWidget
+    end
+
+    if UI == nil or UI.CreateWidget == nil then
+        return nil
+    end
+
+    local ok, widget = pcall(function()
+        return UI.CreateWidget(CONTROL_PROMPT_DOCUMENT_PATH)
+    end)
+    if not ok or widget == nil then
+        return nil
+    end
+
+    ControlPromptWidget = widget
+    pcall(function()
+        ControlPromptWidget:SetWantsMouse(false)
+    end)
+    pcall(function()
+        ControlPromptWidget:SetWantsKeyboard(false)
+    end)
+    pcall(function()
+        ControlPromptWidget:SetBlocksGameInput(false)
+    end)
+    pcall(function()
+        ControlPromptWidget:SetBlocksGameMouseLook(false)
+    end)
+    pcall(function()
+        ControlPromptWidget:AddToViewportZ(75)
+    end)
+
+    return ControlPromptWidget
+end
+
+local function SetControlPromptVisible(bVisible)
+    local widget = EnsureControlPromptWidget()
+    if widget == nil or bControlPromptVisible == bVisible then
+        return
+    end
+
+    bControlPromptVisible = bVisible
+    pcall(function()
+        widget:SetProperty(CONTROL_PROMPT_ELEMENT_ID, "display", bVisible and "block" or "none")
+    end)
+end
+
+local function GetCurrentTool()
+    if HospitalPlayer ~= nil and HospitalPlayer.current_tool ~= nil then
+        return HospitalPlayer.current_tool
+    end
+    return TOOL_PISTOL
+end
+
+local function UpdateControlPrompt()
+    local widget = EnsureControlPromptWidget()
+    if widget == nil then
+        return
+    end
+
+    local promptText = GetCurrentTool() == TOOL_CAMERA and CONTROL_PROMPT_CAMERA_TEXT or CONTROL_PROMPT_PISTOL_TEXT
+    if LastControlPromptText ~= promptText then
+        LastControlPromptText = promptText
+        pcall(function()
+            widget:SetText(CONTROL_PROMPT_ELEMENT_ID, promptText)
+        end)
+    end
+    SetControlPromptVisible(true)
+end
+
 function BeginPlay()
     bCanWarp = true
     PendingDoorCloseSounds = {}
     bDoorsInitialized = false
     bInteractWasDown = false
+    DoorPromptWidget = nil
+    bDoorPromptVisible = false
+    ControlPromptWidget = nil
+    bControlPromptVisible = false
+    LastControlPromptText = nil
 end
 
 function EndPlay()
@@ -842,6 +997,21 @@ function EndPlay()
     PendingDoorCloseSounds = {}
     bDoorsInitialized = false
     bInteractWasDown = false
+    if DoorPromptWidget ~= nil then
+        pcall(function()
+            DoorPromptWidget:RemoveFromParent()
+        end)
+    end
+    DoorPromptWidget = nil
+    bDoorPromptVisible = false
+    if ControlPromptWidget ~= nil then
+        pcall(function()
+            ControlPromptWidget:RemoveFromParent()
+        end)
+    end
+    ControlPromptWidget = nil
+    bControlPromptVisible = false
+    LastControlPromptText = nil
 end
 
 function Tick(dt)
@@ -871,16 +1041,21 @@ function Tick(dt)
         bCanWarp = true
     end
 
+    UpdateControlPrompt()
+
+    local targetedDoor = FindTargetedDoor()
+    UpdateDoorPrompt(targetedDoor)
+
     if Input ~= nil and Input.GetKey ~= nil then
         local ok, pressed = pcall(function()
             return Input.GetKey(INTERACT_KEY)
         end)
         if ok and pressed and not bInteractWasDown then
-            local door = FindTargetedDoor()
-            if door == nil then
+            if targetedDoor == nil then
                 print("[Door] no targeted door in range. count=" .. tostring(#Doors))
             else
-                ToggleDoor(door)
+                ToggleDoor(targetedDoor)
+                UpdateDoorPrompt(targetedDoor)
             end
         end
         bInteractWasDown = ok and pressed == true

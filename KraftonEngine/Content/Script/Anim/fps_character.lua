@@ -24,6 +24,12 @@ local TOY_PROJECTILE_TAG = "ToyProjectile"
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
 
+local function sync_hospital_tool_state(tool)
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.current_tool = tool
+    end
+end
+
 local SWITCH_NONE = 0
 local SWITCH_TO_CAMERA = 1
 local SWITCH_TO_PISTOL = 2
@@ -352,6 +358,7 @@ local function should_play_pistol_fire_from_camera()
 end
 
 local function show_pistol()
+    sync_hospital_tool_state(TOOL_PISTOL)
     Anim.set_crosshair_visible(true)
     Anim.set_owner_mesh_pitch(ARMS_READY_PITCH)
     Anim.set_owner_mesh_visibility(true)
@@ -361,6 +368,7 @@ local function show_pistol()
 end
 
 local function show_camera()
+    sync_hospital_tool_state(TOOL_CAMERA)
     Anim.set_crosshair_visible(false)
     Anim.set_owner_mesh_pitch(ARMS_DOWN_PITCH)
     Anim.set_owner_mesh_visibility(false)
@@ -517,6 +525,7 @@ function init(self)
     Anim.set_root_node(fps)
     self.FpsStateMachine = fps
     show_pistol()
+    sync_hospital_tool_state(TOOL_PISTOL)
 end
 
 function update(self, dt)
