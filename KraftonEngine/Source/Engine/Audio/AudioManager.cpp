@@ -7,6 +7,7 @@
 #include "Platform/Paths.h"
 #include "Render/Types/MinimalViewInfo.h"
 #include <algorithm>
+#include <cmath>
 
 namespace
 {
@@ -36,6 +37,16 @@ namespace
 
 		return CameraManager->GetCameraView(OutPOV);
 	}
+
+	float ClampFloat(float Value, float MinValue, float MaxValue)
+	{
+		return std::max(MinValue, std::min(Value, MaxValue));
+	}
+
+	float Approach(float Current, float Target, float Alpha)
+	{
+		return Current + (Target - Current) * ClampFloat(Alpha, 0.0f, 1.0f);
+	}
 }
 
 bool FAudioManager::Initialize()
@@ -54,6 +65,7 @@ bool FAudioManager::Initialize()
 	}
 
 	System->getMasterChannelGroup(&MasterGroup);
+	EnsureZoneEffectDsps();
 
 	LoadDefaultAudios();
 
@@ -73,6 +85,16 @@ void FAudioManager::Shutdown()
 
 	StopBGM();
 	StopAllLoops();
+	if (LowPassDsp)
+	{
+		LowPassDsp->release();
+		LowPassDsp = nullptr;
+	}
+	if (ReverbDsp)
+	{
+		ReverbDsp->release();
+		ReverbDsp = nullptr;
+	}
 	if (MasterGroup)
 	{
 		MasterGroup->stop();
@@ -99,6 +121,7 @@ void FAudioManager::Tick()
 {
 	if (System)
 	{
+		UpdateZoneEffect(1.0f / 60.0f);
 		System->update();
 	}
 }
@@ -459,11 +482,106 @@ void FAudioManager::SetMasterVolume(float Volume)
 	}
 }
 
+void FAudioManager::ApplyAudioZoneEffect(const FAudioZoneEffectSettings& Settings, const void* Source)
+{
+	if (!Source)
+	{
+		return;
+	}
+
+	ActiveZoneEffectSource = Source;
+	TargetZoneEffect = Settings;
+	TargetZoneEffect.LowPassCutoffHz = ClampFloat(TargetZoneEffect.LowPassCutoffHz, 10.0f, 22000.0f);
+	TargetZoneEffect.ReverbWetLevelDb = ClampFloat(TargetZoneEffect.ReverbWetLevelDb, -80.0f, 10.0f);
+	TargetZoneEffect.ReverbDecayTimeMs = ClampFloat(TargetZoneEffect.ReverbDecayTimeMs, 100.0f, 20000.0f);
+	TargetZoneEffect.FadeTimeSeconds = std::max(TargetZoneEffect.FadeTimeSeconds, 0.0f);
+	EnsureZoneEffectDsps();
+}
+
+void FAudioManager::ClearAudioZoneEffect(const void* Source)
+{
+	if (Source && ActiveZoneEffectSource != Source)
+	{
+		return;
+	}
+
+	ActiveZoneEffectSource = nullptr;
+	TargetZoneEffect = FAudioZoneEffectSettings();
+	TargetZoneEffect.FadeTimeSeconds = std::max(CurrentZoneEffect.FadeTimeSeconds, 0.25f);
+}
+
+void FAudioManager::EnsureZoneEffectDsps()
+{
+	if (!System || !MasterGroup)
+	{
+		return;
+	}
+
+	if (!LowPassDsp)
+	{
+		if (System->createDSPByType(FMOD_DSP_TYPE_LOWPASS, &LowPassDsp) == FMOD_OK && LowPassDsp)
+		{
+			LowPassDsp->setParameterFloat(FMOD_DSP_LOWPASS_CUTOFF, CurrentZoneEffect.LowPassCutoffHz);
+			LowPassDsp->setParameterFloat(FMOD_DSP_LOWPASS_RESONANCE, 1.0f);
+			LowPassDsp->setBypass(true);
+			MasterGroup->addDSP(0, LowPassDsp);
+		}
+		else
+		{
+			UE_LOG("[AudioZone] LowPass DSP create failed.");
+		}
+	}
+
+	if (!ReverbDsp)
+	{
+		if (System->createDSPByType(FMOD_DSP_TYPE_SFXREVERB, &ReverbDsp) == FMOD_OK && ReverbDsp)
+		{
+			ReverbDsp->setParameterFloat(FMOD_DSP_SFXREVERB_DRYLEVEL, 0.0f);
+			ReverbDsp->setParameterFloat(FMOD_DSP_SFXREVERB_WETLEVEL, CurrentZoneEffect.ReverbWetLevelDb);
+			ReverbDsp->setParameterFloat(FMOD_DSP_SFXREVERB_DECAYTIME, CurrentZoneEffect.ReverbDecayTimeMs);
+			ReverbDsp->setBypass(true);
+			MasterGroup->addDSP(0, ReverbDsp);
+		}
+		else
+		{
+			UE_LOG("[AudioZone] Reverb DSP create failed.");
+		}
+	}
+}
+
+void FAudioManager::UpdateZoneEffect(float DeltaTime)
+{
+	EnsureZoneEffectDsps();
+
+	const float FadeTime = std::max(TargetZoneEffect.FadeTimeSeconds, 0.001f);
+	const float Alpha = DeltaTime / FadeTime;
+	CurrentZoneEffect.FadeTimeSeconds = TargetZoneEffect.FadeTimeSeconds;
+	CurrentZoneEffect.LowPassCutoffHz = Approach(CurrentZoneEffect.LowPassCutoffHz, TargetZoneEffect.LowPassCutoffHz, Alpha);
+	CurrentZoneEffect.ReverbWetLevelDb = Approach(CurrentZoneEffect.ReverbWetLevelDb, TargetZoneEffect.ReverbWetLevelDb, Alpha);
+	CurrentZoneEffect.ReverbDecayTimeMs = Approach(CurrentZoneEffect.ReverbDecayTimeMs, TargetZoneEffect.ReverbDecayTimeMs, Alpha);
+	CurrentZoneEffect.bEnableLowPass = TargetZoneEffect.bEnableLowPass || CurrentZoneEffect.LowPassCutoffHz < 21900.0f;
+	CurrentZoneEffect.bEnableReverb = TargetZoneEffect.bEnableReverb || CurrentZoneEffect.ReverbWetLevelDb > -79.0f;
+
+	if (LowPassDsp)
+	{
+		const float Cutoff = CurrentZoneEffect.bEnableLowPass ? CurrentZoneEffect.LowPassCutoffHz : 22000.0f;
+		LowPassDsp->setParameterFloat(FMOD_DSP_LOWPASS_CUTOFF, Cutoff);
+		LowPassDsp->setBypass(!CurrentZoneEffect.bEnableLowPass);
+	}
+
+	if (ReverbDsp)
+	{
+		ReverbDsp->setParameterFloat(FMOD_DSP_SFXREVERB_WETLEVEL, CurrentZoneEffect.ReverbWetLevelDb);
+		ReverbDsp->setParameterFloat(FMOD_DSP_SFXREVERB_DECAYTIME, CurrentZoneEffect.ReverbDecayTimeMs);
+		ReverbDsp->setBypass(!CurrentZoneEffect.bEnableReverb);
+	}
+}
+
 void FAudioManager::LoadDefaultAudios()
 {
 	LoadAudio("CameraShutter", "Camera/CameraShutter.mp3", false);
 	LoadAudio("PhotoOut", "Camera/PhotoOut.mp3", false);
-	LoadAudio("PistolFire", "Pistol/pistolFire.mp3", false);
+	LoadAudio("PistolFire", "SFX/pistol-fire.mp3", false);
 	LoadAudio("Tinnitus", "Pistol/tinnitus.mp3", false);
 	LoadAudio("DoorOpen", "SFX/door-open.mp3", false, true);
 	LoadAudio("HeavyDoorOpen", "SFX/heavy-door-open.mp3", false, true);

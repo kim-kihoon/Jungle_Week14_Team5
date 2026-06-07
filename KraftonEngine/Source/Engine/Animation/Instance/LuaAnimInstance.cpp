@@ -1,4 +1,4 @@
-#include "LuaAnimInstance.h"
+﻿#include "LuaAnimInstance.h"
 
 #include "Animation/AnimationManager.h"
 #include "Animation/Sequence/AnimSequence.h"
@@ -566,7 +566,7 @@ void ULuaAnimInstance::InstallBindings()
 		[]()
 		{
 			FAudioManager::Get().PlayAudio("PistolFire", 1.0f);
-			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.75f, 2.0f);
+			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.25f, 1.5f);
 		});
 	Anim.set_function("play_footstep_audio",
 		[this]()
@@ -607,7 +607,7 @@ void ULuaAnimInstance::InstallBindings()
 			Settings3D.Position = Owner->GetActorLocation();
 			Settings3D.MinDistance = 0.25f;
 			Settings3D.MaxDistance = 8.0f;
-			FAudioManager::Get().PlayAudio(FootstepKeys[Index], 3.0f, 1.0f, &Settings3D);
+			FAudioManager::Get().PlayAudio(FootstepKeys[Index], 0.7f, 1.0f, &Settings3D);
 		});
 	Anim.set_function(
 		"apply_head_bob",

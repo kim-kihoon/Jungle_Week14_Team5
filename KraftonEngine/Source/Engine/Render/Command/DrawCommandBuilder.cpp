@@ -17,6 +17,8 @@
 #include "Render/Pipeline/RenderCollector.h"
 #include "Materials/Material.h"
 #include "Texture/Texture2D.h"
+#include "Engine/Runtime/Engine.h"
+#include "Profiling/Time/Timer.h"
 
 // UpdateProxyLOD defined in RenderCollector.cpp (shared)
 extern void UpdateProxyLOD(FPrimitiveSceneProxy* Proxy, const FLODUpdateContext& LODCtx);
@@ -244,6 +246,14 @@ void FDrawCommandBuilder::BuildCameraPostProcessMaterialCommand(const FFrameCont
 	if (!Shader || !Shader->IsValid())
 	{
 		return;
+	}
+
+	if (GEngine)
+	{
+		if (const FTimer* Timer = GEngine->GetTimer())
+		{
+			Material->SetScalarParameter(FString("Time"), static_cast<float>(Timer->GetTotalTime()));
+		}
 	}
 
 	Material->FlushDirtyBuffers(CachedDevice, CachedContext);

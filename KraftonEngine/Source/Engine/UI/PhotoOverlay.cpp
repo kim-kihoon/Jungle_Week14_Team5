@@ -32,6 +32,7 @@ namespace
 	constexpr float HeldCameraPhotoEjectUpDistance = 0.19f;
 	constexpr const char* CameraShutterAudioKey = "CameraShutter";
 	constexpr const char* PhotoOutAudioKey = "PhotoOut";
+	constexpr float CameraPhotoAudioVolume = 0.5f;
 
 	bool bCaptureRequested = false;
 	bool bPhotoSpawnPending = false;
@@ -76,12 +77,12 @@ namespace
 
 	void PlayCameraShutterAudio()
 	{
-		FAudioManager::Get().PlayAudio(CameraShutterAudioKey, 1.0f);
+		FAudioManager::Get().PlayAudio(CameraShutterAudioKey, CameraPhotoAudioVolume);
 	}
 
 	void PlayPhotoOutAudio()
 	{
-		FAudioManager::Get().PlayAudio(PhotoOutAudioKey, 1.0f, 2.0f);
+		FAudioManager::Get().PlayAudio(PhotoOutAudioKey, CameraPhotoAudioVolume, 2.0f);
 	}
 
 	bool IsHeldCameraMesh(UStaticMeshComponent* Component)
