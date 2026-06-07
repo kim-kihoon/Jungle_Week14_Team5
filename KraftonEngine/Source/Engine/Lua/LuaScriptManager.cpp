@@ -1,6 +1,8 @@
 #include "LuaScriptManager.h"
 #include "Lua/LuaDebugManager.h"
 
+#include "Asset/AssetRegistry.h"
+#include "Animation/AnimationManager.h"
 #include "Audio/AudioManager.h"
 #include "Core/Logging/Log.h"
 #include "Core/Logging/Notification.h"
@@ -5096,6 +5098,29 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         [](USkeletalMeshComponent& Mesh)
         {
             return Mesh.GetAnimationData().AnimToPlayPath.ToString();
+        },
+        "GetCompatibleAnimationPaths",
+        [](USkeletalMeshComponent& Mesh) -> sol::table
+        {
+            sol::table Result = FLuaScriptManager::GetState().create_table();
+
+            USkeletalMesh* SkeletalMesh = Mesh.GetSkeletalMesh();
+            if (!SkeletalMesh)
+            {
+                return Result;
+            }
+
+            FAnimationManager::Get().RefreshAvailableAnimations();
+            const TArray<FAssetListItem> Animations =
+                FAssetRegistry::ListAnimationsForSkeleton(SkeletalMesh->GetSkeletonBinding(), false);
+
+            int32 LuaIndex = 1;
+            for (const FAssetListItem& Item : Animations)
+            {
+                Result[LuaIndex++] = Item.FullPath;
+            }
+
+            return Result;
         },
         "GetPlayRate",
         [](USkeletalMeshComponent& Mesh)

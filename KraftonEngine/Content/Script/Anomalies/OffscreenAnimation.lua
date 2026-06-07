@@ -1,7 +1,6 @@
 local OffscreenAnimation = {}
 
 OffscreenAnimation.Name = "OffscreenAnimation"
-OffscreenAnimation.AnimationPath = "Content/Data/slendyTubbie/slendyTubbie_classic_newborn_newborn_ref_skeleton_classic_newborn_newborn_ref_skeleton_attack.uasset"
 
 local function get_skeletal_mesh(actor)
     if actor == nil or actor.GetSkeletalMeshComponent == nil then
@@ -17,6 +16,29 @@ local function is_target_in_view(actor)
     return World.IsActorInViewFrustum(actor)
 end
 
+local function is_empty_animation_path(path)
+    return path == nil or path == "" or path == "None"
+end
+
+local function collect_candidate_animation_paths(mesh, currentPath)
+    if mesh == nil or mesh.GetCompatibleAnimationPaths == nil then
+        return nil
+    end
+
+    local compatiblePaths = mesh:GetCompatibleAnimationPaths()
+    if compatiblePaths == nil then
+        return nil
+    end
+
+    local candidates = {}
+    for _, path in ipairs(compatiblePaths) do
+        if not is_empty_animation_path(path) and path ~= currentPath then
+            candidates[#candidates + 1] = path
+        end
+    end
+    return candidates
+end
+
 function OffscreenAnimation:Spawn(context)
     local mesh = get_skeletal_mesh(context.Target)
     if mesh == nil or mesh.PlayAnimationByPath == nil then
@@ -24,8 +46,10 @@ function OffscreenAnimation:Spawn(context)
     end
 
     context.State.Mesh = mesh
+    local currentPath = nil
     if mesh.GetAnimationPath ~= nil then
-        context.State.OriginalAnimationPath = mesh:GetAnimationPath()
+        currentPath = mesh:GetAnimationPath()
+        context.State.OriginalAnimationPath = currentPath
     end
     if mesh.GetPlayRate ~= nil then
         context.State.OriginalPlayRate = mesh:GetPlayRate()
@@ -36,13 +60,24 @@ function OffscreenAnimation:Spawn(context)
     if mesh.IsPlaying ~= nil then
         context.State.OriginalPlaying = mesh:IsPlaying()
     end
+
+    local candidates = collect_candidate_animation_paths(mesh, currentPath)
+    if candidates == nil then
+        return false, "compatible animation list binding unavailable"
+    end
+    if #candidates == 0 then
+        return false, "compatible non-current animation not found"
+    end
+
+    context.State.OffscreenAnimationPath = candidates[math.random(1, #candidates)]
     context.State.bPlayingOffscreen = false
     return true
 end
 
 function OffscreenAnimation:Tick(context)
     local mesh = context.State.Mesh
-    if mesh == nil then
+    local animationPath = context.State.OffscreenAnimationPath
+    if mesh == nil or is_empty_animation_path(animationPath) then
         return
     end
 
@@ -53,7 +88,7 @@ function OffscreenAnimation:Tick(context)
 
     context.State.bPlayingOffscreen = shouldPlay
     if shouldPlay then
-        mesh:PlayAnimationByPath(self.AnimationPath, true)
+        mesh:PlayAnimationByPath(animationPath, true)
     else
         mesh:SetPlaying(false)
     end
