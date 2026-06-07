@@ -327,6 +327,7 @@ public:
     void GetEditableProperties(TArray<FPropertyValue>& OutProps) override;
     void PostEditProperty(const char* PropertyName) override;
     void Serialize(FArchive& Ar) override;
+    void OnPostLoad(FArchive& Ar) override;
     void BeginDestroy() override;
 
 protected:
