@@ -2110,6 +2110,50 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
             return GetLuaInputSnapshot().MouseDeltaY;
         }
     );
+    Input.set_function(
+        "GetMouseScreenPosition",
+        [](sol::this_state State)
+        {
+            sol::state_view Lua(State);
+            const POINT Pos = InputSystem::Get().GetMousePos();
+            sol::table Result = Lua.create_table();
+            Result["X"] = Pos.x;
+            Result["Y"] = Pos.y;
+            Result["x"] = Pos.x;
+            Result["y"] = Pos.y;
+            return Result;
+        }
+    );
+    Input.set_function(
+        "GetMouseClientPosition",
+        [](sol::this_state State)
+        {
+            sol::state_view Lua(State);
+            const POINT Pos = InputSystem::Get().GetMouseClientPos();
+            sol::table Result = Lua.create_table();
+            Result["X"] = Pos.x;
+            Result["Y"] = Pos.y;
+            Result["x"] = Pos.x;
+            Result["y"] = Pos.y;
+            return Result;
+        }
+    );
+    Input.set_function(
+        "GetMouseClientSize",
+        [](sol::this_state State)
+        {
+            sol::state_view Lua(State);
+            const POINT Size = InputSystem::Get().GetMouseClientSize();
+            sol::table Result = Lua.create_table();
+            Result["X"] = Size.x;
+            Result["Y"] = Size.y;
+            Result["x"] = Size.x;
+            Result["y"] = Size.y;
+            Result["Width"] = Size.x;
+            Result["Height"] = Size.y;
+            return Result;
+        }
+    );
 
     // Engine — 게임 일시정지 / 종료.
     sol::table Engine = Lua.create_named_table("Engine");

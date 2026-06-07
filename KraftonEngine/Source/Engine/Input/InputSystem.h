@@ -92,6 +92,15 @@ public:
         }
         return ClientPos;
     }
+    POINT GetMouseClientSize() const
+    {
+        RECT ClientRect = {};
+        if (OwnerHWnd && GetClientRect(OwnerHWnd, &ClientRect))
+        {
+            return POINT { ClientRect.right - ClientRect.left, ClientRect.bottom - ClientRect.top };
+        }
+        return POINT { 0, 0 };
+    }
     int MouseDeltaX() const { return FrameMouseDeltaX; }
     int MouseDeltaY() const { return FrameMouseDeltaY; }
     bool MouseMoved() const { return MouseDeltaX() != 0 || MouseDeltaY() != 0; }
