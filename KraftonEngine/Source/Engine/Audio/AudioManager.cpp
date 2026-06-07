@@ -559,8 +559,8 @@ void FAudioManager::UpdateZoneEffect(float DeltaTime)
 	CurrentZoneEffect.LowPassCutoffHz = Approach(CurrentZoneEffect.LowPassCutoffHz, TargetZoneEffect.LowPassCutoffHz, Alpha);
 	CurrentZoneEffect.ReverbWetLevelDb = Approach(CurrentZoneEffect.ReverbWetLevelDb, TargetZoneEffect.ReverbWetLevelDb, Alpha);
 	CurrentZoneEffect.ReverbDecayTimeMs = Approach(CurrentZoneEffect.ReverbDecayTimeMs, TargetZoneEffect.ReverbDecayTimeMs, Alpha);
-	CurrentZoneEffect.bEnableLowPass = TargetZoneEffect.bEnableLowPass || CurrentZoneEffect.LowPassCutoffHz < 21900.0f;
-	CurrentZoneEffect.bEnableReverb = TargetZoneEffect.bEnableReverb || CurrentZoneEffect.ReverbWetLevelDb > -79.0f;
+	CurrentZoneEffect.bEnableLowPass = TargetZoneEffect.bEnableLowPass;
+	CurrentZoneEffect.bEnableReverb = TargetZoneEffect.bEnableReverb;
 
 	if (LowPassDsp)
 	{
