@@ -145,7 +145,7 @@ void UAudioComponent::PlayOneShot(const FString& InSoundPath, float InVolume, fl
 
 	FAudioManager::Get().PlayAudio(
 		Key,
-		ClampVolumeGain(InVolume),
+		ClampVolumeGain(InVolume * Volume),
 		InPitch,
 		bInSpatialize ? &Settings3D : nullptr);
 }

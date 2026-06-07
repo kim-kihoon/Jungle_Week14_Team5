@@ -25,6 +25,7 @@
 #include "CameraShake/CameraShakeAsset.h"
 #include "CameraShake/CameraShakeManager.h"
 #include "Component/ActorComponent.h"
+#include "Component/Audio/AudioComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/SceneComponent.h"
 #include "Component/ShapeComponent.h"
@@ -4659,6 +4660,27 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         )
     );
 
+    Lua.new_usertype<UAudioComponent>(
+        "AudioComponent",
+        sol::base_classes,
+        sol::bases<USceneComponent, UActorComponent, UObject>(),
+        "IsValid",
+        [](UAudioComponent* Component)
+        {
+            return IsValid(Component);
+        },
+        "SetVolume",
+        [](UAudioComponent* Component, float Volume)
+        {
+            if (IsValid(Component)) Component->SetVolume(Volume);
+        },
+        "GetVolume",
+        [](UAudioComponent* Component) -> float
+        {
+            return IsValid(Component) ? Component->GetVolume() : 0.0f;
+        }
+    );
+
     Lua.new_usertype<UPrimitiveComponent>(
         "PrimitiveComponent",
         sol::base_classes,
@@ -5303,6 +5325,31 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         [](AActor& Actor)
         {
             return Actor.GetComponentByClass<USkeletalMeshComponent>();
+        },
+        "GetAudioComponent",
+        [](AActor& Actor)
+        {
+            if (UAudioComponent* ExistingAudioComponent = Actor.GetComponentByClass<UAudioComponent>())
+            {
+                return ExistingAudioComponent;
+            }
+
+            UAudioComponent* NewAudioComponent = Actor.AddComponent<UAudioComponent>();
+            if (IsValid(NewAudioComponent))
+            {
+                NewAudioComponent->SetAutoActivate(false);
+                NewAudioComponent->SetHiddenInComponentTree(true);
+                NewAudioComponent->SetComponentTickEnabled(false);
+                if (USceneComponent* ParentComponent = Actor.GetComponentByClass<USkeletalMeshComponent>())
+                {
+                    NewAudioComponent->AttachToComponent(ParentComponent);
+                }
+                else if (USceneComponent* RootComponent = Actor.GetRootComponent())
+                {
+                    NewAudioComponent->AttachToComponent(RootComponent);
+                }
+            }
+            return NewAudioComponent;
         },
 
         "GetSkinnedMeshComponent",

@@ -4,18 +4,23 @@ local PhotoInvisible = require("Anomalies/PhotoInvisible")
 local NoShadow = require("Anomalies/NoShadow")
 local OffscreenAnimation = require("Anomalies/OffscreenAnimation")
 local OffscreenFacePlayer = require("Anomalies/OffscreenFacePlayer")
+local BlackPhoto = require("Anomalies/BlackPhoto")
+local NearSilentCymbalMonkey = require("Anomalies/NearSilentCymbalMonkey")
 
 AnomalyManager.Tags = {
     Candidate = "AnomalyCandidate",
     ActiveTarget = "ActiveAnomalyTarget",
-    PhotoInvisible = "PhotoInvisible"
+    PhotoInvisible = "PhotoInvisible",
+    PhotoBlackoutTarget = "PhotoBlackoutTarget"
 }
 
 AnomalyManager.Rules = {
     PhotoInvisible,
     NoShadow,
     OffscreenAnimation,
-    OffscreenFacePlayer
+    OffscreenFacePlayer,
+    BlackPhoto,
+    NearSilentCymbalMonkey
 }
 
 AnomalyManager.Active = nil
