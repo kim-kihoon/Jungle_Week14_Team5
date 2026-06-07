@@ -5164,6 +5164,44 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             constexpr float FinishEpsilon = 1.0e-4f;
             const float Length = Animation->GetPlayLength();
             return Length > 0.0f && SingleNode->GetCurrentTime() >= Length - FinishEpsilon;
+        },
+        "EnableRagdollPhysics",
+        [](USkeletalMeshComponent* Mesh) -> bool
+        {
+            return IsValid(Mesh) ? Mesh->EnableRagdollPhysics() : false;
+        },
+        "ApplyRagdollImpulse",
+        [](USkeletalMeshComponent* Mesh, const sol::object& LocationObject, const sol::object& DirectionObject, sol::optional<float> Strength) -> bool
+        {
+            if (!IsValid(Mesh))
+            {
+                return false;
+            }
+
+            FVector Location;
+            FVector Direction;
+            if (!LuaObjectToVector(LocationObject, Location) || !LuaObjectToVector(DirectionObject, Direction))
+            {
+                return false;
+            }
+
+            if (Direction.IsNearlyZero())
+            {
+                return false;
+            }
+
+            FRagdollImpulseRequest Request;
+            Request.WorldLocation = Location;
+            Request.WorldDirection = Direction.Normalized();
+            Request.Strength = Strength.value_or(0.35f);
+            Request.bAllowEscalationToFullBody = false;
+            Request.bAllowWhileMoving = true;
+            return Mesh->ApplyRagdollImpulse(Request);
+        },
+        "IsRagdollActive",
+        [](USkeletalMeshComponent* Mesh) -> bool
+        {
+            return IsValid(Mesh) ? Mesh->IsRagdollActive() : false;
         }
     );
 

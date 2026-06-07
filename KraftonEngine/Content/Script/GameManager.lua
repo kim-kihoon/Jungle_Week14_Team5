@@ -560,8 +560,8 @@ function GameManager:AdvanceAnomalyLoop()
     return AnomalyManager:SelectAndSpawn()
 end
 
-function GameManager:ReportAnomalyShot(actor)
-    local bHitAnomaly = AnomalyManager:ReportShot(actor)
+function GameManager:ReportAnomalyShot(actor, hit)
+    local bHitAnomaly = AnomalyManager:ReportShot(actor, hit)
     if bHitAnomaly then
         self:StopLoop("AnomalyShot")
     end
