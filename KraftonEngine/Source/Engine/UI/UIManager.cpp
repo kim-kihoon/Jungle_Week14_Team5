@@ -27,6 +27,7 @@
 #undef GetFirstChild
 #endif
 #include <RmlUi/Core.h>
+#include <RmlUi/Core/Factory.h>
 
 #include <algorithm>
 #include <cctype>
@@ -824,6 +825,63 @@ void UUIManager::RemoveFromViewportImmediate(UUserWidget* Widget)
 	{
 		Widget->MarkRemovedFromViewport();
 	}
+}
+
+bool UUIManager::ReloadDocument(UUserWidget* Widget)
+{
+	if (!IsAliveObject(Widget))
+	{
+		return false;
+	}
+
+	const bool bWasInViewport = Widget->IsInViewport();
+	CloseDocument(Widget);
+
+	if (!bWasInViewport)
+	{
+		return true;
+	}
+
+	return LoadDocument(Widget);
+}
+
+void UUIManager::ClearRmlCaches()
+{
+	if (!bRmlInitialized)
+	{
+		return;
+	}
+
+	Rml::Factory::ClearStyleSheetCache();
+	Rml::Factory::ClearTemplateCache();
+}
+
+int32 UUIManager::ReloadDocumentsByPath(const FString& DocumentPath)
+{
+	int32 ReloadedCount = 0;
+	ClearRmlCaches();
+
+	const std::filesystem::path TargetPath = ToProjectPath(DocumentPath).lexically_normal();
+	for (UUserWidget* Widget : ViewportWidgets)
+	{
+		if (!IsAliveObject(Widget))
+		{
+			continue;
+		}
+
+		const std::filesystem::path WidgetPath = ToProjectPath(Widget->GetDocumentPath()).lexically_normal();
+		if (WidgetPath != TargetPath)
+		{
+			continue;
+		}
+
+		if (ReloadDocument(Widget))
+		{
+			++ReloadedCount;
+		}
+	}
+
+	return ReloadedCount;
 }
 
 void UUIManager::ClearViewport()

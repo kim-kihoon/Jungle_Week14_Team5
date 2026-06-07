@@ -1,4 +1,4 @@
--- Hospital.Scene 플레이어 루프: 지정 위치에 들어오면 고정 오프셋으로 워프한다.
+-- Hospital.Scene 플레이어 루프: Title 시작 상태와 Hospital 플레이 상태를 함께 관리한다.
 
 local GameManager = require("GameManager")
 
@@ -31,6 +31,9 @@ local TimerUIFrozenSeconds = nil
 local TimerUILastLiveSeconds = 0
 local bExitDoorsUnlockedForCurrentLoop = false
 local bLastLoopStopped = false
+local TitleWidget = nil
+local TitlePopupWidget = nil
+local bTitleMode = true
 
 local INTERACT_KEY = 0x45 -- E
 local KEY_W = 0x57
@@ -59,13 +62,18 @@ local CONTROL_PROMPT_DOCUMENT_PATH = "Content/UI/HospitalControlPrompt.rml"
 local CONTROL_PROMPT_ELEMENT_ID = "control_prompt"
 local TIMER_PROMPT_DOCUMENT_PATH = "Content/UI/HospitalTimer.rml"
 local TIMER_PROMPT_ELEMENT_ID = "timer_display"
+local TITLE_DOCUMENT_PATH = "Content/UI/TitleUI.rml"
+local TITLE_SETTING_DOCUMENT_PATH = "Content/UI/SettingUI.rml"
+local TITLE_CREDIT_DOCUMENT_PATH = "Content/UI/CreditUI.rml"
+local TITLE_CAMERA_TAG = "TitleCamera"
+local TITLE_ACTOR_TAG = "Title"
 local TIMER_COLOR_NORMAL = "rgb(71, 255, 105)"
 local TIMER_COLOR_WARNING = "rgb(255, 71, 71)"
 local TIMER_WARNING_SECONDS = 30
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
-local CONTROL_PROMPT_PISTOL_TEXT = "[LMB] Shoot<br/>[Space] Camera"
-local CONTROL_PROMPT_CAMERA_TEXT = "[LMB] Shoot<br/>[Space] Pistol"
+local CONTROL_PROMPT_PISTOL_TEXT = "[LMB] Shoot\n[Space] Camera"
+local CONTROL_PROMPT_CAMERA_TEXT = "[LMB] Shoot\n[Space] Pistol"
 
 local OPEN_PLUS_NAMES = {
     AStaticMeshActor_2 = true,
@@ -1221,6 +1229,238 @@ local function UpdateTimerPrompt()
     SetTimerPromptVisible(true)
 end
 
+local function AddTitleWidgetToViewport(widget, z_order)
+    if widget == nil then
+        return false
+    end
+
+    pcall(function()
+        widget:SetWantsMouse(true)
+    end)
+    pcall(function()
+        widget:SetWantsKeyboard(true)
+    end)
+    pcall(function()
+        widget:SetBlocksGameInput(true)
+    end)
+    pcall(function()
+        widget:SetBlocksGameKeyboard(true)
+    end)
+    pcall(function()
+        widget:SetBlocksGameMouseLook(true)
+    end)
+
+    local ok = pcall(function()
+        widget:AddToViewportZ(z_order)
+    end)
+    if not ok then
+        pcall(function()
+            widget:AddToViewport()
+        end)
+    end
+
+    return true
+end
+
+local function CreateTitleWidget(document_path)
+    if UI == nil or UI.CreateWidget == nil then
+        return nil
+    end
+
+    local ok, widget = pcall(function()
+        return UI.CreateWidget(document_path)
+    end)
+    if not ok then
+        return nil
+    end
+    return widget
+end
+
+local function ShowTitleUI()
+    if TitleWidget ~= nil then
+        local ok, bInViewport = pcall(function()
+            return TitleWidget:IsInViewport()
+        end)
+        if ok and bInViewport then
+            return true
+        end
+    end
+
+    TitleWidget = CreateTitleWidget(TITLE_DOCUMENT_PATH)
+    return AddTitleWidgetToViewport(TitleWidget, 100)
+end
+
+local function RemoveWidget(widget)
+    if widget ~= nil then
+        pcall(function()
+            widget:RemoveFromParent()
+        end)
+    end
+end
+
+local function CloseTitlePopup()
+    RemoveWidget(TitlePopupWidget)
+    TitlePopupWidget = nil
+end
+
+local function ShowTitlePopup(document_path)
+    if not bTitleMode then
+        return false
+    end
+
+    CloseTitlePopup()
+    TitlePopupWidget = CreateTitleWidget(document_path)
+    return AddTitleWidgetToViewport(TitlePopupWidget, 110)
+end
+
+local function DisposeTitleUI()
+    CloseTitlePopup()
+    RemoveWidget(TitleWidget)
+    TitleWidget = nil
+end
+
+local function GetActorCamera(actor)
+    if actor == nil then
+        return nil
+    end
+
+    local ok, camera = pcall(function()
+        return actor:GetCamera()
+    end)
+    if ok then
+        return camera
+    end
+    return nil
+end
+
+local function FindActorByName(name)
+    if World == nil or World.FindActorByName == nil then
+        return nil
+    end
+
+    local ok, actor = pcall(function()
+        return World.FindActorByName(name)
+    end)
+    if ok then
+        return actor
+    end
+    return nil
+end
+
+local function FindFirstActorByTag(tag)
+    if World == nil or World.FindFirstActorByTag == nil then
+        return nil
+    end
+
+    local ok, actor = pcall(function()
+        return World.FindFirstActorByTag(tag)
+    end)
+    if ok then
+        return actor
+    end
+    return nil
+end
+
+local function SetActiveCameraImmediate(camera)
+    if camera == nil or CameraManager == nil then
+        return false
+    end
+
+    if CameraManager.PossessCamera ~= nil then
+        local ok, result = pcall(function()
+            return CameraManager.PossessCamera(camera)
+        end)
+        if ok then
+            return result ~= false
+        end
+    end
+
+    if CameraManager.SetActiveCamera ~= nil then
+        local ok = pcall(function()
+            CameraManager.SetActiveCamera(camera)
+        end)
+        return ok
+    end
+
+    return false
+end
+
+local function CaptureTitleCamera()
+    local titleCameraActor = FindFirstActorByTag(TITLE_CAMERA_TAG) or FindActorByName("Camera")
+    return SetActiveCameraImmediate(GetActorCamera(titleCameraActor))
+end
+
+local function CapturePlayerCamera()
+    local camera = GetActorCamera(obj)
+    if camera == nil then
+        camera = GetActorCamera(FindActorByName("Player"))
+    end
+    return SetActiveCameraImmediate(camera)
+end
+
+local function DeactivateComponent(component)
+    if component == nil then
+        return
+    end
+
+    pcall(function()
+        component:SetVisibility(false)
+    end)
+    pcall(function()
+        component:SetVisible(false)
+    end)
+    pcall(function()
+        component:SetActive(false)
+    end)
+    pcall(function()
+        component:Deactivate()
+    end)
+end
+
+local function DeactivateTitleActor(actor)
+    if actor == nil then
+        return
+    end
+
+    pcall(function()
+        actor:SetVisible(false)
+    end)
+
+    local okComponents, components = pcall(function()
+        return actor:GetComponents()
+    end)
+    if okComponents and components ~= nil then
+        for _, component in ipairs(components) do
+            DeactivateComponent(component)
+        end
+        return
+    end
+
+    local okRoot, root = pcall(function()
+        return actor:GetRootPrimitiveComponent()
+    end)
+    if okRoot then
+        DeactivateComponent(root)
+    end
+end
+
+local function DeactivateTitleActors()
+    if World == nil or World.FindActorsByTag == nil then
+        return
+    end
+
+    local ok, actors = pcall(function()
+        return World.FindActorsByTag(TITLE_ACTOR_TAG)
+    end)
+    if not ok or actors == nil then
+        return
+    end
+
+    for _, actor in ipairs(actors) do
+        DeactivateTitleActor(actor)
+    end
+end
+
 function BeginPlay()
     bCanWarp = true
     PendingDoorCloseSounds = {}
@@ -1241,6 +1481,14 @@ function BeginPlay()
     TimerUILastLiveSeconds = 0
     bExitDoorsUnlockedForCurrentLoop = false
     bLastLoopStopped = GameManager ~= nil and GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped()
+    TitleWidget = nil
+    TitlePopupWidget = nil
+    bTitleMode = true
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = true
+    end
+    ShowTitleUI()
+    CaptureTitleCamera()
 end
 
 function EndPlay()
@@ -1280,10 +1528,20 @@ function EndPlay()
     TimerUILastLiveSeconds = 0
     bExitDoorsUnlockedForCurrentLoop = false
     bLastLoopStopped = false
+    DisposeTitleUI()
+    bTitleMode = true
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = true
+    end
 end
 
 function Tick(dt)
     if obj == nil then
+        return
+    end
+
+    if bTitleMode then
+        CaptureTitleCamera()
         return
     end
 
@@ -1343,4 +1601,36 @@ function Tick(dt)
 end
 
 function OnOverlap(OtherActor)
+end
+
+function StartGame()
+    if not bTitleMode then
+        return
+    end
+
+    bTitleMode = false
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = false
+    end
+    DisposeTitleUI()
+    CapturePlayerCamera()
+    DeactivateTitleActors()
+end
+
+function ShowSetting()
+    ShowTitlePopup(TITLE_SETTING_DOCUMENT_PATH)
+end
+
+function ShowCredit()
+    ShowTitlePopup(TITLE_CREDIT_DOCUMENT_PATH)
+end
+
+function ClosePopup()
+    CloseTitlePopup()
+end
+
+function ExitGame()
+    if Engine ~= nil and Engine.Exit ~= nil then
+        Engine.Exit()
+    end
 end

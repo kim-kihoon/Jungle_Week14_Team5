@@ -1,17 +1,43 @@
 <rml>
 <head>
-	<title>RML UI</title>
+	<title>Title Menu</title>
 	<style>
-		body { margin: 0px; width: 100%; height: 100%; font-family: Maplestory; }
-		#ui_canvas { position: absolute; left: 0px; top: 0px; width: 100%; height: 100%; }
+		body {
+			margin: 0px;
+			width: 100%;
+			height: 100%;
+			font-family: OCRAStd;
+			color: #FFFFFF;
+		}
+		#ui_canvas {
+			position: absolute;
+			left: 0px;
+			top: 0px;
+			width: 100%;
+			height: 100%;
+		}
+		.title-button {
+			position: absolute;
+			display: block;
+			font-family: OCRAStd;
+			font-size: 48px;
+			font-weight: normal;
+			text-align: left;
+			color: #FFFFFF;
+			background-color: rgba(0, 0, 0, 0);
+		}
+		.title-button:hover {
+			color: rgb(71, 255, 105);
+			background-color: rgba(255, 255, 255, 0.12);
+		}
 	</style>
 </head>
 <body data-rml-ui-document="1" data-canvas-width="1920" data-canvas-height="1080" data-preview-scale="1">
 	<div id="ui_canvas">
-		<div id="button_0" data-rml-editor="1" data-type="Button" data-x="108.107475" data-y="160.000000" data-width="180.000000" data-height="52.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="0.100,0.280,0.550,0.920" data-text="Start" data-text-color="1.000,1.000,1.000,1.000" data-font-size="24.000000" data-font-family="Maplestory" data-bold="false" data-image="" data-target-tag="GameManager" data-on-click="StartGame" style="position:absolute;left:108.107px;top:160px;width:180px;height:52px;z-index:0;display:block;opacity:1;background-color:rgba(26,71,140,235);color:rgba(255,255,255,255);font-size:24px;font-family:Maplestory;font-weight:normal;">Start</div>
-		<div id="button_1" data-rml-editor="1" data-type="Button" data-x="103.230797" data-y="245.821823" data-width="180.000000" data-height="52.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="0.100,0.280,0.550,0.920" data-text="Option" data-text-color="1.000,1.000,1.000,1.000" data-font-size="24.000000" data-font-family="Maplestory" data-bold="false" data-image="" data-target-tag="GameManager" data-on-click="ShowOption" style="position:absolute;left:103.231px;top:245.822px;width:180px;height:52px;z-index:0;display:block;opacity:1;background-color:rgba(26,71,140,235);color:rgba(255,255,255,255);font-size:24px;font-family:Maplestory;font-weight:normal;">Option</div>
-		<div id="button_3" data-rml-editor="1" data-type="Button" data-x="110.289566" data-y="344.716675" data-width="180.000000" data-height="52.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="0.100,0.280,0.550,0.920" data-text="Credit" data-text-color="1.000,1.000,1.000,1.000" data-font-size="24.000000" data-font-family="Maplestory" data-bold="false" data-image="" data-target-tag="GameManager" data-on-click="ShowCredit" style="position:absolute;left:110.29px;top:344.717px;width:180px;height:52px;z-index:0;display:block;opacity:1;background-color:rgba(26,71,140,235);color:rgba(255,255,255,255);font-size:24px;font-family:Maplestory;font-weight:normal;">Credit</div>
-		<div id="button_2" data-rml-editor="1" data-type="Button" data-x="111.341919" data-y="426.676910" data-width="180.000000" data-height="52.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="0.100,0.280,0.550,0.920" data-text="Exit" data-text-color="1.000,1.000,1.000,1.000" data-font-size="24.000000" data-font-family="Maplestory" data-bold="false" data-image="" data-target-tag="GameManager" data-on-click="ExitGame" style="position:absolute;left:111.342px;top:426.677px;width:180px;height:52px;z-index:0;display:block;opacity:1;background-color:rgba(26,71,140,235);color:rgba(255,255,255,255);font-size:24px;font-family:Maplestory;font-weight:normal;">Exit</div>
+		<div id="start_button" class="title-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="400.000000" data-width="280.000000" data-height="64.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Start" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="StartGame" style="position: absolute; left: 120.00px; top: 400.00px; width: 280.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Start</div>
+		<div id="setting_button" class="title-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="480.000000" data-width="360.000000" data-height="64.000000" data-z="1" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Setting" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ShowSetting" style="position: absolute; left: 120.00px; top: 480.00px; width: 360.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Setting</div>
+		<div id="credit_button" class="title-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="560.000000" data-width="320.000000" data-height="64.000000" data-z="2" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Credit" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ShowCredit" style="position: absolute; left: 120.00px; top: 560.00px; width: 320.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Credit</div>
+		<div id="exit_button" class="title-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="640.000000" data-width="240.000000" data-height="64.000000" data-z="3" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Exit" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ExitGame" style="position: absolute; left: 120.00px; top: 640.00px; width: 240.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Exit</div>
 	</div>
 </body>
 </rml>

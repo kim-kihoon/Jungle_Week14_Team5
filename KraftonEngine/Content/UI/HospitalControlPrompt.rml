@@ -25,6 +25,7 @@
 			font-size: 18px;
 			text-align: right;
 			line-height: 1.35;
+			white-space: pre-line;
 			background-color: rgba(0, 0, 0, 0);
 		}
 	</style>

@@ -411,6 +411,7 @@ void FEditorRenderPipeline::RenderCameraPreviewViewport(FEditorCameraPreviewWidg
 	Frame.ClearViewportResources();
 	Frame.SetViewportInfo(VP);
 	Frame.SetCameraInfo(POV);
+	Frame.CameraPostProcessMaterial = Camera->GetPostProcessMaterial();
 	Frame.WorldType = World->GetWorldType();
 	Frame.LODContext = World->PrepareLODContext();
 
