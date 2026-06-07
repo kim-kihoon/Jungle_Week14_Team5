@@ -97,9 +97,9 @@ private:
 	static void DeserializeCamera(json::JSON& CamJSON, FPerspectiveCameraData& OutCam);
 
 	// ---- Deserialization helpers ----
-	static AActor* DeserializeActor(json::JSON& ActorJSON, UWorld* World, FSceneLoadContext& Context);
+	static AActor* DeserializeActor(json::JSON& ActorJSON, UWorld* World, FSceneLoadContext& Context, bool bAddToWorld = true);
 	static void FinalizeDeserializedActor(AActor* Actor, FSceneLoadContext& Context);
-	static void FinalizeDeserializedActors(const TArray<AActor*>& Actors, FSceneLoadContext& Context);
+	static void FinalizeDeserializedActors(const TArray<AActor*>& Actors, FSceneLoadContext& Context, bool bRefreshWorldRegistration = true);
 	static USceneComponent* DeserializeSceneComponentTree(json::JSON& Node, AActor* Owner, FSceneLoadContext& Context);
 	static void DeserializeProperties(UObject* Obj, json::JSON& PropsJSON, FSceneLoadContext& Context);
 
