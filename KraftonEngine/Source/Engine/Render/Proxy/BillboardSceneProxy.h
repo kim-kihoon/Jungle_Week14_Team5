@@ -20,7 +20,7 @@ public:
 
 	// 에디터 아이콘 빌보드는 포스트프로세스 이후 전용 오버레이 패스에서 그린다(깊이/포그 분리).
 	// 머티리얼은 Transparent(AlphaBlend) 그대로지만, 이 패스로 라우팅되어 NoDepth 오버레이로 합성됨.
-	ERenderPass GetRenderPass() const override { return ERenderPass::EditorIcon; }
+	ERenderPass GetRenderPass() const override;
 
 protected:
 	UBillboardComponent* GetBillboardComponent() const;

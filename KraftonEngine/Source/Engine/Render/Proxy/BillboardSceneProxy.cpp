@@ -28,6 +28,16 @@ UBillboardComponent* FBillboardSceneProxy::GetBillboardComponent() const
 	return static_cast<UBillboardComponent*>(GetOwner());
 }
 
+ERenderPass FBillboardSceneProxy::GetRenderPass() const
+{
+	const UBillboardComponent* Comp = GetBillboardComponent();
+	if (Comp && Comp->IsEditorOnly())
+	{
+		return ERenderPass::EditorIcon;
+	}
+	return FPrimitiveSceneProxy::GetRenderPass();
+}
+
 // ============================================================
 // UpdateTransform — Scale/Location 캐싱
 // ============================================================
@@ -58,7 +68,11 @@ void FBillboardSceneProxy::UpdateMesh()
 		FMeshSectionDraw Section;
 		Section.Material = Mat;
 		Section.IndexCount = IndexCount;
-		Section.PassOverride = ERenderPass::EditorIcon; // 에디터 아이콘 전용 오버레이 패스로 라우팅
+		Section.VertexFactory = EVertexFactoryType::Billboard;
+		if (Comp->IsEditorOnly())
+		{
+			Section.PassOverride = ERenderPass::EditorIcon;
+		}
 		SectionDraws.push_back(Section);
 	}
 	else
