@@ -22,12 +22,6 @@
     <Filter Include="Shaders\Generated\Materials">
       <UniqueIdentifier>{3de592bd-0830-b23c-449c-06a97393139e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shaders\Generated\Preview">
-      <UniqueIdentifier>{06e64ccf-c33d-546a-03f7-b51d5cb948fd}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Shaders\Generated\Preview\Materials">
-      <UniqueIdentifier>{c3c91e2a-ea29-bc50-1a55-9eae5443bc0f}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Shaders\Geometry">
       <UniqueIdentifier>{a95f0cc6-e11f-2881-9524-de9a7fdc530e}</UniqueIdentifier>
     </Filter>
@@ -67,9 +61,6 @@
     <Filter Include="Source\Editor\UI">
       <UniqueIdentifier>{d23c3ab5-7e26-ff59-be61-b2a81e9921c0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\Editor\UI\Rml">
-      <UniqueIdentifier>{a8b19f8a-b8b7-4d70-a65e-f3a3397ce603}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source\Editor\UI\Asset">
       <UniqueIdentifier>{d344f4cc-4bcb-0c8d-e15c-1006350dcba6}</UniqueIdentifier>
     </Filter>
@@ -108,6 +99,9 @@
     </Filter>
     <Filter Include="Source\Editor\UI\Panel">
       <UniqueIdentifier>{f7c7f053-501b-35ef-b615-97f5586f017d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Editor\UI\Rml">
+      <UniqueIdentifier>{39a1a56e-0bbf-f23b-ecd6-d8eb2a3ff5f3}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Editor\UI\Toolbar">
       <UniqueIdentifier>{61313b38-6393-84ff-b1c1-0ce7ae5ce397}</UniqueIdentifier>
@@ -184,6 +178,9 @@
     <Filter Include="Source\Engine\Component">
       <UniqueIdentifier>{22bbd7c0-73bc-1bc4-992f-be08238b1609}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Engine\Component\Audio">
+      <UniqueIdentifier>{8eadb833-b339-18f2-3d18-fcbb31dea4e9}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Engine\Component\Camera">
       <UniqueIdentifier>{ac700b73-d302-a951-b230-7f47ae1a3f19}</UniqueIdentifier>
     </Filter>
@@ -191,7 +188,7 @@
       <UniqueIdentifier>{2872cca9-e20a-a7f4-7251-8819c7443392}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine\Component\Gameplay">
-      <UniqueIdentifier>{1e13e2f5-b035-4de0-8cdb-7aa0a6f4b202}</UniqueIdentifier>
+      <UniqueIdentifier>{b6945427-6dac-b3ea-f1ae-54a598844c79}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine\Component\Input">
       <UniqueIdentifier>{358e161e-2bd5-5db1-9e14-9bfb5d4671f1}</UniqueIdentifier>
@@ -404,7 +401,7 @@
       <UniqueIdentifier>{a904550b-6c67-d00d-ee77-c5aaf7b88e71}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Game\Player">
-      <UniqueIdentifier>{265864b1-8f39-40a1-863d-0cb43306b38f}</UniqueIdentifier>
+      <UniqueIdentifier>{252615ec-332b-2a2c-add4-f1ad943f5178}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\ObjViewer">
       <UniqueIdentifier>{3e63d691-bd37-40d8-2cea-c874f8e3a95b}</UniqueIdentifier>
@@ -717,10 +714,16 @@
     <FxCompile Include="Shaders\Generated\Materials\DefaultDecal_Surface.hlsl">
       <Filter>Shaders\Generated\Materials</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\Generated\Materials\JungleMenu_Surface.hlsl">
+      <Filter>Shaders\Generated\Materials</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\Generated\Materials\NewMaterial_1_Decal.hlsl">
       <Filter>Shaders\Generated\Materials</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\Generated\Materials\NewMaterial_Surface.hlsl">
+      <Filter>Shaders\Generated\Materials</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\Generated\Materials\Wood_Surface.hlsl">
       <Filter>Shaders\Generated\Materials</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\Generated\Materials\acc.002_Surface.hlsl">
@@ -737,9 +740,6 @@
     </FxCompile>
     <FxCompile Include="Shaders\Generated\Materials\water_Surface.hlsl">
       <Filter>Shaders\Generated\Materials</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\Generated\Preview\Materials\acc.002_Surface.hlsl">
-      <Filter>Shaders\Generated\Preview\Materials</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\Geometry\Decal.hlsl">
       <Filter>Shaders\Geometry</Filter>
@@ -825,10 +825,10 @@
     <FxCompile Include="Shaders\PostProcess\GammaCorrection.hlsl">
       <Filter>Shaders\PostProcess</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\PostProcess\HorrorPostProcess.hlsl">
+    <FxCompile Include="Shaders\PostProcess\HeightFog.hlsl">
       <Filter>Shaders\PostProcess</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\PostProcess\HeightFog.hlsl">
+    <FxCompile Include="Shaders\PostProcess\HorrorPostProcess.hlsl">
       <Filter>Shaders\PostProcess</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\PostProcess\NormalView.hlsl">
@@ -850,6 +850,9 @@
       <Filter>Shaders\UI</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\UI\OverlayFont.hlsl">
+      <Filter>Shaders\UI</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\UI\PhotoDevelop.hlsl">
       <Filter>Shaders\UI</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\UI\RmlUi.hlsl">
@@ -959,13 +962,13 @@
     <ClCompile Include="Source\Editor\UI\Dialog\FbxImportOptionsDialog.cpp">
       <Filter>Source\Editor\UI\Dialog</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.cpp">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Editor\UI\Panel\EditorConsoleWidget.cpp">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\Panel\EditorControlWidget.cpp">
-      <Filter>Source\Editor\UI\Panel</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.cpp">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\Panel\EditorMaterialInspector.cpp">
@@ -1203,7 +1206,7 @@
       <Filter>Source\Engine\Component</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\Audio\AudioComponent.cpp">
-      <Filter>Source\Engine\Component</Filter>
+      <Filter>Source\Engine\Component\Audio</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\Camera\CameraComponent.cpp">
       <Filter>Source\Engine\Component\Camera</Filter>
@@ -1295,6 +1298,9 @@
     <ClCompile Include="Source\Engine\Component\Primitive\HeightFogComponent.cpp">
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Component\Primitive\PhotoPolaroidComponent.cpp">
+      <Filter>Source\Engine\Component\Primitive</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Component\Primitive\SkeletalMeshComponent.cpp">
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClCompile>
@@ -1302,9 +1308,6 @@
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\Primitive\StaticMeshComponent.cpp">
-      <Filter>Source\Engine\Component\Primitive</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Engine\Component\Primitive\PhotoPolaroidComponent.cpp">
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\Primitive\SubUVComponent.cpp">
@@ -1406,6 +1409,9 @@
     <ClCompile Include="Source\Engine\GameFramework\World.cpp">
       <Filter>Source\Engine\GameFramework</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\GameFramework\Actor\AudioVolume.cpp">
+      <Filter>Source\Engine\GameFramework\Actor</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\GameFramework\Actor\BoxActor.cpp">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClCompile>
@@ -1416,9 +1422,6 @@
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\GameFramework\Actor\HeightFogActor.cpp">
-      <Filter>Source\Engine\GameFramework\Actor</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Engine\GameFramework\Actor\AudioVolume.cpp">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\GameFramework\Actor\ParticleSystemActor.cpp">
@@ -1820,6 +1823,9 @@
     <ClCompile Include="Source\Engine\Profiling\StartupProfiler.cpp">
       <Filter>Source\Engine\Profiling</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Profiling\Stats\ClothCollisionStats.cpp">
+      <Filter>Source\Engine\Profiling\Stats</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Profiling\Stats\MemoryStats.cpp">
       <Filter>Source\Engine\Profiling\Stats</Filter>
     </ClCompile>
@@ -1886,10 +1892,10 @@
     <ClCompile Include="Source\Engine\Render\Proxy\GizmoSceneProxy.cpp">
       <Filter>Source\Engine\Render\Proxy</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.cpp">
+    <ClCompile Include="Source\Engine\Render\Proxy\PhotoPolaroidSceneProxy.cpp">
       <Filter>Source\Engine\Render\Proxy</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Render\Proxy\PhotoPolaroidSceneProxy.cpp">
+    <ClCompile Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.cpp">
       <Filter>Source\Engine\Render\Proxy</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Render\Proxy\PrimitiveSceneProxy.cpp">
@@ -2081,11 +2087,11 @@
     <ClCompile Include="Source\Engine\Texture\Texture2D.cpp">
       <Filter>Source\Engine\Texture</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\UI\CrosshairOverlay.cpp">
-      <Filter>Source\Engine\UI</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Engine\Texture\stb_image_impl.cpp">
       <Filter>Source\Engine\Texture</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\UI\CrosshairOverlay.cpp">
+      <Filter>Source\Engine\UI</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\UI\PhotoOverlay.cpp">
       <Filter>Source\Engine\UI</Filter>
@@ -2166,7 +2172,6 @@
     <ClCompile Include="Intermediate\Generated\Reflection.generated.cpp">
       <Filter>Intermediate\Generated</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Profiling\Stats\ClothCollisionStats.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Editor\EditorEngine.h">
@@ -2292,13 +2297,13 @@
     <ClInclude Include="Source\Editor\UI\Dialog\FbxImportOptionsDialog.h">
       <Filter>Source\Editor\UI\Dialog</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.h">
+      <Filter>Source\Editor\UI\Panel</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Editor\UI\Panel\EditorConsoleWidget.h">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Panel\EditorControlWidget.h">
-      <Filter>Source\Editor\UI\Panel</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.h">
       <Filter>Source\Editor\UI\Panel</Filter>
     </ClInclude>
     <ClInclude Include="Source\Editor\UI\Panel\EditorMaterialInspector.h">
@@ -2584,7 +2589,7 @@
       <Filter>Source\Engine\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Audio\AudioComponent.h">
-      <Filter>Source\Engine\Component</Filter>
+      <Filter>Source\Engine\Component\Audio</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Camera\CameraComponent.h">
       <Filter>Source\Engine\Component\Camera</Filter>
@@ -2676,6 +2681,12 @@
     <ClInclude Include="Source\Engine\Component\Primitive\HeightFogComponent.h">
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Component\Primitive\PhotoPolaroidComponent.h">
+      <Filter>Source\Engine\Component\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\Primitive\RagdollReactionPolicy.h">
+      <Filter>Source\Engine\Component\Primitive</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Component\Primitive\SkeletalMeshComponent.h">
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClInclude>
@@ -2683,9 +2694,6 @@
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Primitive\StaticMeshComponent.h">
-      <Filter>Source\Engine\Component\Primitive</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Engine\Component\Primitive\PhotoPolaroidComponent.h">
       <Filter>Source\Engine\Component\Primitive</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Primitive\SubUVComponent.h">
@@ -2817,6 +2825,9 @@
     <ClInclude Include="Source\Engine\GameFramework\WorldSettings.h">
       <Filter>Source\Engine\GameFramework</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\GameFramework\Actor\AudioVolume.h">
+      <Filter>Source\Engine\GameFramework\Actor</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\GameFramework\Actor\BoxActor.h">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClInclude>
@@ -2827,9 +2838,6 @@
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\GameFramework\Actor\HeightFogActor.h">
-      <Filter>Source\Engine\GameFramework\Actor</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Engine\GameFramework\Actor\AudioVolume.h">
       <Filter>Source\Engine\GameFramework\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\GameFramework\Actor\ParticleSystemActor.h">
@@ -3363,6 +3371,9 @@
     <ClInclude Include="Source\Engine\Profiling\StartupProfiler.h">
       <Filter>Source\Engine\Profiling</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Profiling\Stats\ClothCollisionStats.h">
+      <Filter>Source\Engine\Profiling\Stats</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Profiling\Stats\MemoryStats.h">
       <Filter>Source\Engine\Profiling\Stats</Filter>
     </ClInclude>
@@ -3441,10 +3452,10 @@
     <ClInclude Include="Source\Engine\Render\Proxy\GizmoSceneProxy.h">
       <Filter>Source\Engine\Render\Proxy</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.h">
+    <ClInclude Include="Source\Engine\Render\Proxy\PhotoPolaroidSceneProxy.h">
       <Filter>Source\Engine\Render\Proxy</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Render\Proxy\PhotoPolaroidSceneProxy.h">
+    <ClInclude Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.h">
       <Filter>Source\Engine\Render\Proxy</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Render\Proxy\PrimitiveSceneProxy.h">
@@ -6162,7 +6173,6 @@
     <ClInclude Include="ThirdParty\sol2\include\sol\utility\to_string.hpp">
       <Filter>ThirdParty\sol2\include\sol\utility</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Profiling\Stats\ClothCollisionStats.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="KraftonEngine.rc" />

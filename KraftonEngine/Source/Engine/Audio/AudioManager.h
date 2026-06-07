@@ -15,6 +15,16 @@ struct FAudio3DPlaySettings
 	float MaxDistance = 500.0f;
 };
 
+struct FAudioZoneEffectSettings
+{
+	bool bEnableLowPass = false;
+	float LowPassCutoffHz = 22000.0f;
+	bool bEnableReverb = false;
+	float ReverbWetLevelDb = -80.0f;
+	float ReverbDecayTimeMs = 1500.0f;
+	float FadeTimeSeconds = 0.25f;
+};
+
 // FMOD channel gain — 1.0 = unity, values above 1 amplify (may clip).
 inline constexpr float AudioMaxChannelGain = 10.0f;
 
@@ -45,6 +55,8 @@ public:
 	bool UpdateListenerFromWorld(UWorld* World);
 
 	void SetMasterVolume(float Volume);
+	void ApplyAudioZoneEffect(const FAudioZoneEffectSettings& Settings, const void* Source);
+	void ClearAudioZoneEffect(const void* Source);
 
 private:
 	struct FLoopChannelEntry
@@ -57,6 +69,8 @@ private:
 	FMOD::Sound* FindSound(const FString& Key) const;
 	FMOD::Channel* FindPlayingLoopChannel(const FString& LoopName, bool* bOut3D = nullptr);
 	void Apply3DSettingsToChannel(FMOD::Channel* Channel, const FAudio3DPlaySettings& Settings3D) const;
+	void EnsureZoneEffectDsps();
+	void UpdateZoneEffect(float DeltaTime);
 	static FMOD_VECTOR ToFmodVector(const FVector& Value);
 
 	struct FAudioSoundEntry
@@ -75,6 +89,12 @@ private:
 	FMOD::System* System = nullptr;
 	FMOD::ChannelGroup* MasterGroup = nullptr;
 	FMOD::Channel* BGMChannel = nullptr;
+	FMOD::DSP* LowPassDsp = nullptr;
+	FMOD::DSP* ReverbDsp = nullptr;
+
+	FAudioZoneEffectSettings CurrentZoneEffect;
+	FAudioZoneEffectSettings TargetZoneEffect;
+	const void* ActiveZoneEffectSource = nullptr;
 
 	TMap<FString, FAudioSoundEntry> Audios;
 	TMap<FString, FLoopChannelEntry> LoopChannels;

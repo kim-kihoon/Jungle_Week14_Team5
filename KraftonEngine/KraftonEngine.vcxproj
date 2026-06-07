@@ -444,9 +444,9 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Editor\UI\Debug\EditorAnimationDebugWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Debug\EditorShadowMapDebugWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Dialog\FbxImportOptionsDialog.cpp" />
+    <ClCompile Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorConsoleWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorControlWidget.cpp" />
-    <ClCompile Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorMaterialInspector.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorPlayToolbarWidget.cpp" />
     <ClCompile Include="Source\Editor\UI\Panel\EditorProjectSettingsWidget.cpp" />
@@ -593,11 +593,11 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Engine\GameFramework\AActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Level.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\World.cpp" />
+    <ClCompile Include="Source\Engine\GameFramework\Actor\AudioVolume.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\BoxActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\CapsuleActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\DecalActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\HeightFogActor.cpp" />
-    <ClCompile Include="Source\Engine\GameFramework\Actor\AudioVolume.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\ParticleSystemActor.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\PawnStaticMesh.cpp" />
     <ClCompile Include="Source\Engine\GameFramework\Actor\SkeletalMeshActor.cpp" />
@@ -754,8 +754,8 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Engine\Render\Proxy\CylindricalBillboardSceneProxy.cpp" />
     <ClCompile Include="Source\Engine\Render\Proxy\DecalSceneProxy.cpp" />
     <ClCompile Include="Source\Engine\Render\Proxy\GizmoSceneProxy.cpp" />
-    <ClCompile Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.cpp" />
     <ClCompile Include="Source\Engine\Render\Proxy\PhotoPolaroidSceneProxy.cpp" />
+    <ClCompile Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.cpp" />
     <ClCompile Include="Source\Engine\Render\Proxy\PrimitiveSceneProxy.cpp" />
     <ClCompile Include="Source\Engine\Render\Proxy\ShapeSceneProxy.cpp" />
     <ClCompile Include="Source\Engine\Render\Proxy\SkeletalMeshSceneProxy.cpp" />
@@ -819,8 +819,8 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClCompile Include="Source\Engine\Runtime\Launch.cpp" />
     <ClCompile Include="Source\Engine\Serialization\SceneSaveManager.cpp" />
     <ClCompile Include="Source\Engine\Texture\Texture2D.cpp" />
-    <ClCompile Include="Source\Engine\UI\CrosshairOverlay.cpp" />
     <ClCompile Include="Source\Engine\Texture\stb_image_impl.cpp" />
+    <ClCompile Include="Source\Engine\UI\CrosshairOverlay.cpp" />
     <ClCompile Include="Source\Engine\UI\PhotoOverlay.cpp" />
     <ClCompile Include="Source\Engine\UI\UIManager.cpp" />
     <ClCompile Include="Source\Engine\UI\UserWidget.cpp" />
@@ -891,9 +891,9 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClInclude Include="Source\Editor\UI\Debug\EditorAnimationDebugWidget.h" />
     <ClInclude Include="Source\Editor\UI\Debug\EditorShadowMapDebugWidget.h" />
     <ClInclude Include="Source\Editor\UI\Dialog\FbxImportOptionsDialog.h" />
+    <ClInclude Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorConsoleWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorControlWidget.h" />
-    <ClInclude Include="Source\Editor\UI\Panel\EditorCameraPreviewWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorMaterialInspector.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorPlayToolbarWidget.h" />
     <ClInclude Include="Source\Editor\UI\Panel\EditorProjectSettingsWidget.h" />
@@ -1020,6 +1020,7 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClInclude Include="Source\Engine\Component\Primitive\DecalComponent.h" />
     <ClInclude Include="Source\Engine\Component\Primitive\HeightFogComponent.h" />
     <ClInclude Include="Source\Engine\Component\Primitive\PhotoPolaroidComponent.h" />
+    <ClInclude Include="Source\Engine\Component\Primitive\RagdollReactionPolicy.h" />
     <ClInclude Include="Source\Engine\Component\Primitive\SkeletalMeshComponent.h" />
     <ClInclude Include="Source\Engine\Component\Primitive\SkinnedMeshComponent.h" />
     <ClInclude Include="Source\Engine\Component\Primitive\StaticMeshComponent.h" />
@@ -1066,11 +1067,11 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClInclude Include="Source\Engine\GameFramework\World.h" />
     <ClInclude Include="Source\Engine\GameFramework\WorldContext.h" />
     <ClInclude Include="Source\Engine\GameFramework\WorldSettings.h" />
+    <ClInclude Include="Source\Engine\GameFramework\Actor\AudioVolume.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\BoxActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\CapsuleActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\DecalActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\HeightFogActor.h" />
-    <ClInclude Include="Source\Engine\GameFramework\Actor\AudioVolume.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\ParticleSystemActor.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\PawnStaticMesh.h" />
     <ClInclude Include="Source\Engine\GameFramework\Actor\SkeletalMeshActor.h" />
@@ -1275,8 +1276,8 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
     <ClInclude Include="Source\Engine\Render\Proxy\DecalSceneProxy.h" />
     <ClInclude Include="Source\Engine\Render\Proxy\DirtyFlag.h" />
     <ClInclude Include="Source\Engine\Render\Proxy\GizmoSceneProxy.h" />
-    <ClInclude Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.h" />
     <ClInclude Include="Source\Engine\Render\Proxy\PhotoPolaroidSceneProxy.h" />
+    <ClInclude Include="Source\Engine\Render\Proxy\PhysicsAssetPreviewSceneProxy.h" />
     <ClInclude Include="Source\Engine\Render\Proxy\PrimitiveSceneProxy.h" />
     <ClInclude Include="Source\Engine\Render\Proxy\ShapeSceneProxy.h" />
     <ClInclude Include="Source\Engine\Render\Proxy\SkeletalMeshSceneProxy.h" />
@@ -2331,6 +2332,13 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
     </FxCompile>
+    <FxCompile Include="Shaders\Generated\Materials\JungleMenu_Surface.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="Shaders\Generated\Materials\NewMaterial_1_Decal.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -2339,6 +2347,13 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\Generated\Materials\NewMaterial_Surface.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Shaders\Generated\Materials\Wood_Surface.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
@@ -2374,13 +2389,6 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\Generated\Materials\water_Surface.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="Shaders\Generated\Preview\Materials\acc.002_Surface.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
@@ -2583,14 +2591,14 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="Shaders\PostProcess\HorrorPostProcess.hlsl">
+    <FxCompile Include="Shaders\PostProcess\HeightFog.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="Shaders\PostProcess\HeightFog.hlsl">
+    <FxCompile Include="Shaders\PostProcess\HorrorPostProcess.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
@@ -2640,6 +2648,13 @@ xcopy /Y "$(ProjectDir)ThirdParty\fbx\lib\x64\release\libfbxsdk.dll" "$(OutDir)"
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\UI\OverlayFont.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ObjViewDebug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Demo|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Shaders\UI\PhotoDevelop.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Game|x64'">true</ExcludedFromBuild>
