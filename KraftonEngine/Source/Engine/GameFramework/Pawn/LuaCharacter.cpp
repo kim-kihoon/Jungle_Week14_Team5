@@ -37,7 +37,7 @@ namespace
 		}
 		else if (USkeletalMeshComponent* MeshComponent = Character->GetMesh())
 		{
-			Light->AttachToComponent(MeshComponent, MuzzleSocketName);
+			Light->AttachToComponent(MeshComponent, MuzzleSocketName);   
 		}
 
 		Light->SetRelativeLocation(FVector::ZeroVector);
