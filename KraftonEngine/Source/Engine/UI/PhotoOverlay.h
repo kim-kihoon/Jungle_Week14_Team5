@@ -13,6 +13,7 @@ public:
 	static void RequestCapture();
 	static void RequestCapture(UWorld* World, const FName& ExcludeActorTag, bool bBlackout = false);
 	static void CapturePendingFromViewport(ID3D11Texture2D* SourceTexture);
+	static bool ShouldSuppressViewportUIForCapture();
 	static void Tick(float DeltaTime);
 	static bool IsVisible();
 	static bool IsFlashVisible();
