@@ -713,7 +713,7 @@ end
 
 function DoorManager:Tick(dt, player, location)
     self:UpdateDoors(dt, player)
-    SoundManager:Tick(dt)
+    SoundManager:TickGameplaySounds(dt)
 
     if location ~= nil then
         self:UpdateAutoCloseDoors(location)

@@ -23,8 +23,6 @@ local CAMERA_TRACE_DISTANCE = 1000.0
 local FAKE_TARGET_TAG = "Fake"
 local BLACK_PHOTO_RULE_NAME = "BlackPhoto"
 local TOY_PROJECTILE_TAG = "ToyProjectile"
-local PARTY_BLOWER_SOUND_KEY = "PartyBlower"
-local PARTY_BLOWER_SOUND_VOLUME = 0.25
 
 local TOOL_PISTOL = ToolManager.Tool.Pistol
 local TOOL_CAMERA = ToolManager.Tool.Camera
@@ -281,7 +279,7 @@ local function get_crosshair_aim_target(owner)
 end
 
 local function play_party_blower_audio()
-    SoundManager:Play(PARTY_BLOWER_SOUND_KEY, PARTY_BLOWER_SOUND_VOLUME)
+    SoundManager:PlayPartyBlower()
 end
 
 local function spawn_projectile_from_muzzle()

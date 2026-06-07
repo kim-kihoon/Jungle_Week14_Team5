@@ -59,6 +59,11 @@ void UAudioComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (bMuteUntilStart)
+	{
+		MuteForStartup();
+	}
+
 	if (bAutoPlay)
 	{
 		Play();
@@ -188,6 +193,31 @@ void UAudioComponent::SetVolume(float InVolume)
 		const float LoopVolume = bSpatialize ? Volume : ComputeAttenuatedVolume();
 		FAudioManager::Get().SetLoopVolume(GetLoopName(), LoopVolume);
 	}
+}
+
+bool UAudioComponent::MuteForStartup()
+{
+	if (bStartupMuteActive)
+	{
+		return true;
+	}
+
+	StartupMuteRestoreVolume = Volume;
+	SetVolume(0.0f);
+	bStartupMuteActive = true;
+	return true;
+}
+
+bool UAudioComponent::RestoreStartupMute()
+{
+	if (!bStartupMuteActive)
+	{
+		return false;
+	}
+
+	bStartupMuteActive = false;
+	SetVolume(StartupMuteRestoreVolume);
+	return true;
 }
 
 bool UAudioComponent::EnsureLoaded()

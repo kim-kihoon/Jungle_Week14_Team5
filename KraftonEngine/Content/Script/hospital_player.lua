@@ -2,6 +2,7 @@
 
 local GameManager = require("GameManager")
 local DoorManager = require("DoorManager")
+local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
 local ToolManager = require("ToolManager")
 
@@ -60,6 +61,12 @@ local function GetActionDown(name)
         return Input.GetActionDown(name)
     end)
     return ok and pressed == true
+end
+
+local function IsLoopStopped()
+    return GameManager ~= nil
+        and GameManager.IsLoopStopped ~= nil
+        and GameManager:IsLoopStopped()
 end
 
 local function AddPlayerMovement()
@@ -253,9 +260,10 @@ end
 
 function BeginPlay()
     bCanWarp = true
-    bLastLoopStopped = GameManager ~= nil and GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped()
+    bLastLoopStopped = IsLoopStopped()
     bTitleMode = true
     DoorManager:Reset()
+    SoundManager:EnterTitleState()
     ToolManager:Reset()
     UIManager:ResetHospital()
     if HospitalPlayer ~= nil then
@@ -295,9 +303,7 @@ function Tick(dt)
     AddPlayerMovement()
     DoorManager:Tick(dt, obj, location)
 
-    local bLoopStopped = GameManager ~= nil
-        and GameManager.IsLoopStopped ~= nil
-        and GameManager:IsLoopStopped()
+    local bLoopStopped = IsLoopStopped()
     if bLoopStopped and not bLastLoopStopped then
         DoorManager:OpenExitDoorsForCurrentLoop()
     end
@@ -306,9 +312,7 @@ function Tick(dt)
     if bInZone and bCanWarp then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
         GameManager:OnWarp("PlayerWarp")
-        bLastLoopStopped = GameManager ~= nil
-            and GameManager.IsLoopStopped ~= nil
-            and GameManager:IsLoopStopped()
+        bLastLoopStopped = IsLoopStopped()
         DoorManager:LockExitDoorsForCurrentLoop()
         DoorManager:RandomizeSingleDoorStatesOnWarp()
         DoorManager:ClearToyProjectiles()
@@ -339,6 +343,8 @@ function StartGame()
     end
 
     bTitleMode = false
+    bLastLoopStopped = IsLoopStopped()
+    SoundManager:EnterPlayingState()
     if HospitalPlayer ~= nil then
         HospitalPlayer.title_mode = false
     end
