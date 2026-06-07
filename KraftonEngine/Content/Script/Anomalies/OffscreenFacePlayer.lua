@@ -3,7 +3,6 @@ local OffscreenFacePlayer = {}
 OffscreenFacePlayer.Name = "OffscreenFacePlayer"
 
 local RAD_TO_DEG = 57.29577951308232
-local TRACE_HEIGHT_OFFSET = 0.2
 
 local function is_valid_actor(actor)
     if actor == nil then
@@ -71,12 +70,12 @@ local function get_player_camera()
     return nil
 end
 
-local function get_trace_location(actor)
-    local location = get_actor_location(actor)
-    if location == nil then
+local function get_camera_height_target_location(actor, cameraLocation)
+    local targetLocation = get_actor_location(actor)
+    if targetLocation == nil or cameraLocation == nil then
         return nil
     end
-    return location + Vec3(0.0, 0.0, TRACE_HEIGHT_OFFSET)
+    return Vec3(targetLocation.X, targetLocation.Y, cameraLocation.Z)
 end
 
 local function atan2(y, x)
@@ -132,7 +131,7 @@ local function is_trace_clear_to_target(startLocation, targetActor, ignoreActor)
         return false
     end
 
-    local targetLocation = get_trace_location(targetActor)
+    local targetLocation = get_camera_height_target_location(targetActor, startLocation)
     if targetLocation == nil then
         return false
     end

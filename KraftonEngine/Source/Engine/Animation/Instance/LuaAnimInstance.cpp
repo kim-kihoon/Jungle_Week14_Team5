@@ -557,10 +557,10 @@ void ULuaAnimInstance::InstallBindings()
 	Anim.set_function("is_key_pressed",
 		[](int VK) -> bool { return FLuaScriptManager::GetLuaInputSnapshot().WasPressed(VK); });
 	Anim.set_function("request_photo_capture",
-		[this]()
+		[this](sol::optional<bool> bBlackout)
 		{
 			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
-			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("PhotoInvisible"));
+			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("PhotoInvisible"), bBlackout.value_or(false));
 		});
 	Anim.set_function("play_pistol_fire_audio",
 		[]()

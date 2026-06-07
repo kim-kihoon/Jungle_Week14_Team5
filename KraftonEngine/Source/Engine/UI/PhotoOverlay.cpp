@@ -35,6 +35,7 @@ namespace
 	constexpr float CameraPhotoAudioVolume = 0.5f;
 
 	bool bCaptureRequested = false;
+	bool bCaptureBlackoutRequested = false;
 	bool bPhotoSpawnPending = false;
 	float PhotoSpawnDelayRemaining = 0.0f;
 	float FlashTime = PhotoFlashSeconds;
@@ -274,16 +275,18 @@ void FPhotoOverlay::RequestCapture()
 	RestoreHiddenActors();
 	ResetPhotoForNewCapture();
 	FlashTime = 0.0f;
+	bCaptureBlackoutRequested = false;
 	bCaptureRequested = true;
 }
 
-void FPhotoOverlay::RequestCapture(UWorld* World, const FName& ExcludeActorTag)
+void FPhotoOverlay::RequestCapture(UWorld* World, const FName& ExcludeActorTag, bool bBlackout)
 {
 	PlayCameraShutterAudio();
 	RestoreHiddenActors();
 	ResetPhotoForNewCapture();
 	FlashTime = 0.0f;
 	PendingCaptureWorld = World;
+	bCaptureBlackoutRequested = bBlackout;
 
 	if (World && ExcludeActorTag.IsValid() && ExcludeActorTag != FName::None)
 	{
@@ -313,6 +316,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	if (!SourceTexture)
 	{
 		bCaptureRequested = false;
+		bCaptureBlackoutRequested = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
@@ -321,6 +325,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	bCaptureRequested = false;
 	if (!EnsureResources(SourceTexture))
 	{
+		bCaptureBlackoutRequested = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
@@ -330,6 +335,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	SourceTexture->GetDevice(&Device);
 	if (!Device)
 	{
+		bCaptureBlackoutRequested = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
@@ -338,16 +344,35 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	ID3D11DeviceContext* Context = nullptr;
 	Device->GetImmediateContext(&Context);
 	EnsureFrameResource(Device);
-	Device->Release();
 
 	if (!Context)
 	{
+		Device->Release();
+		bCaptureBlackoutRequested = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
 	}
 
-	Context->CopyResource(CapturedTexture, SourceTexture);
+	bool bWroteCapturedTexture = false;
+	if (bCaptureBlackoutRequested)
+	{
+		ID3D11RenderTargetView* BlackoutRTV = nullptr;
+		if (SUCCEEDED(Device->CreateRenderTargetView(CapturedTexture, nullptr, &BlackoutRTV)) && BlackoutRTV)
+		{
+			const float Black[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+			Context->ClearRenderTargetView(BlackoutRTV, Black);
+			BlackoutRTV->Release();
+			bWroteCapturedTexture = true;
+		}
+	}
+	if (!bWroteCapturedTexture)
+	{
+		Context->CopyResource(CapturedTexture, SourceTexture);
+	}
+
+	bCaptureBlackoutRequested = false;
+	Device->Release();
 	Context->Release();
 	RestoreHiddenActors();
 	bPhotoSpawnPending = true;
@@ -473,7 +498,7 @@ bool FPhotoOverlay::EnsureResources(ID3D11Texture2D* SourceTexture)
 	}
 
 	D3D11_TEXTURE2D_DESC CaptureDesc = SourceDesc;
-	CaptureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	CaptureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 	CaptureDesc.CPUAccessFlags = 0;
 	CaptureDesc.MiscFlags = 0;
 	CaptureDesc.Usage = D3D11_USAGE_DEFAULT;

@@ -19,6 +19,7 @@ local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemp
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
 local FAKE_TARGET_TAG = "Fake"
+local BLACK_PHOTO_RULE_NAME = "BlackPhoto"
 local TOY_PROJECTILE_TAG = "ToyProjectile"
 local PARTY_BLOWER_SOUND_KEY = "PartyBlower"
 local PARTY_BLOWER_SOUND_VOLUME = 0.25
@@ -353,6 +354,103 @@ local function get_camera_trace_actor()
     return hit.Actor
 end
 
+local function is_valid_actor(actor)
+    if actor == nil then
+        return false
+    end
+    if actor.IsValid == nil then
+        return true
+    end
+    return actor:IsValid()
+end
+
+local function get_actor_location(actor)
+    if actor == nil then
+        return nil
+    end
+    if actor.GetLocation ~= nil then
+        return actor:GetLocation()
+    end
+    return actor.Location
+end
+
+local function get_skeletal_mesh(actor)
+    if actor == nil or actor.GetSkeletalMeshComponent == nil then
+        return nil
+    end
+    return actor:GetSkeletalMeshComponent()
+end
+
+local function is_actor_in_camera_frustum(actor)
+    if World == nil or not is_valid_actor(actor) then
+        return false
+    end
+
+    local mesh = get_skeletal_mesh(actor)
+    if mesh ~= nil and World.IsComponentInViewFrustum ~= nil then
+        return World.IsComponentInViewFrustum(mesh)
+    end
+
+    if World.IsActorInViewFrustum ~= nil then
+        return World.IsActorInViewFrustum(actor)
+    end
+
+    return false
+end
+
+local function get_camera_height_target_location(actor, cameraLocation)
+    local targetLocation = get_actor_location(actor)
+    if targetLocation == nil or cameraLocation == nil then
+        return nil
+    end
+    return Vec3(targetLocation.X, targetLocation.Y, cameraLocation.Z)
+end
+
+local function is_trace_clear_to_actor_from_camera(camera, targetActor, ignoreActor)
+    if World == nil or World.LineTraceObjects == nil then
+        return false
+    end
+    if camera == nil or camera.GetLocation == nil or not is_valid_actor(targetActor) then
+        return false
+    end
+
+    local start = camera:GetLocation()
+    local endLocation = get_camera_height_target_location(targetActor, start)
+    if endLocation == nil then
+        return false
+    end
+
+    local hit = World.LineTraceObjects(start, endLocation, ignoreActor)
+    if hit == nil or not hit.Hit then
+        return true
+    end
+    return hit.Actor == targetActor
+end
+
+local function should_blackout_photo_capture()
+    if GameManager == nil or
+        GameManager.GetActiveAnomalyRuleName == nil or
+        GameManager.GetActiveAnomalyTarget == nil then
+        return false
+    end
+
+    if GameManager:GetActiveAnomalyRuleName() ~= BLACK_PHOTO_RULE_NAME then
+        return false
+    end
+
+    local target = GameManager:GetActiveAnomalyTarget()
+    if not is_actor_in_camera_frustum(target) then
+        return false
+    end
+
+    local owner = Anim.get_owner_actor()
+    if owner == nil or owner.GetCamera == nil then
+        return false
+    end
+
+    return is_trace_clear_to_actor_from_camera(owner:GetCamera(), target, owner)
+end
+
 local function should_play_pistol_fire_from_camera()
     local hitActor = get_camera_trace_actor()
     if hitActor == nil then
@@ -573,7 +671,7 @@ function update(self, dt)
             end
         elseif self.CurrentTool == TOOL_CAMERA then
             if Anim.is_left_mouse_pressed() then
-                Anim.request_photo_capture()
+                Anim.request_photo_capture(should_blackout_photo_capture())
             end
         end
 
