@@ -2,6 +2,7 @@ local GameManager = {}
 local AnomalyManager = require("AnomalyManager")
 local LeaderboardManager = require("LeaderboardManager")
 local PlacementManager = require("PlacementManager")
+local JumpScareManager = require("JumpScareManager")
 
 GameManager.State = {
     Ready = "Ready",
@@ -397,6 +398,7 @@ end
 
 function GameManager:Reset()
     AnomalyManager:Reset()
+    JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
     self.score = 0
@@ -444,6 +446,7 @@ function GameManager:GameOver(reason)
     end
 
     AnomalyManager:Reset()
+    JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
     self.bLoopStopped = false
@@ -471,6 +474,7 @@ function GameManager:ClearGame(reason)
     })
 
     AnomalyManager:Reset()
+    JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
     self.bLoopStopped = false
@@ -657,7 +661,20 @@ function GameManager:OnLoopStart(reason)
     self:_RefreshPressureStage(reason, true)
     self:_FireEvent("CymbalMonkeyCycleReset", reason)
     self:_FireEvent("LoopRested", reason)
+    JumpScareManager:ActivateRandom()
     return true
+end
+
+function GameManager:SetJumpScareActiveCount(count)
+    return JumpScareManager:SetActiveCount(count)
+end
+
+function GameManager:GetJumpScareActiveCount()
+    return JumpScareManager:GetActiveCount()
+end
+
+function GameManager:GetLastJumpScareError()
+    return JumpScareManager:GetLastError()
 end
 
 function GameManager:AdvanceAnomalyLoop()
