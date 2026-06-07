@@ -23,6 +23,7 @@ public:
 	void SaveToSettings() const;
 	void SetIconSize(float Size);
 	float GetIconSize() const { return BrowserContext.ContentSize.x; }
+	const std::wstring& GetCurrentDirectoryPath() const { return BrowserContext.CurrentPath; }
 
 private:
 	void LoadFromSettings();

@@ -59,6 +59,8 @@ public:
 	bool HasCurrentLevelFilePath() const { return !CurrentLevelFilePath.empty(); }
 	const FString& GetCurrentLevelFilePath() const { return CurrentLevelFilePath; }
 	void RefreshContentBrowser() { MainPanel.RefreshContentBrowser(); }
+	const std::wstring& GetContentBrowserCurrentPath() const { return MainPanel.GetContentBrowserCurrentPath(); }
+	bool CreateActorTemplateInCurrentContentBrowserPath(const TArray<AActor*>& Actors);
 	void OpenAssetEditorForObject(UObject* Object) { MainPanel.OpenAssetEditorForObject(Object); }
 	void SetContentBrowserIconSize(float Size) { MainPanel.SetContentBrowserIconSize(Size); }
 	float GetContentBrowserIconSize() const { return MainPanel.GetContentBrowserIconSize(); }

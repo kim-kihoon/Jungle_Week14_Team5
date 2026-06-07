@@ -48,6 +48,7 @@ public:
 	void RefreshContentBrowser() { ContentBrowserWidget.Refresh(); }
 	void SetContentBrowserIconSize(float Size) { ContentBrowserWidget.SetIconSize(Size); }
 	float GetContentBrowserIconSize() const { return ContentBrowserWidget.GetIconSize(); }
+	const std::wstring& GetContentBrowserCurrentPath() const { return ContentBrowserWidget.GetCurrentDirectoryPath(); }
 
 	void OpenAssetEditorForObject(UObject* Object);
 	void CollectAssetEditorPreviewViewportClients(TArray<IEditorPreviewViewportClient*>& OutClients) const;
