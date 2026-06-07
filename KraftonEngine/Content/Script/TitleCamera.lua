@@ -46,7 +46,7 @@ local function read_mouse_target()
     local normalizedX = clamp((mouseX / width) * 2.0 - 1.0, -1.0, 1.0)
     local normalizedY = clamp((mouseY / height) * 2.0 - 1.0, -1.0, 1.0)
 
-    return normalizedX * MaxRotationZ, -normalizedY * MaxLocationZ
+    return normalizedX * MaxRotationZ, normalizedY * MaxLocationZ
 end
 
 local function step_spring(current, velocity, target, dt)

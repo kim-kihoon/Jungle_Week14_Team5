@@ -1,0 +1,53 @@
+<rml>
+<head>
+	<title>Credit</title>
+	<style>
+		body {
+			margin: 0px;
+			width: 100%;
+			height: 100%;
+			font-family: OCRAStd;
+			color: #FFFFFF;
+		}
+		#overlay {
+			position: absolute;
+			left: 0px;
+			top: 0px;
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0, 0, 0, 0.70);
+		}
+		#panel_title {
+			position: absolute;
+			left: 120px;
+			top: 260px;
+			font-size: 56px;
+			color: rgb(71, 255, 105);
+		}
+		.credit-text {
+			position: absolute;
+			left: 120px;
+			font-size: 30px;
+			color: #FFFFFF;
+		}
+		.text-button {
+			position: absolute;
+			left: 120px;
+			font-size: 40px;
+			color: #FFFFFF;
+			background-color: rgba(0, 0, 0, 0);
+		}
+		.text-button:hover {
+			color: rgb(71, 255, 105);
+		}
+	</style>
+</head>
+<body data-rml-ui-document="1" data-canvas-width="1920" data-canvas-height="1080" data-preview-scale="1">
+	<div id="overlay">
+		<div id="panel_title">Credit</div>
+		<div id="credit_line_1" class="credit-text" style="top: 360px;">Jungle Week14 Team5</div>
+		<div id="credit_line_2" class="credit-text" style="top: 410px;">KraftonEngine Project</div>
+		<div id="credit_back_button" class="text-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="520.000000" data-width="240.000000" data-height="56.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Back" data-text-color="#FFFFFFFF" data-font-size="40.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ClosePopup" style="position: absolute; left: 120.00px; top: 520.00px; width: 240.00px; height: 56.00px; font-size: 40.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Back</div>
+	</div>
+</body>
+</rml>

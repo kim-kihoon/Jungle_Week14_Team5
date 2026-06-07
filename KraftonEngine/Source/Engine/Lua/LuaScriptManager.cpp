@@ -5528,6 +5528,17 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             Actor.AddActorWorldOffset(Offset);
         },
 
+        "SetVisible",
+        [](AActor& Actor, bool bVisible)
+        {
+            Actor.SetVisible(bVisible);
+        },
+        "IsVisible",
+        [](AActor& Actor)
+        {
+            return Actor.IsVisible();
+        },
+
         "Destroy",
         [](AActor& Actor)
         {
