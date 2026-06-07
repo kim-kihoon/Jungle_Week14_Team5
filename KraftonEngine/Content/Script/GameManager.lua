@@ -270,10 +270,13 @@ function GameManager:_SpawnRandomAnomalyPlacement(reason)
     return true
 end
 
-function GameManager:_RefreshAnomalyPlacementForLoop(reason)
-    AnomalyManager:DespawnCurrent(reason or "RestLoop")
+function GameManager:_SetupAnomaly(reason)
+    reason = reason or "SetupAnomaly"
+    AnomalyManager:DespawnCurrent(reason)
     self:_ClearAnomalyPlacement()
-    return self:_SpawnRandomAnomalyPlacement(reason or "RestLoop")
+    local bPlacementReady = self:_SpawnRandomAnomalyPlacement(reason)
+    local bAnomalyReady = AnomalyManager:SelectAndSpawn()
+    return bPlacementReady and bAnomalyReady
 end
 
 function GameManager:AddListener(eventName, callback)
@@ -351,13 +354,7 @@ function GameManager:StopLoop(reason)
 end
 
 function GameManager:RestLoop(reason)
-    reason = reason or "RestLoop"
-    self.bLoopStopped = false
-    self.remainingTime = self.timeLimit or 0
-    self:_RefreshPressureStage(reason, true)
-    self:_RefreshAnomalyPlacementForLoop(reason)
-    self:_FireEvent("LoopRested", reason)
-    return true
+    return self:OnLoopStart(reason or "RestLoop")
 end
 
 function GameManager:Reset()
@@ -378,9 +375,10 @@ function GameManager:StartGame()
     self.elapsedTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
+    self.bLoopStopped = true
     self:_SetState(self.State.Playing, "StartGame")
     self:_RefreshPressureStage("StartGame", true)
-    self:AdvanceAnomalyLoop()
+    self:_SetupAnomaly("StartGame")
 end
 
 function GameManager:PauseGame()
@@ -551,13 +549,35 @@ function GameManager:GetState()
     return self.state
 end
 
+function GameManager:OnWarp(reason)
+    if self.state ~= self.State.Playing then
+        return false
+    end
+
+    return self:_SetupAnomaly(reason or "OnWarp")
+end
+
+function GameManager:OnLoopStart(reason)
+    if self.state ~= self.State.Playing or not self.bLoopStopped then
+        return false
+    end
+
+    reason = reason or "OnLoopStart"
+    self.bLoopStopped = false
+    self.remainingTime = self.timeLimit or 0
+    self:_RefreshPressureStage(reason, true)
+    self:_FireEvent("LoopRested", reason)
+    return true
+end
+
 function GameManager:AdvanceAnomalyLoop()
     if self.state ~= self.State.Playing then
         return false
     end
 
-    self:RestLoop("AdvanceAnomalyLoop")
-    return AnomalyManager:SelectAndSpawn()
+    local bWarped = self:OnWarp("AdvanceAnomalyLoop")
+    local bStarted = self:OnLoopStart("AdvanceAnomalyLoop")
+    return bWarped and bStarted
 end
 
 function GameManager:ReportAnomalyShot(actor, hit)
