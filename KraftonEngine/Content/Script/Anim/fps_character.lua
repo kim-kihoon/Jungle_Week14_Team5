@@ -19,6 +19,7 @@ local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemp
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
 local FAKE_TARGET_TAG = "Fake"
+local TOY_PROJECTILE_TAG = "ToyProjectile"
 
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
@@ -269,6 +270,10 @@ local function spawn_projectile_from_muzzle()
         rotation)
 
     if projectile ~= nil then
+        if projectile.AddTag ~= nil then
+            projectile:AddTag(TOY_PROJECTILE_TAG)
+        end
+
         local movement = projectile:GetProjectileMovementComponent()
         if movement ~= nil then
             movement:SetIgnoredActor(owner)

@@ -4,6 +4,8 @@ local GameManager = require("GameManager")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
+local AUTO_CLOSE_DOOR_TRIGGER_X_MAX = -0.603
+local AUTO_CLOSE_DOOR_TRIGGER_Y_MIN = 27.119
 local WARP_DELTA_X = 8.368179
 local WARP_DELTA_Y = -33.80393
 local WARP_DELTA_Z = 0.0
@@ -69,8 +71,31 @@ local DOUBLE_DOOR_NAMES = {
     AStaticMeshActor_17 = true,
 }
 
+local AUTO_CLOSE_DOOR_NAMES = {
+    AStaticMeshActor_16 = true,
+    AStaticMeshActor_17 = true,
+}
+
+local AUTO_CLOSE_Y_DOOR_TRIGGER_Y_MIN = -2.0
+
+local AUTO_CLOSE_Y_DOOR_NAMES = {
+    AStaticMeshActor_12 = true,
+    AStaticMeshActor_13 = true,
+}
+
+local MAX_OPEN_SINGLE_DOORS_ON_WARP = 5
+local TOY_PROJECTILE_TAG = "ToyProjectile"
+
 local function IsInTriggerZone(location)
     return location.Y > TRIGGER_Y_MIN and location.X < TRIGGER_X_MAX
+end
+
+local function IsInAutoCloseDoorZone(location)
+    return location.X < AUTO_CLOSE_DOOR_TRIGGER_X_MAX and location.Y > AUTO_CLOSE_DOOR_TRIGGER_Y_MIN
+end
+
+local function IsInAutoCloseYDoorZone(location)
+    return location.Y > AUTO_CLOSE_Y_DOOR_TRIGGER_Y_MIN
 end
 
 local function IsKeyDown(key)
@@ -478,8 +503,147 @@ local function UpdateDoors(dt)
     end
 end
 
+local function FindDoorByName(name)
+    if name == nil or name == "" then
+        return nil
+    end
+
+    for _, door in ipairs(Doors) do
+        if door.Name == name then
+            return door
+        end
+    end
+
+    return nil
+end
+
+local function IsSingleDoor(door)
+    return door ~= nil and DOUBLE_DOOR_NAMES[door.Name] ~= true
+end
+
+local function SetDoorOpenState(door, bOpen, bPlaySound)
+    if door == nil or door.Actor == nil or door.IsOpen == bOpen then
+        return
+    end
+
+    local bWasOpen = door.IsOpen
+    door.IsOpen = bOpen
+    DoorStateByName[door.Name] = bOpen
+    door.StartYaw = door.CurrentYaw
+    door.TargetYaw = bOpen and door.OpenYaw or door.CloseYaw
+    door.Elapsed = 0.0
+    door.bPushPlayer = false
+
+    SetDoorYaw(door, door.StartYaw)
+    SyncDoorPhysics(door.Actor)
+
+    if not bPlaySound then
+        return
+    end
+
+    if bOpen then
+        local openVolume = door.OpenSoundKey == DOOR_OPEN_SOUND_KEY and DOOR_OPEN_SOUND_VOLUME or DOOR_SOUND_VOLUME
+        PlayDoorAudioAt(door.Actor, door.OpenSoundKey, openVolume)
+    elseif bWasOpen then
+        QueueDoorCloseSound(door.Actor)
+    end
+end
+
+local function CloseDoorIfOpen(door)
+    SetDoorOpenState(door, false, true)
+end
+
+local function ShuffleDoors(doors)
+    for index = #doors, 2, -1 do
+        local swapIndex = math.random(index)
+        doors[index], doors[swapIndex] = doors[swapIndex], doors[index]
+    end
+end
+
+local function ClearToyProjectiles()
+    if World == nil or World.FindActorsByTag == nil then
+        return
+    end
+
+    local ok, found = pcall(function()
+        return World.FindActorsByTag(TOY_PROJECTILE_TAG)
+    end)
+    if not ok or found == nil then
+        return
+    end
+
+    for _, actor in ipairs(found) do
+        if actor ~= nil then
+            local okValid, valid = pcall(function()
+                return actor.IsValid ~= nil and actor:IsValid()
+            end)
+            if okValid and valid then
+                pcall(function()
+                    actor:Destroy()
+                end)
+            end
+        end
+    end
+end
+
+local function RandomizeSingleDoorStatesOnWarp()
+    local singleDoors = {}
+    for _, door in ipairs(Doors) do
+        if IsSingleDoor(door) then
+            table.insert(singleDoors, door)
+        end
+    end
+
+    local doorCount = #singleDoors
+    if doorCount == 0 then
+        return
+    end
+
+    ShuffleDoors(singleDoors)
+
+    local maxOpenCount = math.min(MAX_OPEN_SINGLE_DOORS_ON_WARP, doorCount)
+    local openCount = math.random(0, maxOpenCount)
+
+    for index, door in ipairs(singleDoors) do
+        SetDoorOpenState(door, index <= openCount, false)
+    end
+end
+
+local function UpdateAutoCloseDoors(location)
+    if not IsInAutoCloseDoorZone(location) then
+        return
+    end
+
+    for name, _ in pairs(AUTO_CLOSE_DOOR_NAMES) do
+        local door = FindDoorByName(name)
+        if door ~= nil then
+            CloseDoorIfOpen(door)
+            door.bPermanentlyLocked = true
+        end
+    end
+end
+
+local function UnlockAutoCloseDoors()
+    for name, _ in pairs(AUTO_CLOSE_DOOR_NAMES) do
+        local door = FindDoorByName(name)
+        if door ~= nil then
+            door.bPermanentlyLocked = false
+        end
+    end
+end
+
+local function UpdateAutoCloseYDoors(location)
+    if not IsInAutoCloseYDoorZone(location) then
+        return
+    end
+
+    for name, _ in pairs(AUTO_CLOSE_Y_DOOR_NAMES) do
+        CloseDoorIfOpen(FindDoorByName(name))
+    end
+end
+
 local function ToggleDoor(door)
-    if door == nil or door.Actor == nil then
+    if door == nil or door.Actor == nil or door.bPermanentlyLocked then
         return
     end
 
@@ -542,6 +706,7 @@ local function AddDoor(actor, openYaw)
         StartYaw = currentYaw,
         Elapsed = DOOR_OPEN_DURATION,
         bPushPlayer = false,
+        bPermanentlyLocked = false,
     })
     DoorStateByName[name] = isOpen
 end
@@ -692,10 +857,15 @@ function Tick(dt)
     AddPlayerMovement()
     UpdateDoors(dt)
     UpdatePendingDoorCloseSounds(dt)
+    UpdateAutoCloseDoors(location)
+    UpdateAutoCloseYDoors(location)
 
     if bInZone and bCanWarp then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
         GameManager:AdvanceAnomalyLoop()
+        UnlockAutoCloseDoors()
+        RandomizeSingleDoorStatesOnWarp()
+        ClearToyProjectiles()
         bCanWarp = false
     elseif not bInZone then
         bCanWarp = true
