@@ -34,6 +34,64 @@ namespace PSKey
 	constexpr const char* GameSection = "Game";
 	constexpr const char* StartLevelName = "StartLevelName";
 	constexpr const char* GameModeClassName = "GameModeClassName";
+
+	constexpr const char* InputSection = "Input";
+	constexpr const char* Actions = "Actions";
+	constexpr const char* Axes = "Axes";
+	constexpr const char* Name = "Name";
+	constexpr const char* Key = "Key";
+	constexpr const char* Scale = "Scale";
+}
+
+namespace
+{
+	void AddActionMapping(FInputProjectOption& Input, const FString& Name, const FString& Key)
+	{
+		Input.ActionMappings.push_back(FInputBindingSetting{ Name, Key, 1.0f });
+	}
+
+	void AddAxisMapping(FInputProjectOption& Input, const FString& Name, const FString& Key, float Scale)
+	{
+		Input.AxisMappings.push_back(FInputBindingSetting{ Name, Key, Scale });
+	}
+
+	json::JSON WriteInputBinding(const FInputBindingSetting& Binding, bool bWriteScale)
+	{
+		json::JSON Obj = json::Object();
+		Obj[PSKey::Name] = Binding.Name;
+		Obj[PSKey::Key] = Binding.Key;
+		if (bWriteScale)
+		{
+			Obj[PSKey::Scale] = Binding.Scale;
+		}
+		return Obj;
+	}
+
+	void ReadInputBindings(json::JSON& Array, TArray<FInputBindingSetting>& OutBindings, bool bReadScale)
+	{
+		if (Array.JSONType() != json::JSON::Class::Array)
+		{
+			return;
+		}
+
+		OutBindings.clear();
+		for (auto& Entry : Array.ArrayRange())
+		{
+			if (Entry.JSONType() != json::JSON::Class::Object || !Entry.hasKey(PSKey::Name) || !Entry.hasKey(PSKey::Key))
+			{
+				continue;
+			}
+
+			FInputBindingSetting Binding;
+			Binding.Name = Entry[PSKey::Name].ToString();
+			Binding.Key = Entry[PSKey::Key].ToString();
+			Binding.Scale = bReadScale && Entry.hasKey(PSKey::Scale) ? static_cast<float>(Entry[PSKey::Scale].ToFloat()) : 1.0f;
+			if (!Binding.Name.empty() && !Binding.Key.empty())
+			{
+				OutBindings.push_back(Binding);
+			}
+		}
+	}
 }
 
 void FProjectSettings::SaveToFile(const FString& Path) const
@@ -72,6 +130,21 @@ void FProjectSettings::SaveToFile(const FString& Path) const
 	GameObj[PSKey::GameModeClassName] = Game.GameModeClassName;
 	Root[PSKey::GameSection] = GameObj;
 
+	JSON InputObj = Object();
+	JSON Actions = Array();
+	JSON Axes = Array();
+	for (const FInputBindingSetting& Binding : Input.ActionMappings)
+	{
+		Actions.append(WriteInputBinding(Binding, false));
+	}
+	for (const FInputBindingSetting& Binding : Input.AxisMappings)
+	{
+		Axes.append(WriteInputBinding(Binding, true));
+	}
+	InputObj[PSKey::Actions] = Actions;
+	InputObj[PSKey::Axes] = Axes;
+	Root[PSKey::InputSection] = InputObj;
+
 	std::filesystem::path FilePath(FPaths::ToWide(Path));
 	if (FilePath.has_parent_path())
 		std::filesystem::create_directories(FilePath.parent_path());
@@ -84,6 +157,8 @@ void FProjectSettings::SaveToFile(const FString& Path) const
 void FProjectSettings::LoadFromFile(const FString& Path)
 {
 	using namespace json;
+
+	EnsureDefaultInputMappings();
 
 	std::ifstream File(std::filesystem::path(FPaths::ToWide(Path)));
 	if (!File.is_open())
@@ -150,6 +225,22 @@ void FProjectSettings::LoadFromFile(const FString& Path)
 			Game.GameModeClassName = G[PSKey::GameModeClassName].ToString();
 	}
 
+	if (Root.hasKey(PSKey::InputSection))
+	{
+		JSON I = Root[PSKey::InputSection];
+		if (I.hasKey(PSKey::Actions))
+		{
+			JSON Actions = I[PSKey::Actions];
+			ReadInputBindings(Actions, Input.ActionMappings, false);
+		}
+		if (I.hasKey(PSKey::Axes))
+		{
+			JSON Axes = I[PSKey::Axes];
+			ReadInputBindings(Axes, Input.AxisMappings, true);
+		}
+		EnsureDefaultInputMappings();
+	}
+
 	if (Root.hasKey(PSKey::Shadow))
 	{
 		JSON S = Root[PSKey::Shadow];
@@ -181,4 +272,41 @@ void FProjectSettings::LoadFromFile(const FString& Path)
 			Shadow.MaxPointAtlasPages = static_cast<uint32>(v > 1 ? v : 1);
 		}
 	}
+}
+
+void FProjectSettings::EnsureDefaultInputMappings()
+{
+	if (!Input.ActionMappings.empty() || !Input.AxisMappings.empty())
+	{
+		return;
+	}
+
+	AddAxisMapping(Input, "MoveForward", "W", 1.0f);
+	AddAxisMapping(Input, "MoveForward", "S", -1.0f);
+	AddAxisMapping(Input, "MoveForward", "Gamepad_LeftStickY", -1.0f);
+	AddAxisMapping(Input, "MoveRight", "D", 1.0f);
+	AddAxisMapping(Input, "MoveRight", "A", -1.0f);
+	AddAxisMapping(Input, "MoveRight", "Gamepad_LeftStickX", 1.0f);
+	AddAxisMapping(Input, "Turn", "MouseX", 0.1f);
+	AddAxisMapping(Input, "Turn", "Gamepad_RightStickX", 2.0f);
+	AddAxisMapping(Input, "LookUp", "MouseY", 0.1f);
+	AddAxisMapping(Input, "LookUp", "Gamepad_RightStickY", 2.0f);
+	AddAxisMapping(Input, "VehicleThrottle", "W", 1.0f);
+	AddAxisMapping(Input, "VehicleThrottle", "Gamepad_RightTrigger", 1.0f);
+	AddAxisMapping(Input, "VehicleBrake", "S", 1.0f);
+	AddAxisMapping(Input, "VehicleBrake", "Gamepad_LeftTrigger", 1.0f);
+	AddAxisMapping(Input, "VehicleSteering", "A", -1.0f);
+	AddAxisMapping(Input, "VehicleSteering", "D", 1.0f);
+	AddAxisMapping(Input, "VehicleSteering", "Gamepad_LeftStickX", 1.0f);
+
+	AddActionMapping(Input, "Jump", "Space");
+	AddActionMapping(Input, "Jump", "Gamepad_FaceDown");
+	AddActionMapping(Input, "Interact", "E");
+	AddActionMapping(Input, "Interact", "Gamepad_FaceRight");
+	AddActionMapping(Input, "Aim", "RightMouseButton");
+	AddActionMapping(Input, "Aim", "Gamepad_LeftShoulder");
+	AddActionMapping(Input, "Fire", "LeftMouseButton");
+	AddActionMapping(Input, "Fire", "Gamepad_RightShoulder");
+	AddActionMapping(Input, "VehicleHandbrake", "Space");
+	AddActionMapping(Input, "VehicleHandbrake", "Gamepad_FaceDown");
 }

@@ -12,6 +12,12 @@ namespace
         int32       Code;
     };
 
+    struct FInputNamedHandleEntry
+    {
+        const char* Name;
+        FInputKeyHandle Handle;
+    };
+
     FString NormalizeKeyName(FString Value)
     {
         Value.erase(std::remove_if(Value.begin(), Value.end(), [](unsigned char C)
@@ -80,6 +86,58 @@ namespace
         };
         return Entries;
     }
+
+    const TArray<FInputNamedHandleEntry>& GetInputHandleNameEntries()
+    {
+        static const TArray<FInputNamedHandleEntry> Entries = {
+            {"MouseX", {EInputKeyKind::MouseAxis, static_cast<int32>(EMouseAxis::X)}},
+            {"MouseY", {EInputKeyKind::MouseAxis, static_cast<int32>(EMouseAxis::Y)}},
+            {"MouseWheel", {EInputKeyKind::MouseAxis, static_cast<int32>(EMouseAxis::Wheel)}},
+
+            {"Gamepad_FaceDown", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceDown)}},
+            {"Gamepad_FaceRight", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceRight)}},
+            {"Gamepad_FaceLeft", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceLeft)}},
+            {"Gamepad_FaceUp", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceUp)}},
+            {"Gamepad_Back", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Back)}},
+            {"Gamepad_Guide", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Guide)}},
+            {"Gamepad_Start", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Start)}},
+            {"Gamepad_LeftStick", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::LeftStick)}},
+            {"Gamepad_RightStick", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::RightStick)}},
+            {"Gamepad_LeftShoulder", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::LeftShoulder)}},
+            {"Gamepad_RightShoulder", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::RightShoulder)}},
+            {"Gamepad_DPadUp", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::DPadUp)}},
+            {"Gamepad_DPadDown", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::DPadDown)}},
+            {"Gamepad_DPadLeft", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::DPadLeft)}},
+            {"Gamepad_DPadRight", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::DPadRight)}},
+            {"Gamepad_Misc1", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Misc1)}},
+            {"Gamepad_RightPaddle1", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::RightPaddle1)}},
+            {"Gamepad_LeftPaddle1", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::LeftPaddle1)}},
+            {"Gamepad_RightPaddle2", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::RightPaddle2)}},
+            {"Gamepad_LeftPaddle2", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::LeftPaddle2)}},
+            {"Gamepad_Touchpad", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Touchpad)}},
+
+            {"Gamepad_LeftStickX", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::LeftStickX)}},
+            {"Gamepad_LeftStickY", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::LeftStickY)}},
+            {"Gamepad_RightStickX", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::RightStickX)}},
+            {"Gamepad_RightStickY", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::RightStickY)}},
+            {"Gamepad_LeftTrigger", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::LeftTrigger)}},
+            {"Gamepad_RightTrigger", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::RightTrigger)}},
+
+            // PlayStation 별칭은 매핑 작성 편의를 위한 이름이고, 내부 처리는 범용 위치로 통일한다.
+            {"Gamepad_Cross", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceDown)}},
+            {"Gamepad_Circle", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceRight)}},
+            {"Gamepad_Square", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceLeft)}},
+            {"Gamepad_Triangle", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::FaceUp)}},
+            {"Gamepad_L1", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::LeftShoulder)}},
+            {"Gamepad_R1", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::RightShoulder)}},
+            {"Gamepad_Options", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Start)}},
+            {"Gamepad_Share", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Back)}},
+            {"Gamepad_PS", {EInputKeyKind::GamepadButton, static_cast<int32>(EGamepadButton::Guide)}},
+            {"Gamepad_L2", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::LeftTrigger)}},
+            {"Gamepad_R2", {EInputKeyKind::GamepadAxis, static_cast<int32>(EGamepadAxis::RightTrigger)}},
+        };
+        return Entries;
+    }
 }
 
 int32 ResolveInputKeyCode(const FString& KeyName)
@@ -113,6 +171,36 @@ int32 ResolveInputKeyCode(const FString& KeyName)
     }
 
     return 0;
+}
+
+FInputKeyHandle ResolveInputKeyHandle(const FString& KeyName)
+{
+    const FString Normalized = NormalizeKeyName(KeyName);
+    if (Normalized.empty() || Normalized == "NONE")
+    {
+        return {};
+    }
+
+    for (const FInputNamedHandleEntry& Entry : GetInputHandleNameEntries())
+    {
+        if (NormalizeKeyName(Entry.Name) == Normalized)
+        {
+            return Entry.Handle;
+        }
+    }
+
+    const int32 KeyCode = ResolveInputKeyCode(KeyName);
+    if (KeyCode != 0)
+    {
+        FInputKeyHandle Handle;
+        Handle.Kind = (KeyCode == 0x01 || KeyCode == 0x02 || KeyCode == 0x04 || KeyCode == 0x05 || KeyCode == 0x06)
+            ? EInputKeyKind::MouseButton
+            : EInputKeyKind::Keyboard;
+        Handle.KeyCode = KeyCode;
+        return Handle;
+    }
+
+    return {};
 }
 
 FString GetInputKeyName(int32 KeyCode)

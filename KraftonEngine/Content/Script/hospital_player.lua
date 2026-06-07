@@ -167,17 +167,44 @@ local function IsKeyDown(key)
     return ok and down == true
 end
 
+local function GetInputAxis(name)
+    if Input == nil or Input.GetAxis == nil then
+        return 0.0
+    end
+
+    local ok, value = pcall(function()
+        return Input.GetAxis(name)
+    end)
+    if ok and value ~= nil then
+        return value
+    end
+    return 0.0
+end
+
+local function GetActionDown(name)
+    if Input == nil or Input.GetActionDown == nil then
+        return false
+    end
+
+    local ok, pressed = pcall(function()
+        return Input.GetActionDown(name)
+    end)
+    return ok and pressed == true
+end
+
 local function AddPlayerMovement()
     if obj == nil then
         return
     end
 
-    local forwardInput = 0.0
-    local rightInput = 0.0
-    if IsKeyDown(KEY_W) then forwardInput = forwardInput + 1.0 end
-    if IsKeyDown(KEY_S) then forwardInput = forwardInput - 1.0 end
-    if IsKeyDown(KEY_D) then rightInput = rightInput + 1.0 end
-    if IsKeyDown(KEY_A) then rightInput = rightInput - 1.0 end
+    local forwardInput = GetInputAxis("MoveForward")
+    local rightInput = GetInputAxis("MoveRight")
+    if forwardInput == 0.0 and rightInput == 0.0 then
+        if IsKeyDown(KEY_W) then forwardInput = forwardInput + 1.0 end
+        if IsKeyDown(KEY_S) then forwardInput = forwardInput - 1.0 end
+        if IsKeyDown(KEY_D) then rightInput = rightInput + 1.0 end
+        if IsKeyDown(KEY_A) then rightInput = rightInput - 1.0 end
+    end
 
     if forwardInput == 0.0 and rightInput == 0.0 then
         return
@@ -1584,19 +1611,24 @@ function Tick(dt)
     local targetedDoor = FindTargetedDoor()
     UpdateDoorPrompt(targetedDoor)
 
-    if Input ~= nil and Input.GetKey ~= nil then
+    local bInteractPressed = GetActionDown("Interact")
+    if not bInteractPressed and Input ~= nil and Input.GetKey ~= nil then
         local ok, pressed = pcall(function()
             return Input.GetKey(INTERACT_KEY)
         end)
-        if ok and pressed and not bInteractWasDown then
-            if targetedDoor == nil then
-                print("[Door] no targeted door in range. count=" .. tostring(#Doors))
-            else
-                ToggleDoor(targetedDoor)
-                UpdateDoorPrompt(targetedDoor)
-            end
-        end
+        bInteractPressed = ok and pressed and not bInteractWasDown
         bInteractWasDown = ok and pressed == true
+    else
+        bInteractWasDown = false
+    end
+
+    if bInteractPressed then
+        if targetedDoor == nil then
+            print("[Door] no targeted door in range. count=" .. tostring(#Doors))
+        else
+            ToggleDoor(targetedDoor)
+            UpdateDoorPrompt(targetedDoor)
+        end
     end
 end
 

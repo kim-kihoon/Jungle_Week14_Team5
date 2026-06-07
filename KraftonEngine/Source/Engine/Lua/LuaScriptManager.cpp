@@ -2097,6 +2097,65 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         )
     );
     Input.set_function(
+        "GetAction",
+        [](const FString& Name)
+        {
+            return GetLuaInputSnapshot().IsActionDown(Name);
+        }
+    );
+    Input.set_function(
+        "GetActionDown",
+        [](const FString& Name)
+        {
+            return GetLuaInputSnapshot().WasActionPressed(Name);
+        }
+    );
+    Input.set_function(
+        "GetActionUp",
+        [](const FString& Name)
+        {
+            return GetLuaInputSnapshot().WasActionReleased(Name);
+        }
+    );
+    Input.set_function(
+        "GetAxis",
+        [](const FString& Name)
+        {
+            return GetLuaInputSnapshot().GetAxis(Name);
+        }
+    );
+    Input.set_function(
+        "PlayRumble",
+        [](float LowFrequency, float HighFrequency, sol::optional<uint32> DurationMs)
+        {
+            return InputSystem::Get().PlayRumble(LowFrequency, HighFrequency, DurationMs.value_or(120u));
+        }
+    );
+    Input.set_function(
+        "PlayTriggerRumble",
+        [](float Left, float Right, sol::optional<uint32> DurationMs)
+        {
+            return InputSystem::Get().PlayTriggerRumble(Left, Right, DurationMs.value_or(120u));
+        }
+    );
+    Input.set_function(
+        "SetInputLightColor",
+        [](int Red, int Green, int Blue)
+        {
+            const uint8 R = static_cast<uint8>((std::max)(0, (std::min)(Red, 255)));
+            const uint8 G = static_cast<uint8>((std::max)(0, (std::min)(Green, 255)));
+            const uint8 B = static_cast<uint8>((std::max)(0, (std::min)(Blue, 255)));
+            return InputSystem::Get().SetInputLightColor(R, G, B);
+        }
+    );
+    Input.set_function(
+        "GetInputDeviceBattery",
+        []()
+        {
+            return InputSystem::Get().GetInputDeviceBattery();
+        }
+    );
+    Input.set_function(
         "GetMouseDeltaX",
         []()
         {
@@ -5868,11 +5927,11 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         sol::overload(
             [](UInputComponent& Self, const FString& Name, const FString& KeyName, float Scale)
             {
-                Self.AddAxisMapping(Name, ResolveInputKeyCode(KeyName), Scale);
+                Self.AddAxisMapping(Name, KeyName, Scale);
             },
             [](UInputComponent& Self, const FString& Name, const FString& KeyName)
             {
-                Self.AddAxisMapping(Name, ResolveInputKeyCode(KeyName), 1.0f);
+                Self.AddAxisMapping(Name, KeyName, 1.0f);
             },
             [](UInputComponent& Self, const FString& Name, int32 KeyCode, float Scale)
             {
@@ -5904,7 +5963,7 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         sol::overload(
             [](UInputComponent& Self, const FString& Name, const FString& KeyName)
             {
-                Self.AddActionMapping(Name, ResolveInputKeyCode(KeyName));
+                Self.AddActionMapping(Name, KeyName);
             },
             [](UInputComponent& Self, const FString& Name, int32 KeyCode)
             {

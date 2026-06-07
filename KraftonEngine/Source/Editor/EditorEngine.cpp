@@ -103,6 +103,7 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
 	// 에디터 전용 초기화
 	FEditorSettings::Get().LoadFromFile(FEditorSettings::GetDefaultSettingsPath());
 	FProjectSettings::Get().LoadFromFile(FProjectSettings::GetDefaultPath());
+	InputSystem::Get().LoadMappingsFromProjectSettings();
 	FEditorTextureManager::Get().Initialize(Renderer.GetFD3DDevice().GetDevice());
 
 	{

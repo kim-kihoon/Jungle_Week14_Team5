@@ -92,6 +92,7 @@ INCLUDE_PATHS = [
     "Source\\Game",
     "ThirdParty\\lua\\include",
     "ThirdParty\\sol2\\include",
+    "ThirdParty\\SDL\\include",
     "ThirdParty\\fmod\\include",
     "ThirdParty\\fbx\\include",
     "ThirdParty\\PhysX\\include",
@@ -158,6 +159,11 @@ LUA_LIB_DIR = "ThirdParty\\lua\\lib"
 LUA_BIN_DIR = "ThirdParty\\lua\\bin"
 LUA_LIB     = "lua51.lib"
 LUA_DLL     = "lua51.dll"
+
+SDL_LIB_DIR = "ThirdParty\\SDL\\lib\\x64"
+SDL_BIN_DIR = "ThirdParty\\SDL\\lib\\x64"
+SDL_LIB     = "SDL3.lib"
+SDL_DLL     = "SDL3.dll"
 
 # FBX SDK — 동적 링크. libfbxsdk.lib(import lib) + libfbxsdk.dll 를 사용하고,
 # Debug/Release 디렉터리가 분리되어 있어 구성별로 경로를 선택한다.
@@ -361,6 +367,7 @@ def generate_vcxproj(files: dict[str, list[str]]):
         library_paths = [rmlui_dir] if is_x64 else []
         if is_x64:
             library_paths.append(FMOD_LIB_DIR)
+            library_paths.append(SDL_LIB_DIR)
             library_paths.append(FBX_DEBUG_LIB_DIR if cfg == "Debug" else FBX_RELEASE_LIB_DIR)
         library_path_value = ";".join(library_paths) + ";$(LibraryPath)" if library_paths else "$(LibraryPath)"
         pg = ET.SubElement(proj, "PropertyGroup", Condition=cond)
@@ -437,6 +444,7 @@ def generate_vcxproj(files: dict[str, list[str]]):
             all_deps.extend(RMLUI_DEPENDENCIES)
             # fmod: Debug면 logging 버전(fmodL_vc.lib), 그 외 release 버전(fmod_vc.lib)
             all_deps.append(FMOD_DEBUG_LIB if cfg == "Debug" else FMOD_RELEASE_LIB)
+            all_deps.append(SDL_LIB)
             all_deps.append(FBX_LIB)
             all_deps.append("$(NvClothDebugLib)" if cfg == "Debug" else "$(NvClothReleaseLib)")
         if all_deps:
@@ -460,6 +468,7 @@ def generate_vcxproj(files: dict[str, list[str]]):
                 f'xcopy /Y "$(ProjectDir){physx_bin}\\*.dll" "$(OutDir)"\n'
                 f'xcopy /Y "$(ProjectDir){NVCLOTH_BIN_DIR}\\{nvcloth_dll}" "$(OutDir)"\n'
                 f'xcopy /Y "$(ProjectDir){LUA_BIN_DIR}\\{LUA_DLL}" "$(OutDir)"\n'
+                f'xcopy /Y "$(ProjectDir){SDL_BIN_DIR}\\{SDL_DLL}" "$(OutDir)"\n'
                 f'xcopy /Y "$(ProjectDir){fbx_lib_dir}\\{FBX_DLL}" "$(OutDir)"'
             )
 

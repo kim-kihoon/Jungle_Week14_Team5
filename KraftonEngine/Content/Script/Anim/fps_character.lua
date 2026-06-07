@@ -148,14 +148,35 @@ local function is_aiming(self)
         return false
     end
 
-    if Input == nil or Input.GetKey == nil then
-        return false
+    if Input ~= nil and Input.GetAction ~= nil then
+        local ok, down = pcall(function()
+            return Input.GetAction("Aim")
+        end)
+        if ok then
+            return down == true
+        end
     end
 
-    local ok, down = pcall(function()
-        return Input.GetKey(KEY_RBUTTON)
-    end)
-    return ok and down == true
+    if Input ~= nil and Input.GetKey ~= nil then
+        local ok, down = pcall(function()
+            return Input.GetKey(KEY_RBUTTON)
+        end)
+        return ok and down == true
+    end
+
+    return false
+end
+
+local function is_action_pressed(action_name)
+    if Input ~= nil and Input.GetActionDown ~= nil then
+        local ok, pressed = pcall(function()
+            return Input.GetActionDown(action_name)
+        end)
+        if ok then
+            return pressed == true
+        end
+    end
+    return false
 end
 
 local function get_head_bob_amplitude_scale(self)
@@ -654,7 +675,7 @@ function update(self, dt)
     end
 
     if self.SwitchPhase == SWITCH_NONE then
-        if Anim.is_key_pressed(KEY_SPACE) then
+        if is_action_pressed("Jump") or Anim.is_key_pressed(KEY_SPACE) then
             self.SwitchTime = 0.0
             if self.CurrentTool == TOOL_PISTOL then
                 self.SwitchPhase = SWITCH_TO_CAMERA
@@ -663,7 +684,7 @@ function update(self, dt)
                 self.SwitchPhase = SWITCH_TO_PISTOL
                 update_switch_to_pistol(self, 0.0)
             end
-        elseif self.CurrentTool == TOOL_PISTOL and Anim.is_left_mouse_pressed() then
+        elseif self.CurrentTool == TOOL_PISTOL and (is_action_pressed("Fire") or Anim.is_left_mouse_pressed()) then
             local handledHit = should_play_pistol_fire_from_camera()
             if handledHit then
                 start_pistol_fire_action(self)
@@ -672,7 +693,7 @@ function update(self, dt)
                 spawn_projectile_from_muzzle()
             end
         elseif self.CurrentTool == TOOL_CAMERA then
-            if Anim.is_left_mouse_pressed() then
+            if is_action_pressed("Fire") or Anim.is_left_mouse_pressed() then
                 Anim.request_photo_capture(should_blackout_photo_capture())
             end
         end
