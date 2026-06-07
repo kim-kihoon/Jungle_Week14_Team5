@@ -27,6 +27,8 @@ AnomalyManager.Active = nil
 AnomalyManager.LastError = nil
 
 local seeded = false
+local COLLISION_NO_COLLISION = 0
+local SHOT_RAGDOLL_IMPULSE_STRENGTH = 0.35
 
 local function make_seed(timeSeconds)
     local rawSeed = math.floor((tonumber(timeSeconds) or 0) * 1000000)
@@ -64,6 +66,81 @@ end
 
 local function get_rule_name(rule)
     return rule and rule.Name or "Unknown"
+end
+
+local function get_skeletal_mesh(actor)
+    if actor == nil or actor.GetSkeletalMeshComponent == nil then
+        return nil
+    end
+
+    local ok, mesh = pcall(function()
+        return actor:GetSkeletalMeshComponent()
+    end)
+    if not ok then
+        return nil
+    end
+    return mesh
+end
+
+local function get_shot_hit_location(actor, hit)
+    if hit ~= nil and hit.Location ~= nil then
+        return hit.Location
+    end
+
+    if actor ~= nil and actor.GetLocation ~= nil then
+        local ok, location = pcall(function()
+            return actor:GetLocation()
+        end)
+        if ok then
+            return location
+        end
+    end
+
+    return nil
+end
+
+local function get_shot_direction(hit)
+    if hit ~= nil and hit.ShotDirection ~= nil then
+        return hit.ShotDirection
+    end
+
+    if hit ~= nil and hit.Normal ~= nil then
+        return Vec3(-hit.Normal.X, -hit.Normal.Y, -hit.Normal.Z)
+    end
+
+    return nil
+end
+
+local function apply_shot_ragdoll(actor, hit)
+    local mesh = get_skeletal_mesh(actor)
+    if mesh == nil or mesh.EnableRagdollPhysics == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return mesh:EnableRagdollPhysics()
+    end)
+    local bRagdollEnabled = ok and result == true
+    if bRagdollEnabled and mesh.SetCollisionEnabled ~= nil then
+        pcall(function()
+            mesh:SetCollisionEnabled(COLLISION_NO_COLLISION)
+        end)
+    end
+
+    if mesh.ApplyRagdollImpulse == nil then
+        return bRagdollEnabled
+    end
+
+    local location = get_shot_hit_location(actor, hit)
+    local direction = get_shot_direction(hit)
+    if location == nil or direction == nil then
+        return bRagdollEnabled
+    end
+
+    pcall(function()
+        mesh:ApplyRagdollImpulse(location, direction, SHOT_RAGDOLL_IMPULSE_STRENGTH)
+    end)
+    return bRagdollEnabled
 end
 
 local function safe_call(rule, function_name, context)
@@ -295,7 +372,7 @@ function AnomalyManager:OnClear(active, reason)
     return true
 end
 
-function AnomalyManager:ReportShot(actor)
+function AnomalyManager:ReportShot(actor, hit)
     if actor == nil or self.Active == nil then
         return false
     end
@@ -315,6 +392,7 @@ function AnomalyManager:ReportShot(actor)
         return false
     end
 
+    apply_shot_ragdoll(actor, hit)
     return self:OnClear(active, "Shot")
 end
 

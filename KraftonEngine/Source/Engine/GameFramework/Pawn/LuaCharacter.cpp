@@ -5,6 +5,7 @@
 #include "Component/Script/LuaScriptComponent.h"
 #include "Component/Camera/SpringArmComponent.h"
 #include "Component/Light/SpotLightComponent.h"
+#include "Component/Particle/ParticleSystemComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
 #include "Component/Primitive/StaticMeshComponent.h"
 
@@ -45,7 +46,7 @@ namespace
 
 		Light->SetIntensity(PistolMuzzleFlashIntensity);  
 		Light->SetLightColor(FVector4(1.0f, 0.90f, 0.72f, 1.0f));
-		Light->SetAttenuationRadius(PistolMuzzleFlashAttenuationRadius);
+		Light->SetAttenuationRadius(PistolMuzzleFlashAttenuationRadius);  
 		Light->SetInnerConeAngle(PistolMuzzleFlashInnerConeHalfAngleDegrees);
 		Light->SetOuterConeAngle(PistolMuzzleFlashOuterConeHalfAngleDegrees);
 		Light->SetCastShadows(false);
@@ -194,17 +195,36 @@ void ALuaCharacter::InitDefaultComponents(const FString& SkeletalMeshFileName, c
 void ALuaCharacter::PostDuplicate()
 {
 	Super::PostDuplicate();
+	RefreshLuaCharacterComponentReferences();
+	ConfigureFirstPersonViewRig();
+}
+
+void ALuaCharacter::OnPostLoad(FArchive& Ar)
+{
+	Super::OnPostLoad(Ar);
+	RefreshLuaCharacterComponentReferences();
+}
+
+void ALuaCharacter::RefreshLuaCharacterComponentReferences()
+{
 	LuaScriptComponent = GetComponentByClass<ULuaScriptComponent>();
 	SpringArm          = GetComponentByClass<USpringArmComponent>();
 	Camera             = GetComponentByClass<UCameraComponent>();
 	PistolMuzzleFlashLight = nullptr;
-	ConfigureFirstPersonViewRig();
 }
 
 void ALuaCharacter::BeginPlay()
 {
+	RefreshLuaCharacterComponentReferences();
+	ConfigureFirstPersonViewRig();
+
 	Super::BeginPlay();
 	EnsurePistolMuzzleFlashLight();
+	if (PistolMuzzleFlashParticle)
+	{
+		PistolMuzzleFlashParticle->SetCastShadow(false);
+		PistolMuzzleFlashParticle->Deactivate();
+	}
 	SetPistolMuzzleFlashVisible(false);
 }
 
@@ -231,6 +251,11 @@ void ALuaCharacter::PlayPistolFireEffect()
 	if (USpotLightComponent* Light = PistolMuzzleFlashLight.Get())
 	{
 		ConfigurePistolMuzzleFlashLight(this, Light);
+	}
+	if (PistolMuzzleFlashParticle)
+	{
+		PistolMuzzleFlashParticle->SetCastShadow(false);
+		PistolMuzzleFlashParticle->Activate(true);
 	}
 	PistolMuzzleFlashRemaining = PistolMuzzleFlashDuration;
 	SetPistolMuzzleFlashVisible(true);

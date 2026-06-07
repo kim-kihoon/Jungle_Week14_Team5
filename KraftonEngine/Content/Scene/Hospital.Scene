@@ -16216,7 +16216,7 @@
           "AttachSocketName" : "Name_None",
           "CachedEditRotator" : [-0.000000, 89.999985, 0.000000],
           "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
-          "CollisionEnabled" : 0,
+          "CollisionEnabled" : 3,
           "Mass" : 1.000000,
           "MaterialSlots" : ["Content/Material/Auto/Mannequin/Material__415.uasset", "Content/Material/Auto/Mannequin/Material__451.uasset", "Content/Material/Auto/Mannequin/Material__463.uasset", "Content/Material/Auto/Mannequin/Material__403.uasset", "Content/Material/Auto/Mannequin/Material__487.uasset", "Content/Material/Auto/Mannequin/Material__499.uasset", "Content/Material/Auto/Mannequin/Material__379.uasset", "Content/Material/Auto/Mannequin/Material__391.uasset", "Content/Material/Auto/Mannequin/Material__511.uasset", "Content/Material/Auto/Mannequin/Material__354.uasset", "Content/Material/Auto/Mannequin/Material__536.uasset", "Content/Material/Auto/Mannequin/Material__608.uasset", "Content/Material/Auto/Mannequin/Material__563.uasset"],
           "ObjectName" : "UStaticMeshComponent_118",

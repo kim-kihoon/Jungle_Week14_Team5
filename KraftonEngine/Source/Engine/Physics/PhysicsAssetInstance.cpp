@@ -10,17 +10,38 @@
 #include "Physics/PhysicsAsset.h"
 #include "Physics/PhysicsRuntime.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace
 {
+    FVector AbsVector(const FVector& Value)
+    {
+        return FVector(
+            std::fabs(Value.X),
+            std::fabs(Value.Y),
+            std::fabs(Value.Z));
+    }
+
+    FVector MultiplyVectors(const FVector& A, const FVector& B)
+    {
+        return FVector(A.X * B.X, A.Y * B.Y, A.Z * B.Z);
+    }
+
+    float MaxComponent(const FVector& Value)
+    {
+        return (std::max)(Value.X, (std::max)(Value.Y, Value.Z));
+    }
+
     // PhysicsAsset body/constraint local frames are authored relative to bones.
     // Runtime creation and pose sync both use the same composition rule so the two
     // directions stay mathematically symmetric.
     FTransform ComposePhysicsTransforms(const FTransform& ParentWorld, const FTransform& Local)
     {
         FTransform Result = Local;
-        Result.Location = ParentWorld.Location + ParentWorld.Rotation.RotateVector(Local.Location);
+        Result.Location = ParentWorld.Location + ParentWorld.Rotation.RotateVector(MultiplyVectors(Local.Location, ParentWorld.Scale));
         Result.Rotation = ParentWorld.Rotation * Local.Rotation;
-        Result.Scale = FVector::OneVector;
+        Result.Scale = MultiplyVectors(ParentWorld.Scale, Local.Scale);
         return Result;
     }
 
@@ -28,8 +49,11 @@ namespace
     {
         FTransform Result;
         Result.Rotation = ChildWorld.Rotation * ChildLocalToParent.Rotation.Inverse();
-        Result.Location = ChildWorld.Location - Result.Rotation.RotateVector(ChildLocalToParent.Location);
-        Result.Scale = FVector::OneVector;
+        Result.Scale = FVector(
+            std::fabs(ChildLocalToParent.Scale.X) > 1.0e-6f ? ChildWorld.Scale.X / ChildLocalToParent.Scale.X : ChildWorld.Scale.X,
+            std::fabs(ChildLocalToParent.Scale.Y) > 1.0e-6f ? ChildWorld.Scale.Y / ChildLocalToParent.Scale.Y : ChildWorld.Scale.Y,
+            std::fabs(ChildLocalToParent.Scale.Z) > 1.0e-6f ? ChildWorld.Scale.Z / ChildLocalToParent.Scale.Z : ChildWorld.Scale.Z);
+        Result.Location = ChildWorld.Location - Result.Rotation.RotateVector(MultiplyVectors(ChildLocalToParent.Location, Result.Scale));
         return Result;
     }
 
@@ -41,8 +65,13 @@ namespace
             return Result;
         }
 
-        Result.Location = Component->GetWorldLocation();
-        Result.Rotation = Component->GetWorldMatrix().ToQuat();
+        return FTransform(Component->GetWorldMatrix());
+    }
+
+    FTransform ScaleLocalFrame(const FTransform& Frame, const FVector& Scale)
+    {
+        FTransform Result = Frame;
+        Result.Location = MultiplyVectors(Frame.Location, Scale);
         Result.Scale = FVector::OneVector;
         return Result;
     }
@@ -159,15 +188,18 @@ namespace
         const FPhysicsAssetBodySetup& BodySetup,
         const USkeletalMeshComponent* OwnerComponent,
         const FPhysicsAssetSimulationOptions& Options,
+        const FVector& BodyWorldScale,
         TArray<FPhysicsShapeDesc>& OutShapes
     )
     {
         OutShapes.clear();
+        const FVector ShapeScale = AbsVector(BodyWorldScale);
+        const float UniformShapeScale = MaxComponent(ShapeScale);
 
         for (const FPhysicsAssetShapeSetup& ShapeSetup : BodySetup.Shapes)
         {
             FPhysicsShapeDesc ShapeDesc;
-            ShapeDesc.LocalTransform = ShapeSetup.LocalTransform;
+            ShapeDesc.LocalTransform = ScaleLocalFrame(ShapeSetup.LocalTransform, BodyWorldScale);
             ShapeDesc.CollisionEnabled = Options.bUseIndependentRagdollCollision
                 ? Options.IndependentCollisionEnabled
                 : (Options.bForceQueryAndPhysicsCollision
@@ -193,16 +225,16 @@ namespace
             {
             case EPhysicsAssetShapeType::Box:
                 ShapeDesc.Type = EPhysicsShapeType::Box;
-                ShapeDesc.BoxHalfExtent = ShapeSetup.BoxHalfExtent;
+                ShapeDesc.BoxHalfExtent = MultiplyVectors(ShapeSetup.BoxHalfExtent, ShapeScale);
                 break;
             case EPhysicsAssetShapeType::Sphere:
                 ShapeDesc.Type = EPhysicsShapeType::Sphere;
-                ShapeDesc.SphereRadius = ShapeSetup.SphereRadius;
+                ShapeDesc.SphereRadius = ShapeSetup.SphereRadius * UniformShapeScale;
                 break;
             case EPhysicsAssetShapeType::Capsule:
                 ShapeDesc.Type = EPhysicsShapeType::Capsule;
-                ShapeDesc.CapsuleRadius = ShapeSetup.CapsuleRadius;
-                ShapeDesc.CapsuleHalfHeight = ShapeSetup.CapsuleHalfHeight;
+                ShapeDesc.CapsuleRadius = ShapeSetup.CapsuleRadius * UniformShapeScale;
+                ShapeDesc.CapsuleHalfHeight = ShapeSetup.CapsuleHalfHeight * UniformShapeScale;
                 break;
             default:
                 continue;
@@ -235,9 +267,11 @@ namespace
         // Ragdoll bodies stay manual because skeletal pose sync is driven explicitly by
         // the component rather than by generic component/world transform mirroring.
         OutDesc.SyncMode = EPhysicsSyncMode::Manual;
-        OutDesc.WorldTransform = ComposePhysicsTransforms(BoneWorldTransform, BodySetup.BodyLocalFrame);
+        const FTransform BodyWorldTransform = ComposePhysicsTransforms(BoneWorldTransform, BodySetup.BodyLocalFrame);
+        OutDesc.WorldTransform = BodyWorldTransform;
+        OutDesc.WorldTransform.Scale = FVector::OneVector;
 
-        BuildShapeDescs(BodySetup, OwnerComponent, Options, OutDesc.Shapes);
+        BuildShapeDescs(BodySetup, OwnerComponent, Options, BodyWorldTransform.Scale, OutDesc.Shapes);
         if (OutDesc.Shapes.empty())
         {
             return false;
@@ -267,12 +301,14 @@ namespace
 
     bool BuildConstraintCreationDesc(
         const FPhysicsAssetConstraintSetup& ConstraintSetup,
+        const FVector& ParentBodyScale,
+        const FVector& ChildBodyScale,
         FConstraintCreationDesc& OutDesc
     )
     {
         OutDesc = FConstraintCreationDesc{};
-        OutDesc.ParentLocalFrame = ConstraintSetup.ParentLocalFrame;
-        OutDesc.ChildLocalFrame = ConstraintSetup.ChildLocalFrame;
+        OutDesc.ParentLocalFrame = ScaleLocalFrame(ConstraintSetup.ParentLocalFrame, ParentBodyScale);
+        OutDesc.ChildLocalFrame = ScaleLocalFrame(ConstraintSetup.ChildLocalFrame, ChildBodyScale);
         OutDesc.Limits = ConstraintSetup.Limits;
         OutDesc.bDisableCollisionBetweenBodies = ConstraintSetup.bDisableCollisionBetweenBodies;
         return true;
@@ -280,6 +316,7 @@ namespace
 
     bool ComputeBoneWorldTransformFromBody(
         const FPhysicsAssetBodySetup& BodySetup,
+        const FVector& BodyWorldScale,
         const FTransform& BodyWorld,
         FTransform& OutBoneWorld
     )
@@ -288,9 +325,13 @@ namespace
         // reverses that offset so the simulated body can become the final bone transform.
         const FQuat InverseBodyLocalRotation = BodySetup.BodyLocalFrame.Rotation.Inverse().GetNormalized();
         OutBoneWorld = BodyWorld;
+        OutBoneWorld.Scale = FVector(
+            std::fabs(BodySetup.BodyLocalFrame.Scale.X) > 1.0e-6f ? BodyWorldScale.X / BodySetup.BodyLocalFrame.Scale.X : BodyWorldScale.X,
+            std::fabs(BodySetup.BodyLocalFrame.Scale.Y) > 1.0e-6f ? BodyWorldScale.Y / BodySetup.BodyLocalFrame.Scale.Y : BodyWorldScale.Y,
+            std::fabs(BodySetup.BodyLocalFrame.Scale.Z) > 1.0e-6f ? BodyWorldScale.Z / BodySetup.BodyLocalFrame.Scale.Z : BodyWorldScale.Z);
         OutBoneWorld.Rotation = (BodyWorld.Rotation * InverseBodyLocalRotation).GetNormalized();
         OutBoneWorld.Location =
-            BodyWorld.Location - OutBoneWorld.Rotation.RotateVector(BodySetup.BodyLocalFrame.Location);
+            BodyWorld.Location - OutBoneWorld.Rotation.RotateVector(MultiplyVectors(BodySetup.BodyLocalFrame.Location, OutBoneWorld.Scale));
         return true;
     }
 
@@ -477,6 +518,8 @@ bool FPhysicsAssetInstance::CreateBodiesAndConstraints(const FPhysicsAssetSimula
 
     int32 CreatedBodyCount = 0;
     int32 CreatedConstraintCount = 0;
+    TArray<FVector> BodyWorldScales;
+    BodyWorldScales.resize(BodySetups.size(), FVector::OneVector);
 
     // Bodies must exist before constraints because joints are expressed in terms of
     // two already-created rigid bodies.
@@ -494,6 +537,8 @@ bool FPhysicsAssetInstance::CreateBodiesAndConstraints(const FPhysicsAssetSimula
 
         const FTransform BoneWorldTransform =
             ComposePhysicsTransforms(ComponentWorldTransform, BoneComponentSpaceTransforms[BoneIndex]);
+        const FTransform BodyWorldTransform =
+            ComposePhysicsTransforms(BoneWorldTransform, BodySetup.BodyLocalFrame);
 
         FBodyCreationDesc BodyDesc;
         if (!BuildBodyCreationDesc(
@@ -538,19 +583,20 @@ bool FPhysicsAssetInstance::CreateBodiesAndConstraints(const FPhysicsAssetSimula
         }
 
         BodiesByBone[BodyIndex] = BodyHandle;
+        BodyWorldScales[BodyIndex] = BodyWorldTransform.Scale;
         ++CreatedBodyCount;
     }
 
     for (int32 ConstraintIndex = 0; ConstraintIndex < static_cast<int32>(ConstraintSetups.size()); ++ConstraintIndex)
     {
         const FPhysicsAssetConstraintSetup& ConstraintSetup = ConstraintSetups[ConstraintIndex];
+        const int32 ParentBodyIndex = Asset->FindBodySetupIndexByBoneName(ConstraintSetup.ParentBoneName);
+        const int32 ChildBodyIndex = Asset->FindBodySetupIndexByBoneName(ConstraintSetup.ChildBoneName);
         const FPhysicsBodyHandle ParentHandle = GetBodyHandleByBoneName(ConstraintSetup.ParentBoneName);
         const FPhysicsBodyHandle ChildHandle = GetBodyHandleByBoneName(ConstraintSetup.ChildBoneName);
 
         if (bStrictPartialSimulation)
         {
-            const int32 ParentBodyIndex = Asset->FindBodySetupIndexByBoneName(ConstraintSetup.ParentBoneName);
-            const int32 ChildBodyIndex = Asset->FindBodySetupIndexByBoneName(ConstraintSetup.ChildBoneName);
             const bool bParentSimulated =
                 ParentBodyIndex >= 0 && ParentBodyIndex < static_cast<int32>(SimulatedBodyMask.size()) &&
                 SimulatedBodyMask[ParentBodyIndex] != 0;
@@ -564,8 +610,6 @@ bool FPhysicsAssetInstance::CreateBodiesAndConstraints(const FPhysicsAssetSimula
         }
         else if (Options.bSelectedOnly)
         {
-            const int32 ParentBodyIndex = Asset->FindBodySetupIndexByBoneName(ConstraintSetup.ParentBoneName);
-            const int32 ChildBodyIndex = Asset->FindBodySetupIndexByBoneName(ConstraintSetup.ChildBoneName);
             const bool bParentSimulated =
                 ParentBodyIndex >= 0 && ParentBodyIndex < static_cast<int32>(SimulatedBodyMask.size()) &&
                 SimulatedBodyMask[ParentBodyIndex] != 0;
@@ -588,7 +632,15 @@ bool FPhysicsAssetInstance::CreateBodiesAndConstraints(const FPhysicsAssetSimula
         }
 
         FConstraintCreationDesc ConstraintDesc;
-        if (!BuildConstraintCreationDesc(ConstraintSetup, ConstraintDesc))
+        const FVector ParentBodyScale =
+            ParentBodyIndex >= 0 && ParentBodyIndex < static_cast<int32>(BodyWorldScales.size())
+                ? BodyWorldScales[ParentBodyIndex]
+                : FVector::OneVector;
+        const FVector ChildBodyScale =
+            ChildBodyIndex >= 0 && ChildBodyIndex < static_cast<int32>(BodyWorldScales.size())
+                ? BodyWorldScales[ChildBodyIndex]
+                : FVector::OneVector;
+        if (!BuildConstraintCreationDesc(ConstraintSetup, ParentBodyScale, ChildBodyScale, ConstraintDesc))
         {
             UE_LOG("Skipped PhysicsAsset constraint: invalid constraint setup. Component=%s Parent=%s Child=%s",
                 Owner->GetName().c_str(),
@@ -833,14 +885,14 @@ bool FPhysicsAssetInstance::PullPhysicsPose(
             continue;
         }
         const FTransform BodyWorld = BodySnapshot->CurrentTransform;
+        const FVector BodyWorldScale =
+            ComposePhysicsTransforms(OutBoneWorldTransforms[BoneIndex], BodySetup.BodyLocalFrame).Scale;
         FTransform       BoneWorld = OutBoneWorldTransforms[BoneIndex];
-        if (!ComputeBoneWorldTransformFromBody(BodySetup, BodyWorld, BoneWorld))
+        if (!ComputeBoneWorldTransformFromBody(BodySetup, BodyWorldScale, BodyWorld, BoneWorld))
         {
             continue;
         }
 
-        // Physics bodies do not carry meaningful bone scale, so preserve the existing scale.
-        BoneWorld.Scale = OutBoneWorldTransforms[BoneIndex].Scale;
         OutBoneWorldTransforms[BoneIndex] = BoneWorld;
         AppliedBodyBoneMask[BoneIndex] = 1;
         ++AppliedBodyCount;

@@ -1,12 +1,14 @@
 ﻿#pragma once
 
 #include "GameFramework/Pawn/Character.h"
+#include "Object/Ptr/ObjectPtr.h"
 #include "Object/Ptr/WeakObjectPtr.h"
 
 class ULuaScriptComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class USpotLightComponent;
+class UParticleSystemComponent;
 
 // ACharacter + ULuaScriptComponent — Pawn-level 게임 로직 (BeginPlay/Tick/EndPlay) 을 lua 로 작성.
 // AnimInstance lua (ULuaAnimInstance) 와는 책임 분리:
@@ -37,6 +39,7 @@ public:
 	}
 
 	void PostDuplicate() override;
+	void OnPostLoad(FArchive& Ar) override;
 	void BeginPlay() override;
 	void Tick(float DeltaTime) override;
 
@@ -48,12 +51,17 @@ public:
 
 protected:
 	void ConfigureFirstPersonViewRig();
+	void RefreshLuaCharacterComponentReferences();
 	void EnsurePistolMuzzleFlashLight();
 	void SetPistolMuzzleFlashVisible(bool bVisible);
 
 	TWeakObjectPtr<ULuaScriptComponent> LuaScriptComponent = nullptr;
 	TWeakObjectPtr<USpringArmComponent> SpringArm          = nullptr;
 	TWeakObjectPtr<UCameraComponent>    Camera             = nullptr;
+
+	UPROPERTY(Edit, Save, Category="Effects|Pistol", DisplayName="Muzzle Flash Particle", Type=ObjectRef, AllowedClass=UParticleSystemComponent)
+	TObjectPtr<UParticleSystemComponent> PistolMuzzleFlashParticle = nullptr;
+
 	TWeakObjectPtr<USpotLightComponent> PistolMuzzleFlashLight = nullptr;
 	float PistolMuzzleFlashDuration = 0.09f;
 	float PistolMuzzleFlashRemaining = 0.0f;

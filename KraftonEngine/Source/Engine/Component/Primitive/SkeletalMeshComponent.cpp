@@ -3153,7 +3153,7 @@ bool USkeletalMeshComponent::EvaluateAnimInstance(float DeltaTime)
     }
 
     USkeletalMesh* Mesh = GetSkeletalMesh();
-    if (!Mesh) return false;
+    if (!Mesh) return false; 
     FSkeletalMesh* Asset = Mesh->GetSkeletalMeshAsset();
     if (!Asset || Asset->Bones.empty()) return false;
 
