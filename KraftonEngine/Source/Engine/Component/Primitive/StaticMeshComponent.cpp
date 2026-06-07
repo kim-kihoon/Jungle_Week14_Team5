@@ -15,6 +15,27 @@
 #include "Serialization/Archive.h"
 #include "Object/GarbageCollection.h"
 
+namespace
+{
+	bool IsHospitalImportedStaticMeshPath(const FString& MeshPath)
+	{
+		return MeshPath.find("Content/Data/hospital-map-data/") != FString::npos ||
+			MeshPath.find("Content/Data/hospital-objects/") != FString::npos;
+	}
+
+	bool IsLegacyFlatAutoMaterialPath(const FString& MaterialPath)
+	{
+		const FString Prefix = "Content/Material/Auto/";
+		if (MaterialPath.rfind(Prefix, 0) != 0)
+		{
+			return false;
+		}
+
+		const FString Remainder = MaterialPath.substr(Prefix.size());
+		return Remainder.find('/') == FString::npos && Remainder.find('\\') == FString::npos;
+	}
+}
+
 FPrimitiveSceneProxy* UStaticMeshComponent::CreateSceneProxy()
 {
 	return new FStaticMeshSceneProxy(this);
@@ -304,6 +325,12 @@ void UStaticMeshComponent::ReloadMeshAndSerializedMaterials()
 	const int32 SlotCount = static_cast<int32>((std::min)(MaterialSlots.size(), SavedSlots.size()));
 	for (int32 i = 0; i < SlotCount; ++i)
 	{
+		const FString& SavedMatPath = SavedSlots[i];
+		if (IsHospitalImportedStaticMeshPath(StaticMeshPath) && IsLegacyFlatAutoMaterialPath(SavedMatPath))
+		{
+			continue;
+		}
+
 		MaterialSlots[i] = SavedSlots[i];
 		const FString& MatPath = MaterialSlots[i];
 		if (MatPath.empty() || MatPath == "None")
