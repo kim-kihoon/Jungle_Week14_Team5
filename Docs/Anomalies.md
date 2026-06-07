@@ -312,6 +312,9 @@ PrimitiveComponent:SetCastShadow(bool)
 PrimitiveComponent:GetCastShadow()
 PrimitiveComponent:SetVisibility(bool)
 PrimitiveComponent:IsVisible()
+Actor:GetAudioComponent()
+AudioComponent:SetVolume(float)
+AudioComponent:GetVolume()
 
 SkeletalMeshComponent:GetAnimationPath()
 SkeletalMeshComponent:GetPlayRate()
@@ -349,3 +352,62 @@ World.GetRealTimeSeconds()
 - 활성 대상을 쏘면 게임 시간이 멈추고 `CymbalMonkey` 애니메이션도 정지하는지 확인한다.
 - 다음 루프를 돌면 `remainingTime`이 초기값으로 복구되고, 시간이 다시 흐르며 `CymbalMonkey` 애니메이션이 재개되는지 확인한다.
 - 씬을 재시작하거나 게임이 리셋될 때 이전 이상현상 상태가 복구되는지 확인한다.
+
+## OffscreenFacePlayer 추가 규칙
+
+`OffscreenFacePlayer`는 플레이어가 대상을 한 번 관측한 뒤, 대상이 플레이어 카메라 프러스텀 밖에 있을 때만 대상 액터의 body yaw를 플레이어 방향으로 돌리는 규칙이다.
+
+- 디버그 단축키: `4`
+- 최초 관측 기준: 프러스텀 판정과 `World.LineTraceObjects`를 함께 사용한다.
+- 발동 후 회전 기준: 라인트레이스는 사용하지 않고 프러스텀 판정만 사용한다.
+- 스켈레탈 메시 대상: `World.IsComponentInViewFrustum(mesh)`로 실제 메시 컴포넌트 AABB를 검사한다.
+- 일반 대상: 스켈레탈 메시가 없으면 `World.IsActorInViewFrustum(actor)`로 대체한다.
+- 회전 방식: `Pitch=0`, `Roll=0`, `Yaw=플레이어 방향`으로 설정한다.
+- 정지 조건: 대상이 프러스텀 안으로 들어오면 회전을 갱신하지 않는다.
+- 복구 방식: 다음 루프, 리셋, 게임 종료 등으로 `Despawn`이 호출되면 `Spawn` 시점의 원래 회전으로 되돌린다.
+
+디버그 키 매핑은 다음과 같다.
+
+```txt
+1 -> PhotoInvisible
+2 -> NoShadow
+3 -> OffscreenAnimation
+4 -> OffscreenFacePlayer
+5 -> BlackPhoto
+6 -> NearSilentCymbalMonkey
+```
+
+`World.IsComponentInViewFrustum(component)`는 현재 월드의 활성 POV로 프러스텀을 만들고, 전달된 `UPrimitiveComponent`의 월드 AABB와 교차하는지 검사한다. 이 바인딩은 액터 루트 AABB와 실제 보이는 스켈레탈 메시 AABB가 달라지는 경우를 피하기 위해 사용한다.
+
+### OffscreenFacePlayer 최초 관측 조건
+
+`OffscreenFacePlayer`는 생성 직후 바로 회전하지 않는다. 플레이어가 대상을 한 번 관측해야 이상현상이 발동한다.
+
+- 최초 관측 조건: 대상이 프러스텀 안에 있고, 플레이어 카메라에서 대상까지 `World.LineTraceObjects`가 막히지 않아야 한다.
+- 최초 관측 전: 대상은 원래 회전을 유지한다.
+- 최초 관측 후: 대상이 프러스텀 밖에 있을 때만 플레이어 방향으로 yaw를 갱신한다.
+- 최초 관측 후 프러스텀 판정에는 라인트레이스를 사용하지 않는다.
+- 라인트레이스 대상점은 대상 원점이 아니라 대상의 X/Y에 카메라 높이 Z를 맞춘 위치를 사용한다.
+
+## BlackPhoto 추가 규칙
+
+`BlackPhoto`는 활성 이상현상 대상이 촬영 순간 카메라에 관측될 때, 해당 사진 한 장의 내부 캡처 이미지를 전체 검은색으로 만드는 규칙이다.
+
+- 디버그 단축키: `5`
+- 태그: 활성 대상에 `PhotoBlackoutTarget` 태그를 붙이고, 원래 없던 태그만 `Despawn`에서 제거한다.
+- 관측 조건: 대상이 프러스텀 안에 있고, 카메라에서 대상까지 `World.LineTraceObjects`가 막히지 않아야 한다.
+- 프러스텀 기준: 스켈레탈 메시가 있으면 `World.IsComponentInViewFrustum(mesh)`를 사용하고, 없으면 `World.IsActorInViewFrustum(actor)`를 사용한다.
+- 라인트레이스 대상점: 대상의 X/Y에 카메라 높이 Z를 맞춘 위치를 사용한다.
+- 블랙아웃 범위: 폴라로이드 프레임은 유지하고, 사진 내부 캡처 텍스처만 검은색으로 clear한다.
+- 적용 범위: 블랙아웃 여부는 촬영 입력 순간마다 다시 계산하며, 조건을 만족한 그 한 장에만 적용된다.
+
+## NearSilentCymbalMonkey 추가 규칙
+
+`NearSilentCymbalMonkey`는 플레이어가 활성 이상현상 대상 근처에 접근했을 때 `CymbalsMonkey` 태그를 가진 액터의 `AudioComponent` 볼륨을 0으로 낮추는 규칙이다.
+
+- 디버그 키: `6`
+- 원숭이 검색 기준: `World.FindActorsByTag("CymbalsMonkey")`
+- 거리 기준: 플레이어 카메라 위치와 활성 이상현상 대상 위치 사이의 거리가 `2.5m` 이하일 때 발동한다.
+- 음소거 방식: 별도 오디오 매니저 게이트를 만들지 않고, `CymbalsMonkey` 태그 액터의 대표 `AudioComponent:SetVolume(0)`을 호출한다.
+- 복구 방식: 플레이어가 범위 밖으로 나가거나 다음 루프, 리셋, 게임 종료로 `Despawn`이 호출되면 저장해 둔 원래 볼륨으로 복구한다.
+- 적용 대상: 정답 대상은 기존처럼 랜덤 `AnomalyCandidate`이며, 원숭이 자체를 정답 대상으로 바꾸지 않는다.

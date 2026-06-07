@@ -439,6 +439,26 @@ void FEditorSceneManagerWidget::RenderActorContextMenu(AActor* Actor, FSelection
 			ImGui::EndMenu();
 		}
 		ImGui::Separator();
+		if (ImGui::MenuItem("Create Actor Template"))
+		{
+			TArray<AActor*> ActorsToSave;
+			const TArray<AActor*> SelectedActors = Selection.GetSelectedActors();
+			if (SelectedActors.size() > 1
+				&& std::find(SelectedActors.begin(), SelectedActors.end(), Actor) != SelectedActors.end())
+			{
+				ActorsToSave = SelectedActors;
+			}
+			else
+			{
+				ActorsToSave.push_back(Actor);
+			}
+
+			if (EditorEngine)
+			{
+				EditorEngine->CreateActorTemplateInCurrentContentBrowserPath(ActorsToSave);
+			}
+		}
+		ImGui::Separator();
 		if (ImGui::MenuItem("Delete Actor"))
 		{
 			Selection.Select(Actor);

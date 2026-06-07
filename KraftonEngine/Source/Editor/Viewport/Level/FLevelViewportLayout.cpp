@@ -962,19 +962,19 @@ void FLevelViewportLayout::RenderViewportUI(float DeltaTime)
 			{
 				FContentItem ContentItem = *reinterpret_cast<const FContentItem*>(payload->Data);
 				FString Error;
-				AActor* SpawnedActor = nullptr;
+				TArray<AActor*> SpawnedActors;
 				if (Editor && Editor->GetWorld())
 				{
-					SpawnedActor = FSceneSaveManager::LoadActorTemplateFromJSON(
+					SpawnedActors = FSceneSaveManager::LoadActorTemplateActorsFromJSON(
 						FPaths::ToUtf8(ContentItem.Path.wstring()),
 						Editor->GetWorld(),
 						&Error
 					);
 				}
 
-				if (SpawnedActor && SelectionManager)
+				if (!SpawnedActors.empty() && SelectionManager)
 				{
-					SelectionManager->Select(SpawnedActor);
+					SelectActors(SpawnedActors);
 				}
 				else if (!Error.empty())
 				{
@@ -1856,6 +1856,24 @@ void FLevelViewportLayout::RenderViewportPlaceActorPopup()
 		ImGui::EndMenu();
 	}
 
+	const bool bHasActorSelection = SelectionManager && !SelectionManager->GetSelectedActors().empty();
+	ImGui::Separator();
+	if (!bHasActorSelection)
+	{
+		ImGui::BeginDisabled();
+	}
+	if (ImGui::MenuItem("Create Actor Template from Selection"))
+	{
+		if (Editor && SelectionManager)
+		{
+			Editor->CreateActorTemplateInCurrentContentBrowserPath(SelectionManager->GetSelectedActors());
+		}
+	}
+	if (!bHasActorSelection)
+	{
+		ImGui::EndDisabled();
+	}
+
 	const bool bCanDelete = SelectionManager && !SelectionManager->IsEmpty();
 	if (!bCanDelete)
 	{
@@ -1997,6 +2015,13 @@ void FLevelViewportLayout::RenderViewportActorContextPopup()
 	if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateSelectedActors();
 	if (ImGui::MenuItem("Delete", "Del")) DeleteSelectedActors();
 	ImGui::Separator();
+	if (ImGui::MenuItem("Create Actor Template"))
+	{
+		if (Editor && SelectionManager)
+		{
+			Editor->CreateActorTemplateInCurrentContentBrowserPath(SelectionManager->GetSelectedActors());
+		}
+	}
 	if (ImGui::MenuItem("Move to View", "Ctrl+Alt+F")) MoveSelectedActorsToView();
 	if (ImGui::MenuItem("Align with View", "Ctrl+Shift+F")) AlignSelectedActorsWithView();
 	if (!bHasSelection) ImGui::EndDisabled();

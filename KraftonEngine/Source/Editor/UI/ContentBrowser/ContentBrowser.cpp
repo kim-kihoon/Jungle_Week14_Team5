@@ -563,8 +563,26 @@ bool FEditorContentBrowserWidget::HandleActorTemplateDropToDirectory(const std::
 				Actor = *reinterpret_cast<AActor* const*>(Payload->Data);
 			}
 
+			TArray<AActor*> ActorsToSave;
+			if (Actor)
+			{
+				if (BrowserContext.EditorEngine)
+				{
+					const TArray<AActor*> SelectedActors = BrowserContext.EditorEngine->GetSelectionManager().GetSelectedActors();
+					if (SelectedActors.size() > 1 && std::find(SelectedActors.begin(), SelectedActors.end(), Actor) != SelectedActors.end())
+					{
+						ActorsToSave = SelectedActors;
+					}
+				}
+
+				if (ActorsToSave.empty())
+				{
+					ActorsToSave.push_back(Actor);
+				}
+			}
+
 			FString CreatedPath;
-			if (Actor && FSceneSaveManager::SaveActorTemplateAsJSON(Actor, FPaths::ToUtf8(TargetDirectory), CreatedPath))
+			if (!ActorsToSave.empty() && FSceneSaveManager::SaveActorTemplateAsJSON(ActorsToSave, FPaths::ToUtf8(TargetDirectory), CreatedPath))
 			{
 				BrowserContext.bPendingContentRefresh = true;
 				bHandled = true;

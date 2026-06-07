@@ -25,6 +25,7 @@
 #include "CameraShake/CameraShakeAsset.h"
 #include "CameraShake/CameraShakeManager.h"
 #include "Component/ActorComponent.h"
+#include "Component/Audio/AudioComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/SceneComponent.h"
 #include "Component/ShapeComponent.h"
@@ -88,6 +89,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialManager.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Math/Quat.h"
 #include "Math/Rotator.h"
 #include "Math/Vector.h"
 #include "Mesh/MeshManager.h"
@@ -125,6 +127,57 @@ FSubscriptionID                             FLuaScriptManager::WatchSub = 0;
 
 namespace
 {
+    FVector LuaSafeComponentScaleRatio(const FVector& TargetScale, const FVector& SourceScale)
+    {
+        return FVector(
+            std::fabs(SourceScale.X) > 1.0e-6f ? TargetScale.X / SourceScale.X : 1.0f,
+            std::fabs(SourceScale.Y) > 1.0e-6f ? TargetScale.Y / SourceScale.Y : 1.0f,
+            std::fabs(SourceScale.Z) > 1.0e-6f ? TargetScale.Z / SourceScale.Z : 1.0f
+        );
+    }
+
+    FVector LuaComponentMultiply(const FVector& A, const FVector& B)
+    {
+        return FVector(A.X * B.X, A.Y * B.Y, A.Z * B.Z);
+    }
+
+    void LuaApplyActorTemplateGroupTransform(
+        const TArray<AActor*>& Actors,
+        const FVector&         TargetLocation,
+        const FRotator&        TargetRotation,
+        const FVector&         TargetScale)
+    {
+        if (Actors.empty() || !IsValid(Actors[0]))
+        {
+            return;
+        }
+
+        AActor*        Anchor              = Actors[0];
+        const FVector  AnchorLocation      = Anchor->GetActorLocation();
+        const FRotator AnchorRotation      = Anchor->GetActorRotation();
+        const FVector  AnchorScale         = Anchor->GetActorScale();
+        const FQuat    AnchorRotationQuat  = AnchorRotation.ToQuaternion();
+        const FQuat    TargetRotationQuat  = TargetRotation.ToQuaternion();
+        const FQuat    RotationDelta       = TargetRotationQuat * AnchorRotationQuat.Inverse();
+        const FVector  ScaleRatio          = LuaSafeComponentScaleRatio(TargetScale, AnchorScale);
+
+        for (AActor* Actor : Actors)
+        {
+            if (!IsValid(Actor))
+            {
+                continue;
+            }
+
+            const FVector  RelativeLocation = Actor->GetActorLocation() - AnchorLocation;
+            const FRotator RelativeRotation = Actor->GetActorRotation();
+            const FVector  RelativeScale    = Actor->GetActorScale();
+
+            Actor->SetActorLocation(TargetLocation + RotationDelta.RotateVector(LuaComponentMultiply(RelativeLocation, ScaleRatio)));
+            Actor->SetActorRotation((RotationDelta * RelativeRotation.ToQuaternion()).ToRotator().GetNormalized());
+            Actor->SetActorScale(LuaComponentMultiply(RelativeScale, ScaleRatio));
+        }
+    }
+
     struct FLuaReflectedEventOverride
     {
         TWeakObjectPtr<UObject> Target;
@@ -4659,6 +4712,27 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         )
     );
 
+    Lua.new_usertype<UAudioComponent>(
+        "AudioComponent",
+        sol::base_classes,
+        sol::bases<USceneComponent, UActorComponent, UObject>(),
+        "IsValid",
+        [](UAudioComponent* Component)
+        {
+            return IsValid(Component);
+        },
+        "SetVolume",
+        [](UAudioComponent* Component, float Volume)
+        {
+            if (IsValid(Component)) Component->SetVolume(Volume);
+        },
+        "GetVolume",
+        [](UAudioComponent* Component) -> float
+        {
+            return IsValid(Component) ? Component->GetVolume() : 0.0f;
+        }
+    );
+
     Lua.new_usertype<UPrimitiveComponent>(
         "PrimitiveComponent",
         sol::base_classes,
@@ -5304,6 +5378,31 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         {
             return Actor.GetComponentByClass<USkeletalMeshComponent>();
         },
+        "GetAudioComponent",
+        [](AActor& Actor)
+        {
+            if (UAudioComponent* ExistingAudioComponent = Actor.GetComponentByClass<UAudioComponent>())
+            {
+                return ExistingAudioComponent;
+            }
+
+            UAudioComponent* NewAudioComponent = Actor.AddComponent<UAudioComponent>();
+            if (IsValid(NewAudioComponent))
+            {
+                NewAudioComponent->SetAutoActivate(false);
+                NewAudioComponent->SetHiddenInComponentTree(true);
+                NewAudioComponent->SetComponentTickEnabled(false);
+                if (USceneComponent* ParentComponent = Actor.GetComponentByClass<USkeletalMeshComponent>())
+                {
+                    NewAudioComponent->AttachToComponent(ParentComponent);
+                }
+                else if (USceneComponent* RootComponent = Actor.GetRootComponent())
+                {
+                    NewAudioComponent->AttachToComponent(RootComponent);
+                }
+            }
+            return NewAudioComponent;
+        },
 
         "GetSkinnedMeshComponent",
         [](AActor& Actor)
@@ -5644,6 +5743,46 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         }
     );
     World.set_function(
+        "SpawnActorTemplateActors",
+        [](const FString& TemplatePath, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale) -> sol::table
+        {
+            sol::table Result = FLuaScriptManager::GetState().create_table();
+            if (!GEngine) return Result;
+            UWorld* W = GEngine->GetWorld();
+            if (!W) return Result;
+
+            FString Error;
+            TArray<AActor*> Actors = FSceneSaveManager::LoadActorTemplateActorsFromJSON(TemplatePath, W, &Error);
+            if (Actors.empty())
+            {
+                if (!Error.empty())
+                {
+                    UE_LOG("[Lua] SpawnActorTemplateActors failed: %s Path=%s", Error.c_str(), TemplatePath.c_str());
+                }
+                return Result;
+            }
+
+            AActor* Anchor = Actors[0];
+            if (IsValid(Anchor))
+            {
+                const FVector  TargetLocation = Location.value_or(Anchor->GetActorLocation());
+                const FRotator TargetRotation = Rotation ? FRotator(*Rotation) : Anchor->GetActorRotation();
+                const FVector  TargetScale    = Scale.value_or(Anchor->GetActorScale());
+                LuaApplyActorTemplateGroupTransform(Actors, TargetLocation, TargetRotation, TargetScale);
+            }
+
+            int Idx = 1;
+            for (AActor* Actor : Actors)
+            {
+                if (IsValid(Actor))
+                {
+                    Result[Idx++] = Actor;
+                }
+            }
+            return Result;
+        }
+    );
+    World.set_function(
         "SpawnPawn",
         [](const FString& ClassName, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale, sol::optional<bool> bPossess) -> APawn*
         {
@@ -5800,6 +5939,32 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
                 Primitive = Actor->GetComponentByClass<UPrimitiveComponent>();
             }
             if (!IsValid(Primitive))
+            {
+                return false;
+            }
+
+            FMinimalViewInfo POV;
+            if (!CurrentWorld->GetActivePOV(POV))
+            {
+                return false;
+            }
+
+            FConvexVolume ViewFrustum;
+            ViewFrustum.UpdateFromMatrix(POV.CalculateViewProjectionMatrix());
+            return ViewFrustum.IntersectAABB(Primitive->GetWorldBoundingBox());
+        }
+    );
+    World.set_function(
+        "IsComponentInViewFrustum",
+        [](UPrimitiveComponent* Primitive) -> bool
+        {
+            if (!IsValid(Primitive) || !GEngine)
+            {
+                return false;
+            }
+
+            UWorld* CurrentWorld = GEngine->GetWorld();
+            if (!CurrentWorld)
             {
                 return false;
             }

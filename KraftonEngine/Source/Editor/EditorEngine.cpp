@@ -875,6 +875,41 @@ bool UEditorEngine::SaveScene()
 	return SaveSceneAsWithDialog();
 }
 
+bool UEditorEngine::CreateActorTemplateInCurrentContentBrowserPath(const TArray<AActor*>& Actors)
+{
+	TArray<AActor*> ValidActors;
+	for (AActor* Actor : Actors)
+	{
+		if (IsValid(Actor))
+		{
+			ValidActors.push_back(Actor);
+		}
+	}
+
+	if (ValidActors.empty())
+	{
+		UE_LOG("[ActorTemplate] 저장할 유효한 액터가 없습니다.");
+		return false;
+	}
+
+	const std::wstring& CurrentPath = GetContentBrowserCurrentPath();
+	if (CurrentPath.empty() || !std::filesystem::exists(CurrentPath) || !std::filesystem::is_directory(CurrentPath))
+	{
+		UE_LOG("[ActorTemplate] 현재 콘텐츠 브라우저 경로가 유효하지 않습니다: %s", FPaths::ToUtf8(CurrentPath).c_str());
+		return false;
+	}
+
+	FString CreatedPath;
+	if (!FSceneSaveManager::SaveActorTemplateAsJSON(ValidActors, FPaths::ToUtf8(CurrentPath), CreatedPath))
+	{
+		UE_LOG("[ActorTemplate] 템플릿 저장 실패: %s", FPaths::ToUtf8(CurrentPath).c_str());
+		return false;
+	}
+
+	RefreshContentBrowser();
+	return true;
+}
+
 bool UEditorEngine::SaveSceneAsWithDialog()
 {
 	const std::wstring InitialDir = GetSceneDialogDirectory();

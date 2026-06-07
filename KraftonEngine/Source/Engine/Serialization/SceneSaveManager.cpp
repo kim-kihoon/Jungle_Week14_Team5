@@ -372,10 +372,26 @@ void FSceneSaveManager::SaveSceneAsJSON(const string& InSceneName, FWorldContext
 
 bool FSceneSaveManager::SaveActorTemplateAsJSON(AActor* Actor, const FString& DirectoryPath, FString& OutCreatedPath)
 {
+	TArray<AActor*> Actors;
+	Actors.push_back(Actor);
+	return SaveActorTemplateAsJSON(Actors, DirectoryPath, OutCreatedPath);
+}
+
+bool FSceneSaveManager::SaveActorTemplateAsJSON(const TArray<AActor*>& Actors, const FString& DirectoryPath, FString& OutCreatedPath)
+{
 	using namespace json;
 	FScopedGarbageCollectionBlocker GCBlocker;
 
-	if (!IsSceneSerializableObject(Actor))
+	TArray<AActor*> SerializableActors;
+	for (AActor* Actor : Actors)
+	{
+		if (IsSceneSerializableObject(Actor))
+		{
+			SerializableActors.push_back(Actor);
+		}
+	}
+
+	if (SerializableActors.empty())
 	{
 		return false;
 	}
@@ -387,18 +403,36 @@ bool FSceneSaveManager::SaveActorTemplateAsJSON(AActor* Actor, const FString& Di
 	}
 
 	FSceneSaveContext SaveContext;
-	CollectActorObjectIds(Actor, SaveContext);
+	for (AActor* Actor : SerializableActors)
+	{
+		CollectActorObjectIds(Actor, SaveContext);
+	}
 
-	const FString ActorName = Actor->GetFName().ToString().empty()
-		? Actor->GetClass()->GetName()
-		: Actor->GetFName().ToString();
-	const std::filesystem::path FileDestination = BuildUniqueActorTemplatePath(Directory, ActorName);
+	AActor* FirstActor = SerializableActors[0];
+	const FString FirstActorName = FirstActor->GetFName().ToString().empty()
+		? FirstActor->GetClass()->GetName()
+		: FirstActor->GetFName().ToString();
+	const bool bMultiActorTemplate = SerializableActors.size() > 1;
+	const FString TemplateName = bMultiActorTemplate ? FirstActorName + "_Group" : FirstActorName;
+	const std::filesystem::path FileDestination = BuildUniqueActorTemplatePath(Directory, TemplateName);
 
 	JSON Root = json::Object();
 	Root[SceneKeys::Type] = ActorTemplateTypeName;
-	Root[SceneKeys::Version] = 1;
-	Root[SceneKeys::Name] = ActorName;
-	Root[SceneKeys::Actor] = SerializeActor(Actor, SaveContext);
+	Root[SceneKeys::Version] = bMultiActorTemplate ? 2 : 1;
+	Root[SceneKeys::Name] = TemplateName;
+	if (bMultiActorTemplate)
+	{
+		JSON SerializedActors = json::Array();
+		for (AActor* Actor : SerializableActors)
+		{
+			SerializedActors.append(SerializeActor(Actor, SaveContext));
+		}
+		Root[SceneKeys::Actors] = SerializedActors;
+	}
+	else
+	{
+		Root[SceneKeys::Actor] = SerializeActor(FirstActor, SaveContext);
+	}
 
 	std::ofstream File(FileDestination);
 	if (!File.is_open())
@@ -694,6 +728,13 @@ void FSceneSaveManager::FinalizeDeserializedActor(AActor* Actor, FSceneLoadConte
 		return;
 	}
 
+	TArray<AActor*> Actors;
+	Actors.push_back(Actor);
+	FinalizeDeserializedActors(Actors, Context);
+}
+
+void FSceneSaveManager::FinalizeDeserializedActors(const TArray<AActor*>& Actors, FSceneLoadContext& Context)
+{
 	for (FPendingPropertyLoad& Pending : Context.PendingProperties)
 	{
 		if (IsSceneSerializableObject(Pending.Object) && Pending.Properties)
@@ -703,29 +744,43 @@ void FSceneSaveManager::FinalizeDeserializedActor(AActor* Actor, FSceneLoadConte
 	}
 	Context.PendingProperties.clear();
 
-	for (UActorComponent* Component : Actor->GetComponents())
+	for (AActor* Actor : Actors)
 	{
-		if (!IsValid(Component))
+		if (!IsSceneSerializableObject(Actor))
 		{
 			continue;
 		}
 
-		Component->DestroyRenderState();
-		if (USceneComponent* SceneComponent = Cast<USceneComponent>(Component))
+		for (UActorComponent* Component : Actor->GetComponents())
 		{
-			SceneComponent->MarkTransformDirty();
-		}
-		Component->CreateRenderState();
-	}
+			if (!IsValid(Component))
+			{
+				continue;
+			}
 
-	if (UWorld* World = Actor->GetWorld())
-	{
-		World->RemoveActorToOctree(Actor);
-		World->InsertActorToOctree(Actor);
+			Component->DestroyRenderState();
+			if (USceneComponent* SceneComponent = Cast<USceneComponent>(Component))
+			{
+				SceneComponent->MarkTransformDirty();
+			}
+			Component->CreateRenderState();
+		}
+
+		if (UWorld* World = Actor->GetWorld())
+		{
+			World->RemoveActorToOctree(Actor);
+			World->InsertActorToOctree(Actor);
+		}
 	}
 }
 
 AActor* FSceneSaveManager::LoadActorTemplateFromJSON(const FString& FilePath, UWorld* TargetWorld, FString* OutError)
+{
+	TArray<AActor*> Actors = LoadActorTemplateActorsFromJSON(FilePath, TargetWorld, OutError);
+	return Actors.empty() ? nullptr : Actors[0];
+}
+
+TArray<AActor*> FSceneSaveManager::LoadActorTemplateActorsFromJSON(const FString& FilePath, UWorld* TargetWorld, FString* OutError)
 {
 	auto SetError = [&](const char* Message)
 	{
@@ -735,10 +790,11 @@ AActor* FSceneSaveManager::LoadActorTemplateFromJSON(const FString& FilePath, UW
 		}
 	};
 
+	TArray<AActor*> LoadedActors;
 	if (!IsSceneSerializableObject(TargetWorld))
 	{
 		SetError("Target world is not valid.");
-		return nullptr;
+		return LoadedActors;
 	}
 
 	FScopedGarbageCollectionBlocker GCBlocker;
@@ -746,7 +802,7 @@ AActor* FSceneSaveManager::LoadActorTemplateFromJSON(const FString& FilePath, UW
 	if (!File.is_open())
 	{
 		SetError("Failed to open actor template file.");
-		return nullptr;
+		return LoadedActors;
 	}
 
 	string FileContent((std::istreambuf_iterator<char>(File)), std::istreambuf_iterator<char>());
@@ -755,30 +811,50 @@ AActor* FSceneSaveManager::LoadActorTemplateFromJSON(const FString& FilePath, UW
 	if (!Root.hasKey(SceneKeys::Type) || Root[SceneKeys::Type].ToString() != ActorTemplateTypeName)
 	{
 		SetError("File is not an ActorTemplate.");
-		return nullptr;
+		return LoadedActors;
 	}
-	if (!Root.hasKey(SceneKeys::Actor))
+	if (!Root.hasKey(SceneKeys::Actor) && !Root.hasKey(SceneKeys::Actors))
 	{
 		SetError("ActorTemplate is missing Actor data.");
-		return nullptr;
+		return LoadedActors;
 	}
 
 	FSceneLoadContext LoadContextState;
-	json::JSON& ActorJSON = Root[SceneKeys::Actor];
-	AActor* Actor = DeserializeActor(ActorJSON, TargetWorld, LoadContextState);
-	if (!Actor)
+	auto DeserializeTemplateActor = [&](json::JSON& ActorJSON)
 	{
-		SetError("Failed to deserialize actor template.");
-		return nullptr;
+		AActor* Actor = DeserializeActor(ActorJSON, TargetWorld, LoadContextState);
+		if (!Actor)
+		{
+			return;
+		}
+
+		const FString TemplateName = Actor->GetFName().ToString().empty()
+			? FString("Actor")
+			: Actor->GetFName().ToString();
+		Actor->SetFName(FName(MakeUniqueTemplateSpawnActorName(TargetWorld, TemplateName, Actor)));
+		LoadedActors.push_back(Actor);
+	};
+
+	if (Root.hasKey(SceneKeys::Actors))
+	{
+		for (auto& ActorJSON : Root[SceneKeys::Actors].ArrayRange())
+		{
+			DeserializeTemplateActor(ActorJSON);
+		}
+	}
+	else
+	{
+		DeserializeTemplateActor(Root[SceneKeys::Actor]);
 	}
 
-	const FString TemplateName = Actor->GetFName().ToString().empty()
-		? FString("Actor")
-		: Actor->GetFName().ToString();
-	Actor->SetFName(FName(MakeUniqueTemplateSpawnActorName(TargetWorld, TemplateName, Actor)));
+	if (LoadedActors.empty())
+	{
+		SetError("Failed to deserialize actor template.");
+		return LoadedActors;
+	}
 
-	FinalizeDeserializedActor(Actor, LoadContextState);
-	return Actor;
+	FinalizeDeserializedActors(LoadedActors, LoadContextState);
+	return LoadedActors;
 }
 
 void FSceneSaveManager::LoadSceneFromJSON(const string& filepath, FWorldContext& OutWorldContext, FPerspectiveCameraData& OutCam, const EWorldType* OverrideWorldType)
