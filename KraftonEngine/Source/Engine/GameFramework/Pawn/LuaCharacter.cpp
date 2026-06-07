@@ -46,7 +46,7 @@ namespace
 
 		Light->SetIntensity(PistolMuzzleFlashIntensity);  
 		Light->SetLightColor(FVector4(1.0f, 0.90f, 0.72f, 1.0f));
-		Light->SetAttenuationRadius(PistolMuzzleFlashAttenuationRadius);
+		Light->SetAttenuationRadius(PistolMuzzleFlashAttenuationRadius);  
 		Light->SetInnerConeAngle(PistolMuzzleFlashInnerConeHalfAngleDegrees);
 		Light->SetOuterConeAngle(PistolMuzzleFlashOuterConeHalfAngleDegrees);
 		Light->SetCastShadows(false);

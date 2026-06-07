@@ -1728,17 +1728,19 @@ FPhysicsShapeDesc FPhysXPhysicsScene::BuildShapeDescFromComponent_GameThread(
             !RootComponent->IsKinematic();
         UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh();
         FStaticMesh* MeshAsset = StaticMesh ? StaticMesh->GetStaticMeshAsset() : nullptr;
-        const FString StaticMeshPath = StaticMeshComponent->GetStaticMeshPath();
-        const bool bUseSimpleStaticMeshCollision =
-            StaticMeshPath.find("Content/Data/hospital-objects/") != FString::npos;
 
-        if (!bUseSimpleStaticMeshCollision && bRootBodyIsStatic && MeshAsset && MeshAsset->Vertices.size() >= 3 && MeshAsset->Indices.size() >= 3)
+        if (bRootBodyIsStatic && MeshAsset && MeshAsset->Vertices.size() >= 3 && MeshAsset->Indices.size() >= 3)
         {
+            const FVector ComponentScale = StaticMeshComponent->GetWorldScale();
             auto MeshData = std::make_shared<FPhysicsShapeDesc::FTriangleMeshData>();
             MeshData->Vertices.reserve(MeshAsset->Vertices.size());
             for (const FNormalVertex& Vertex : MeshAsset->Vertices)
             {
-                MeshData->Vertices.push_back(Vertex.pos);
+                MeshData->Vertices.push_back(FVector(
+                    Vertex.pos.X * ComponentScale.X,
+                    Vertex.pos.Y * ComponentScale.Y,
+                    Vertex.pos.Z * ComponentScale.Z
+                ));
             }
             MeshData->Indices = MeshAsset->Indices;
 
