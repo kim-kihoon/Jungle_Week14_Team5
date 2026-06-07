@@ -7,7 +7,18 @@ local function initialize_cymbal_monkey()
         return false
     end
 
-    local monkey = World.FindActorByName("Monkey")
+    local monkey = nil
+    local actorNames = {
+        "CymbalsMonkeyInplay",
+        "CymbalMonkeyInplay",
+        "Monkey",
+    }
+    for _, actorName in ipairs(actorNames) do
+        monkey = World.FindActorByName(actorName)
+        if monkey ~= nil then
+            break
+        end
+    end
     if monkey == nil then
         print("[GameManagerActor] CymbalMonkey init failed: Monkey actor not found")
         return false

@@ -23,6 +23,7 @@ GameManager.remainingTime = 0
 GameManager.timeLimit = nil
 GameManager.isPlayerDead = false
 GameManager.bLoopStopped = false
+GameManager.bCymbalMonkeyCycleStarted = false
 GameManager.pressureStage = GameManager.Pressure.EntryStrike
 GameManager.manualPressureStage = nil
 GameManager.AnomalyPlacementTemplateSetName = "Debug"
@@ -47,7 +48,9 @@ GameManager._listeners = {
     TimeExpired = {},
     PressureChanged = {},
     LoopStopped = {},
-    LoopRested = {}
+    LoopRested = {},
+    CymbalMonkeyCycleStarted = {},
+    CymbalMonkeyCycleReset = {}
 }
 
 local WARNING_REMAINING_RATIO = 0.1
@@ -336,6 +339,38 @@ function GameManager:OnLoopRested(callback)
     return self:AddListener("LoopRested", callback)
 end
 
+function GameManager:OnCymbalMonkeyCycleStarted(callback)
+    return self:AddListener("CymbalMonkeyCycleStarted", callback)
+end
+
+function GameManager:OnCymbalMonkeyCycleReset(callback)
+    return self:AddListener("CymbalMonkeyCycleReset", callback)
+end
+
+function GameManager:IsCymbalMonkeyCycleStarted()
+    return self.bCymbalMonkeyCycleStarted == true
+end
+
+function GameManager:StartCymbalMonkeyCycle()
+    if self.bCymbalMonkeyCycleStarted then
+        return false
+    end
+    if self.state ~= self.State.Playing or self.bLoopStopped then
+        return false
+    end
+
+    self.bCymbalMonkeyCycleStarted = true
+    self:_FireEvent("CymbalMonkeyCycleStarted", "StartCymbalMonkeyCycle")
+    return true
+end
+
+function GameManager:ResetCymbalMonkeyCycle()
+    local bWasStarted = self.bCymbalMonkeyCycleStarted == true
+    self.bCymbalMonkeyCycleStarted = false
+    self:_FireEvent("CymbalMonkeyCycleReset", "ResetCymbalMonkeyCycle")
+    return bWasStarted
+end
+
 function GameManager:IsLoopStopped()
     return self.bLoopStopped == true
 end
@@ -354,8 +389,10 @@ function GameManager:RestLoop(reason)
     reason = reason or "RestLoop"
     self.bLoopStopped = false
     self.remainingTime = self.timeLimit or 0
+    self.bCymbalMonkeyCycleStarted = false
     self:_RefreshPressureStage(reason, true)
     self:_RefreshAnomalyPlacementForLoop(reason)
+    self:_FireEvent("CymbalMonkeyCycleReset", reason)
     self:_FireEvent("LoopRested", reason)
     return true
 end
@@ -369,6 +406,7 @@ function GameManager:Reset()
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
     self.bLoopStopped = false
+    self.bCymbalMonkeyCycleStarted = false
     self.manualPressureStage = nil
     self:_SetPressureStage(self.Pressure.EntryStrike, "Reset", false)
     self:_SetState(self.State.Ready, "Reset")
@@ -442,6 +480,10 @@ function GameManager:Tick(dt)
 
     AnomalyManager:Tick(dt)
     if self.bLoopStopped then
+        return
+    end
+
+    if not self.bCymbalMonkeyCycleStarted then
         return
     end
 

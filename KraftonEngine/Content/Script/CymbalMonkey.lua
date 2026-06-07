@@ -46,6 +46,9 @@ local bMissingMeshLogged = false
 local PressureChangedHandle = nil
 local LoopStoppedHandle = nil
 local LoopRestedHandle = nil
+local CymbalCycleStartedHandle = nil
+local CymbalCycleResetHandle = nil
+local bPressureCycleArmed = false
 local bObservedSinceTeleport = false
 local bMonkeyAtInitPosition = true
 
@@ -680,6 +683,11 @@ local function handle_pressure_changed(pressure)
         return
     end
 
+    if not bPressureCycleArmed then
+        CurrentPressure = pressure
+        return
+    end
+
     if GameManager:IsPlaying() then
         enter_pressure(pressure)
         return
@@ -708,14 +716,34 @@ local function unregister_pressure_listener()
     end
 end
 
-local function handle_loop_rested()
+local function reset_pressure_cycle()
+    bPressureCycleArmed = false
+    stop_animation()
+    reset_monkey_teleport_position()
+    CurrentPressure = get_game_manager_pressure()
+    CurrentState = STATE_NONE
+    CurrentEntryInterval = calculate_entry_interval()
+    bAnimationPlaying = false
+    bObservedSinceTeleport = false
+    bMonkeyAtInitPosition = true
+end
+
+local function start_pressure_cycle()
+    if bPressureCycleArmed then
+        return true
+    end
     if not GameManager:IsPlaying() or is_loop_stopped() then
         return false
     end
 
-    reset_monkey_teleport_position()
+    bPressureCycleArmed = true
     CurrentPressure = get_game_manager_pressure()
     return enter_pressure(CurrentPressure)
+end
+
+local function handle_loop_rested()
+    reset_pressure_cycle()
+    return true
 end
 
 local function register_loop_listeners()
@@ -726,6 +754,14 @@ local function register_loop_listeners()
     if LoopRestedHandle ~= nil then
         GameManager:RemoveListener("LoopRested", LoopRestedHandle)
         LoopRestedHandle = nil
+    end
+    if CymbalCycleStartedHandle ~= nil then
+        GameManager:RemoveListener("CymbalMonkeyCycleStarted", CymbalCycleStartedHandle)
+        CymbalCycleStartedHandle = nil
+    end
+    if CymbalCycleResetHandle ~= nil then
+        GameManager:RemoveListener("CymbalMonkeyCycleReset", CymbalCycleResetHandle)
+        CymbalCycleResetHandle = nil
     end
 
     if GameManager.OnLoopStopped ~= nil then
@@ -738,6 +774,16 @@ local function register_loop_listeners()
             handle_loop_rested()
         end)
     end
+    if GameManager.OnCymbalMonkeyCycleStarted ~= nil then
+        CymbalCycleStartedHandle = GameManager:OnCymbalMonkeyCycleStarted(function()
+            start_pressure_cycle()
+        end)
+    end
+    if GameManager.OnCymbalMonkeyCycleReset ~= nil then
+        CymbalCycleResetHandle = GameManager:OnCymbalMonkeyCycleReset(function()
+            reset_pressure_cycle()
+        end)
+    end
 end
 
 local function unregister_loop_listeners()
@@ -748,6 +794,14 @@ local function unregister_loop_listeners()
     if LoopRestedHandle ~= nil then
         GameManager:RemoveListener("LoopRested", LoopRestedHandle)
         LoopRestedHandle = nil
+    end
+    if CymbalCycleStartedHandle ~= nil then
+        GameManager:RemoveListener("CymbalMonkeyCycleStarted", CymbalCycleStartedHandle)
+        CymbalCycleStartedHandle = nil
+    end
+    if CymbalCycleResetHandle ~= nil then
+        GameManager:RemoveListener("CymbalMonkeyCycleReset", CymbalCycleResetHandle)
+        CymbalCycleResetHandle = nil
     end
 end
 
@@ -844,26 +898,24 @@ function InitializeFromGameManager()
     Mesh = nil
     bMissingMeshLogged = false
     cache_mesh()
+    reset_pressure_cycle()
+    print("[CymbalMonkey] InitializeFromGameManager waiting for exit-door open trigger")
+    return true
+end
 
-    stop_animation()
-    reset_monkey_teleport_position()
-
-    CurrentPressure = get_game_manager_pressure()
-    CurrentState = STATE_NONE
-    CurrentEntryInterval = calculate_entry_interval()
-    bAnimationPlaying = false
-
-    if is_loop_stopped() then
-        return true
+function StartPressureCycle()
+    if GameManager.StartCymbalMonkeyCycle ~= nil then
+        return GameManager:StartCymbalMonkeyCycle()
     end
+    return start_pressure_cycle()
+end
 
-    if GameManager:IsPlaying() then
-        print("[CymbalMonkey] InitializeFromGameManager pressure=" .. tostring(CurrentPressure))
-        return enter_pressure(CurrentPressure)
+function ResetPressureCycle()
+    if GameManager.ResetCymbalMonkeyCycle ~= nil then
+        return GameManager:ResetCymbalMonkeyCycle()
     end
-
-    print("[CymbalMonkey] InitializeFromGameManager ignored: GameManager is not playing")
-    return false
+    reset_pressure_cycle()
+    return true
 end
 
 function BeginPlay()
@@ -872,17 +924,7 @@ function BeginPlay()
     cache_mesh()
     register_pressure_listener()
     register_loop_listeners()
-
-    CurrentPressure = get_game_manager_pressure()
-    CurrentState = STATE_NONE
-    CurrentEntryInterval = calculate_entry_interval()
-    bAnimationPlaying = false
-    stop_pressure_one_coroutine()
-    reset_monkey_teleport_position()
-
-    if GameManager:IsPlaying() and not is_loop_stopped() then
-        enter_pressure(CurrentPressure)
-    end
+    reset_pressure_cycle()
 end
 
 function EndPlay()
@@ -890,6 +932,7 @@ function EndPlay()
     unregister_loop_listeners()
     stop_animation()
     Mesh = nil
+    bPressureCycleArmed = false
     bObservedSinceTeleport = false
     bMonkeyAtInitPosition = true
     CurrentPressure = PRESSURE_ENTRY_STRIKE
@@ -912,6 +955,10 @@ function Tick(dt)
     end
 
     update_monkey_teleport()
+
+    if not bPressureCycleArmed then
+        return
+    end
 
     local nextPressure = get_game_manager_pressure()
     if nextPressure ~= CurrentPressure then

@@ -103,6 +103,11 @@ local AUTO_CLOSE_Y_DOOR_NAMES = {
     AStaticMeshActor_13 = true,
 }
 
+local CYMBAL_TRIGGER_DOOR_NAMES = {
+    AStaticMeshActor_12 = true,
+    AStaticMeshActor_13 = true,
+}
+
 local MAX_OPEN_SINGLE_DOORS_ON_WARP = 5
 local TOY_PROJECTILE_TAG = "ToyProjectile"
 
@@ -541,6 +546,25 @@ local function IsSingleDoor(door)
     return door ~= nil and DOUBLE_DOOR_NAMES[door.Name] ~= true
 end
 
+local function TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
+    if door == nil or bWasOpen or not door.IsOpen then
+        return
+    end
+    if CYMBAL_TRIGGER_DOOR_NAMES[door.Name] ~= true then
+        return
+    end
+    if GameManager == nil or GameManager.StartCymbalMonkeyCycle == nil then
+        return
+    end
+
+    local ok, started = pcall(function()
+        return GameManager:StartCymbalMonkeyCycle()
+    end)
+    if ok and started then
+        print("[Door] CymbalMonkey cycle started by " .. tostring(door.Name))
+    end
+end
+
 local function SetDoorOpenState(door, bOpen, bPlaySound)
     if door == nil or door.Actor == nil or door.IsOpen == bOpen then
         return
@@ -556,6 +580,10 @@ local function SetDoorOpenState(door, bOpen, bPlaySound)
 
     SetDoorYaw(door, door.StartYaw)
     SyncDoorPhysics(door.Actor)
+
+    if bOpen then
+        TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
+    end
 
     if not bPlaySound then
         return
@@ -702,6 +730,7 @@ local function ToggleDoor(door)
     SyncDoorPhysics(door.Actor)
 
     if door.IsOpen then
+        TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
         local openVolume = door.OpenSoundKey == DOOR_OPEN_SOUND_KEY and DOOR_OPEN_SOUND_VOLUME or DOOR_SOUND_VOLUME
         PlayDoorAudioAt(door.Actor, door.OpenSoundKey, openVolume)
     elseif bWasOpen then
