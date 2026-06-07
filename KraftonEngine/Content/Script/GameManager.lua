@@ -1,5 +1,6 @@
 local GameManager = {}
 local AnomalyManager = require("AnomalyManager")
+local LeaderboardManager = require("LeaderboardManager")
 local PlacementManager = require("PlacementManager")
 
 GameManager.State = {
@@ -19,6 +20,7 @@ GameManager.Pressure = {
 GameManager.state = GameManager.State.Ready
 GameManager.score = 0
 GameManager.elapsedTime = 0
+GameManager.totalGameTime = 0
 GameManager.remainingTime = 0
 GameManager.timeLimit = nil
 GameManager.isPlayerDead = false
@@ -399,6 +401,7 @@ function GameManager:Reset()
     self.LastAnomalyPlacementError = nil
     self.score = 0
     self.elapsedTime = 0
+    self.totalGameTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
     self.bLoopStopped = false
@@ -410,6 +413,7 @@ end
 
 function GameManager:StartGame()
     self.elapsedTime = 0
+    self.totalGameTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
     self.bLoopStopped = true
@@ -452,12 +456,26 @@ function GameManager:ClearGame(reason)
         return false
     end
 
+    local clearReason = reason or "ClearGame"
+    local createdAtSeconds = 0
+    if World ~= nil and World.GetRealTimeSeconds ~= nil then
+        createdAtSeconds = tonumber(World.GetRealTimeSeconds()) or 0
+    end
+
+    LeaderboardManager:AddClearRecord({
+        TotalTimeSeconds = self.totalGameTime,
+        ElapsedTimeSeconds = self.elapsedTime,
+        Score = self.score,
+        ClearReason = clearReason,
+        CreatedAtSeconds = createdAtSeconds
+    })
+
     AnomalyManager:Reset()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
     self.bLoopStopped = false
-    self:_SetPressureStage(self.Pressure.EntryStrike, reason or "ClearGame", false)
-    return self:_SetState(self.State.Clear, reason or "ClearGame")
+    self:_SetPressureStage(self.Pressure.EntryStrike, clearReason, false)
+    return self:_SetState(self.State.Clear, clearReason)
 end
 
 function GameManager:RestartGame()
@@ -474,6 +492,8 @@ function GameManager:Tick(dt)
     if dt < 0 then
         dt = 0
     end
+
+    self.totalGameTime = self.totalGameTime + dt
 
     AnomalyManager:Tick(dt)
     if self.bLoopStopped then
@@ -544,6 +564,30 @@ end
 
 function GameManager:GetElapsedTime()
     return self.elapsedTime
+end
+
+function GameManager:GetTotalGameTime()
+    return self.totalGameTime
+end
+
+function GameManager:GetLeaderboardEntries()
+    return LeaderboardManager:GetEntries()
+end
+
+function GameManager:GetLeaderboardEntryCount()
+    return LeaderboardManager:GetEntryCount()
+end
+
+function GameManager:GetLeaderboardEntry(index)
+    return LeaderboardManager:GetEntry(index)
+end
+
+function GameManager:GetBestLeaderboardEntry()
+    return LeaderboardManager:GetBestEntry()
+end
+
+function GameManager:GetLastLeaderboardRecord()
+    return LeaderboardManager:GetLastRecord()
 end
 
 function GameManager:GetRemainingTime()
