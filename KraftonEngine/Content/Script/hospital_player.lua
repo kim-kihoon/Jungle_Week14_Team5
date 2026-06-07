@@ -15,7 +15,6 @@ local Doors = {}
 local DoorStateByName = {}
 local PendingDoorCloseSounds = {}
 local bDoorsInitialized = false
-local bInteractWasDown = false
 local DoorPromptWidget = nil
 local bDoorPromptVisible = false
 local ControlPromptWidget = nil
@@ -35,7 +34,6 @@ local TitleWidget = nil
 local TitlePopupWidget = nil
 local bTitleMode = true
 
-local INTERACT_KEY = 0x45 -- E
 local KEY_W = 0x57
 local KEY_A = 0x41
 local KEY_S = 0x53
@@ -72,8 +70,9 @@ local TIMER_COLOR_WARNING = "rgb(255, 71, 71)"
 local TIMER_WARNING_SECONDS = 30
 local TOOL_PISTOL = 0
 local TOOL_CAMERA = 1
-local CONTROL_PROMPT_PISTOL_TEXT = "[LMB] Shoot\n[Space] Camera"
-local CONTROL_PROMPT_CAMERA_TEXT = "[LMB] Shoot\n[Space] Pistol"
+local CONTROL_PROMPT_FIRE_FALLBACK = "LMB"
+local CONTROL_PROMPT_TOOL_FALLBACK = "Space"
+local INTERACT_PROMPT_FALLBACK = "E"
 
 local OPEN_PLUS_NAMES = {
     AStaticMeshActor_2 = true,
@@ -190,6 +189,25 @@ local function GetActionDown(name)
         return Input.GetActionDown(name)
     end)
     return ok and pressed == true
+end
+
+local function GetActionMappingDisplayName(name, fallback)
+    if Input == nil or Input.GetActionMappingDisplayName == nil then
+        return fallback
+    end
+
+    local ok, displayName = pcall(function()
+        return Input.GetActionMappingDisplayName(name)
+    end)
+    if ok and displayName ~= nil and displayName ~= "" then
+        return tostring(displayName)
+    end
+
+    return fallback
+end
+
+local function FormatActionPrompt(name, fallback)
+    return "[" .. GetActionMappingDisplayName(name, fallback) .. "]"
 end
 
 local function AddPlayerMovement()
@@ -1040,7 +1058,8 @@ local function UpdateDoorPrompt(door)
         return
     end
 
-    local promptText = door.IsOpen and "[E] Close" or "[E] Open"
+    local interactPrompt = FormatActionPrompt("Interact", INTERACT_PROMPT_FALLBACK)
+    local promptText = door.IsOpen and (interactPrompt .. " Close") or (interactPrompt .. " Open")
     pcall(function()
         widget:SetText(DOOR_PROMPT_ELEMENT_ID, promptText)
     end)
@@ -1108,7 +1127,11 @@ local function UpdateControlPrompt()
         return
     end
 
-    local promptText = GetCurrentTool() == TOOL_CAMERA and CONTROL_PROMPT_CAMERA_TEXT or CONTROL_PROMPT_PISTOL_TEXT
+    local firePrompt = FormatActionPrompt("Fire", CONTROL_PROMPT_FIRE_FALLBACK)
+    local toolPrompt = FormatActionPrompt("Jump", CONTROL_PROMPT_TOOL_FALLBACK)
+    local promptText = GetCurrentTool() == TOOL_CAMERA
+        and (firePrompt .. " Shoot\n" .. toolPrompt .. " Pistol")
+        or (firePrompt .. " Shoot\n" .. toolPrompt .. " Camera")
     if LastControlPromptText ~= promptText then
         LastControlPromptText = promptText
         pcall(function()
@@ -1492,7 +1515,6 @@ function BeginPlay()
     bCanWarp = true
     PendingDoorCloseSounds = {}
     bDoorsInitialized = false
-    bInteractWasDown = false
     DoorPromptWidget = nil
     bDoorPromptVisible = false
     ControlPromptWidget = nil
@@ -1524,7 +1546,6 @@ function EndPlay()
     DoorStateByName = {}
     PendingDoorCloseSounds = {}
     bDoorsInitialized = false
-    bInteractWasDown = false
     if DoorPromptWidget ~= nil then
         pcall(function()
             DoorPromptWidget:RemoveFromParent()
@@ -1612,15 +1633,6 @@ function Tick(dt)
     UpdateDoorPrompt(targetedDoor)
 
     local bInteractPressed = GetActionDown("Interact")
-    if not bInteractPressed and Input ~= nil and Input.GetKey ~= nil then
-        local ok, pressed = pcall(function()
-            return Input.GetKey(INTERACT_KEY)
-        end)
-        bInteractPressed = ok and pressed and not bInteractWasDown
-        bInteractWasDown = ok and pressed == true
-    else
-        bInteractWasDown = false
-    end
 
     if bInteractPressed then
         if targetedDoor == nil then

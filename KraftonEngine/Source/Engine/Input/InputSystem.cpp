@@ -13,6 +13,32 @@ namespace
 	{
 		return VK == VK_LBUTTON || VK == VK_RBUTTON || VK == VK_MBUTTON || VK == VK_XBUTTON1 || VK == VK_XBUTTON2;
 	}
+
+	bool ContainsDisplayName(const TArray<FString>& Names, const FString& Name)
+	{
+		for (const FString& ExistingName : Names)
+		{
+			if (ExistingName == Name)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	FString JoinDisplayNames(const TArray<FString>& Names)
+	{
+		FString Result;
+		for (const FString& Name : Names)
+		{
+			if (!Result.empty())
+			{
+				Result += "/";
+			}
+			Result += Name;
+		}
+		return Result;
+	}
 }
 
 bool FInputSystemSnapshot::IsActionDown(const FString& Name) const
@@ -212,6 +238,132 @@ bool InputSystem::SetInputLightColor(uint8 Red, uint8 Green, uint8 Blue)
 int32 InputSystem::GetInputDeviceBattery() const
 {
 	return DeviceManager.GetInputDeviceBattery();
+}
+
+FString InputSystem::GetActionMappingDisplayName(const FString& Name)
+{
+	EnsureDefaultInputMappings();
+	return GetMappingDisplayName(Name, ActionMappings);
+}
+
+FString InputSystem::GetAxisMappingDisplayName(const FString& Name)
+{
+	EnsureDefaultInputMappings();
+	return GetMappingDisplayName(Name, AxisMappings);
+}
+
+FString InputSystem::GetCurrentInputDeviceName() const
+{
+	return DeviceManager.GetPrimaryGameplayDeviceClass() == EInputDeviceClass::Gamepad ? "Gamepad" : "KeyboardMouse";
+}
+
+FString InputSystem::GetMappingDisplayName(const FString& Name, const TArray<FInputMapping>& Mappings) const
+{
+	const EInputDeviceClass PrimaryDevice = DeviceManager.GetPrimaryGameplayDeviceClass();
+	TArray<FString> PrimaryNames;
+	TArray<FString> FallbackNames;
+
+	for (const FInputMapping& Mapping : Mappings)
+	{
+		if (Mapping.Name != Name)
+		{
+			continue;
+		}
+
+		const FString DisplayName = GetInputKeyDisplayName(Mapping.Key);
+		if (DisplayName.empty())
+		{
+			continue;
+		}
+
+		TArray<FString>& TargetNames = GetHandleDeviceClass(Mapping.Key) == PrimaryDevice ? PrimaryNames : FallbackNames;
+		if (!ContainsDisplayName(TargetNames, DisplayName))
+		{
+			TargetNames.push_back(DisplayName);
+		}
+	}
+
+	if (!PrimaryNames.empty())
+	{
+		return JoinDisplayNames(PrimaryNames);
+	}
+	return JoinDisplayNames(FallbackNames);
+}
+
+FString InputSystem::GetInputKeyDisplayName(const FInputKeyHandle& Key) const
+{
+	if (!Key.IsValid())
+	{
+		return "";
+	}
+
+	switch (Key.Kind)
+	{
+	case EInputKeyKind::Keyboard:
+		return GetInputKeyName(Key.KeyCode);
+	case EInputKeyKind::MouseButton:
+		switch (Key.KeyCode)
+		{
+		case VK_LBUTTON: return "LMB";
+		case VK_RBUTTON: return "RMB";
+		case VK_MBUTTON: return "MMB";
+		case VK_XBUTTON1: return "Mouse X1";
+		case VK_XBUTTON2: return "Mouse X2";
+		default: return GetInputKeyName(Key.KeyCode);
+		}
+	case EInputKeyKind::MouseAxis:
+		switch (static_cast<EMouseAxis>(Key.KeyCode))
+		{
+		case EMouseAxis::X: return "Mouse X";
+		case EMouseAxis::Y: return "Mouse Y";
+		case EMouseAxis::Wheel: return "Mouse Wheel";
+		default: return "";
+		}
+	case EInputKeyKind::GamepadButton:
+		switch (static_cast<EGamepadButton>(Key.KeyCode))
+		{
+		case EGamepadButton::FaceDown: return "Cross";
+		case EGamepadButton::FaceRight: return "Circle";
+		case EGamepadButton::FaceLeft: return "Square";
+		case EGamepadButton::FaceUp: return "Triangle";
+		case EGamepadButton::Back: return "Share";
+		case EGamepadButton::Guide: return "PS";
+		case EGamepadButton::Start: return "Options";
+		case EGamepadButton::LeftStick: return "L3";
+		case EGamepadButton::RightStick: return "R3";
+		case EGamepadButton::LeftShoulder: return "L1";
+		case EGamepadButton::RightShoulder: return "R1";
+		case EGamepadButton::DPadUp: return "D-Pad Up";
+		case EGamepadButton::DPadDown: return "D-Pad Down";
+		case EGamepadButton::DPadLeft: return "D-Pad Left";
+		case EGamepadButton::DPadRight: return "D-Pad Right";
+		case EGamepadButton::Misc1: return "Gamepad Misc";
+		case EGamepadButton::RightPaddle1: return "Right Paddle 1";
+		case EGamepadButton::LeftPaddle1: return "Left Paddle 1";
+		case EGamepadButton::RightPaddle2: return "Right Paddle 2";
+		case EGamepadButton::LeftPaddle2: return "Left Paddle 2";
+		case EGamepadButton::Touchpad: return "Touchpad";
+		default: return "";
+		}
+	case EInputKeyKind::GamepadAxis:
+		switch (static_cast<EGamepadAxis>(Key.KeyCode))
+		{
+		case EGamepadAxis::LeftStickX:
+		case EGamepadAxis::LeftStickY:
+			return "Left Stick";
+		case EGamepadAxis::RightStickX:
+		case EGamepadAxis::RightStickY:
+			return "Right Stick";
+		case EGamepadAxis::LeftTrigger:
+			return "L2";
+		case EGamepadAxis::RightTrigger:
+			return "R2";
+		default:
+			return "";
+		}
+	default:
+		return "";
+	}
 }
 
 FInputActionState InputSystem::EvaluateActionHandle(const FInputKeyHandle& Key) const

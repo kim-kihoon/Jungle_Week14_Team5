@@ -2125,6 +2125,27 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         }
     );
     Input.set_function(
+        "GetActionMappingDisplayName",
+        [](const FString& Name)
+        {
+            return InputSystem::Get().GetActionMappingDisplayName(Name);
+        }
+    );
+    Input.set_function(
+        "GetAxisMappingDisplayName",
+        [](const FString& Name)
+        {
+            return InputSystem::Get().GetAxisMappingDisplayName(Name);
+        }
+    );
+    Input.set_function(
+        "GetCurrentInputDeviceName",
+        []()
+        {
+            return InputSystem::Get().GetCurrentInputDeviceName();
+        }
+    );
+    Input.set_function(
         "PlayRumble",
         [](float LowFrequency, float HighFrequency, sol::optional<uint32> DurationMs)
         {

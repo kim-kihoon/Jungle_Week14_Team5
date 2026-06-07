@@ -94,6 +94,9 @@ public:
 	bool GetActionDown(const FString& Name) const { return CurrentSnapshot.WasActionPressed(Name); }
 	bool GetActionUp(const FString& Name) const { return CurrentSnapshot.WasActionReleased(Name); }
 	float GetAxis(const FString& Name) const { return CurrentSnapshot.GetAxis(Name); }
+	FString GetActionMappingDisplayName(const FString& Name);
+	FString GetAxisMappingDisplayName(const FString& Name);
+	FString GetCurrentInputDeviceName() const;
 	void ClearInputMappings();
 	void AddActionMapping(const FString& Name, const FString& KeyName);
 	void AddActionMapping(const FString& Name, FInputKeyHandle Key);
@@ -161,6 +164,8 @@ private:
 	FInputActionState EvaluateActionHandle(const FInputKeyHandle& Key) const;
 	float EvaluateAxisHandle(const FInputKeyHandle& Key) const;
 	EInputDeviceClass GetHandleDeviceClass(const FInputKeyHandle& Key) const;
+	FString GetMappingDisplayName(const FString& Name, const TArray<FInputMapping>& Mappings) const;
+	FString GetInputKeyDisplayName(const FInputKeyHandle& Key) const;
 	void EnsureDefaultInputMappings();
 	void UpdateCurrentSnapshot();
 };
