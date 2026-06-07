@@ -379,6 +379,11 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	PhotoSpawnDelayRemaining = PhotoSpawnDelaySeconds;
 }
 
+bool FPhotoOverlay::ShouldSuppressViewportUIForCapture()
+{
+	return bCaptureRequested;
+}
+
 void FPhotoOverlay::Tick(float DeltaTime)
 {
 	if (FlashTime < PhotoFlashSeconds)
