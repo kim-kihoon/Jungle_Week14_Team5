@@ -16,6 +16,7 @@
 #include "Core/ProjectSettings.h"
 #include "Core/Logging/Log.h"
 #include "UI/PhotoOverlay.h"
+#include "Input/InputSystem.h"
 
 void UGameEngine::Init(FWindowsWindow* InWindow)
 {
@@ -26,6 +27,7 @@ void UGameEngine::Init(FWindowsWindow* InWindow)
 	FEngineInitHooks::RunAll();
 
 	FProjectSettings::Get().LoadFromFile(FProjectSettings::GetDefaultPath());
+	InputSystem::Get().LoadMappingsFromProjectSettings();
 
 	StandaloneViewport = new FViewport();
 	StandaloneViewport->Initialize(

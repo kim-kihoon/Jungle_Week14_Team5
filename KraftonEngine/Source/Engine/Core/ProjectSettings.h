@@ -4,6 +4,19 @@
 #include "Core/Singleton.h"
 #include "Platform/Paths.h"
 
+struct FInputBindingSetting
+{
+	FString Name;
+	FString Key;
+	float Scale = 1.0f;
+};
+
+struct FInputProjectOption
+{
+	TArray<FInputBindingSetting> ActionMappings;
+	TArray<FInputBindingSetting> AxisMappings;
+};
+
 /*
 	FProjectSettings — 프로젝트 전역 설정 (per-viewport가 아닌 전체 공유).
 	Settings/ProjectSettings.ini에 독립 직렬화됩니다.
@@ -63,10 +76,12 @@ public:
 	FShadowOption Shadow;
 	FPhysicsOption Physics;
 	FGameOption Game;
+	FInputProjectOption Input;
 
 	// --- 직렬화 ---
 	void SaveToFile(const FString& Path) const;
 	void LoadFromFile(const FString& Path);
+	void EnsureDefaultInputMappings();
 
 	static FString GetDefaultPath() { return FPaths::ToUtf8(FPaths::ProjectSettingsFilePath()); }
 };

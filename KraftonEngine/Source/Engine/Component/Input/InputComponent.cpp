@@ -6,6 +6,44 @@
 #include "Object/Reflection/ObjectFactory.h"
 
 #include <algorithm>
+#include <cmath>
+
+namespace
+{
+	constexpr float AXIS_EPSILON = 0.001f;
+
+	FInputKeyHandle MakeKeyHandleFromVK(int VKey)
+	{
+		FInputKeyHandle Handle;
+		Handle.Kind = (VKey == VK_LBUTTON || VKey == VK_RBUTTON || VKey == VK_MBUTTON || VKey == VK_XBUTTON1 || VKey == VK_XBUTTON2)
+			? EInputKeyKind::MouseButton
+			: EInputKeyKind::Keyboard;
+		Handle.KeyCode = VKey;
+		return Handle;
+	}
+
+	FInputKeyHandle MakeMouseAxisHandle(EInputAxisSourceType Axis)
+	{
+		FInputKeyHandle Handle;
+		Handle.Kind = EInputKeyKind::MouseAxis;
+		switch (Axis)
+		{
+		case EInputAxisSourceType::MouseX:
+			Handle.KeyCode = static_cast<int32>(EMouseAxis::X);
+			break;
+		case EInputAxisSourceType::MouseY:
+			Handle.KeyCode = static_cast<int32>(EMouseAxis::Y);
+			break;
+		case EInputAxisSourceType::MouseWheel:
+			Handle.KeyCode = static_cast<int32>(EMouseAxis::Wheel);
+			break;
+		default:
+			Handle.Kind = EInputKeyKind::None;
+			break;
+		}
+		return Handle;
+	}
+}
 
 UInputComponent::UInputComponent()
 {
@@ -26,15 +64,22 @@ void UInputComponent::AddAxisMapping(const FString& Name, const FString& KeyName
 
 void UInputComponent::AddAxisMappingForOwner(const void* OwnerKey, const FString& Name, const FString& KeyName, float Scale)
 {
-	AddAxisMappingForOwner(OwnerKey, Name, ResolveInputKeyCode(KeyName), Scale);
+	FAxisMapping M;
+	M.Name = Name;
+	M.Key = ResolveInputKeyHandle(KeyName);
+	M.Scale = Scale;
+	M.OwnerKey = OwnerKey;
+	if (M.Key.IsValid())
+	{
+		AxisMappings.push_back(std::move(M));
+	}
 }
 
 void UInputComponent::AddAxisMappingForOwner(const void* OwnerKey, const FString& Name, int VKey, float Scale)
 {
 	FAxisMapping M;
 	M.Name = Name;
-	M.SourceType = EInputAxisSourceType::Key;
-	M.VKey = VKey;
+	M.Key = MakeKeyHandleFromVK(VKey);
 	M.Scale = Scale;
 	M.OwnerKey = OwnerKey;
 	AxisMappings.push_back(std::move(M));
@@ -54,10 +99,13 @@ void UInputComponent::AddMouseAxisMappingForOwner(const void* OwnerKey, const FS
 
 	FAxisMapping M;
 	M.Name = Name;
-	M.SourceType = Axis;
+	M.Key = MakeMouseAxisHandle(Axis);
 	M.Scale = Scale;
 	M.OwnerKey = OwnerKey;
-	AxisMappings.push_back(std::move(M));
+	if (M.Key.IsValid())
+	{
+		AxisMappings.push_back(std::move(M));
+	}
 }
 
 void UInputComponent::AddActionMapping(const FString& Name, int VKey)
@@ -72,14 +120,21 @@ void UInputComponent::AddActionMapping(const FString& Name, const FString& KeyNa
 
 void UInputComponent::AddActionMappingForOwner(const void* OwnerKey, const FString& Name, const FString& KeyName)
 {
-	AddActionMappingForOwner(OwnerKey, Name, ResolveInputKeyCode(KeyName));
+	FActionMapping M;
+	M.Name = Name;
+	M.Key = ResolveInputKeyHandle(KeyName);
+	M.OwnerKey = OwnerKey;
+	if (M.Key.IsButton())
+	{
+		ActionMappings.push_back(std::move(M));
+	}
 }
 
 void UInputComponent::AddActionMappingForOwner(const void* OwnerKey, const FString& Name, int VKey)
 {
 	FActionMapping M;
 	M.Name = Name;
-	M.VKey = VKey;
+	M.Key = MakeKeyHandleFromVK(VKey);
 	M.OwnerKey = OwnerKey;
 	ActionMappings.push_back(std::move(M));
 }
@@ -144,19 +199,58 @@ void UInputComponent::RemoveBindingsForOwner(const void* OwnerKey)
 
 float UInputComponent::EvaluateAxisMapping(const FAxisMapping& Mapping, const FInputSystemSnapshot& Snapshot) const
 {
-	switch (Mapping.SourceType)
+	switch (Mapping.Key.Kind)
 	{
-	case EInputAxisSourceType::Key:
-		return Snapshot.IsDown(Mapping.VKey) ? Mapping.Scale : 0.0f;
-	case EInputAxisSourceType::MouseX:
-		return static_cast<float>(Snapshot.MouseDeltaX) * Mapping.Scale;
-	case EInputAxisSourceType::MouseY:
-		return static_cast<float>(Snapshot.MouseDeltaY) * Mapping.Scale;
-	case EInputAxisSourceType::MouseWheel:
-		return static_cast<float>(Snapshot.ScrollDelta) * Mapping.Scale;
+	case EInputKeyKind::Keyboard:
+	case EInputKeyKind::MouseButton:
+		return Snapshot.IsDown(Mapping.Key.KeyCode) ? Mapping.Scale : 0.0f;
+	case EInputKeyKind::MouseAxis:
+		switch (static_cast<EMouseAxis>(Mapping.Key.KeyCode))
+		{
+		case EMouseAxis::X:
+			return static_cast<float>(Snapshot.MouseDeltaX) * Mapping.Scale;
+		case EMouseAxis::Y:
+			return static_cast<float>(Snapshot.MouseDeltaY) * Mapping.Scale;
+		case EMouseAxis::Wheel:
+			return static_cast<float>(Snapshot.ScrollDelta) * Mapping.Scale;
+		default:
+			return 0.0f;
+		}
+	case EInputKeyKind::GamepadAxis:
+	{
+		const int32 AxisIndex = Mapping.Key.KeyCode;
+		return AxisIndex >= 0 && AxisIndex < static_cast<int32>(EGamepadAxis::Count)
+			? Snapshot.GamepadSnapshot.Axes[AxisIndex] * Mapping.Scale
+			: 0.0f;
+	}
 	default:
 		return 0.0f;
 	}
+}
+
+bool UInputComponent::EvaluateActionMapping(const FActionMapping& Mapping, EInputEvent Event, const FInputSystemSnapshot& Snapshot) const
+{
+	if (Mapping.Key.Kind == EInputKeyKind::Keyboard || Mapping.Key.Kind == EInputKeyKind::MouseButton)
+	{
+		return Event == EInputEvent::Pressed
+			? Snapshot.WasPressed(Mapping.Key.KeyCode)
+			: Snapshot.WasReleased(Mapping.Key.KeyCode);
+	}
+
+	if (Mapping.Key.Kind == EInputKeyKind::GamepadButton)
+	{
+		const int32 ButtonIndex = Mapping.Key.KeyCode;
+		if (ButtonIndex < 0 || ButtonIndex >= static_cast<int32>(EGamepadButton::Count))
+		{
+			return false;
+		}
+
+		const bool bDown = Snapshot.GamepadSnapshot.Buttons[ButtonIndex];
+		const bool bWasDown = Snapshot.GamepadSnapshot.PrevButtons[ButtonIndex];
+		return Event == EInputEvent::Pressed ? (bDown && !bWasDown) : (!bDown && bWasDown);
+	}
+
+	return false;
 }
 
 void UInputComponent::ProcessInput(const FInputSystemSnapshot& Snapshot, float /*DeltaTime*/)
@@ -165,12 +259,16 @@ void UInputComponent::ProcessInput(const FInputSystemSnapshot& Snapshot, float /
 	// UE 와 동일 — 매 frame 호출 (value=0 도 호출됨, 자식이 0 분기 처리).
 	for (const FAxisBinding& B : AxisBindings)
 	{
-		float Value = 0.0f;
-		for (const FAxisMapping& M : AxisMappings)
+		float Value = Snapshot.GetAxis(B.Name);
+		if (std::abs(Value) <= AXIS_EPSILON)
 		{
-			if (M.Name == B.Name)
+			Value = 0.0f;
+			for (const FAxisMapping& M : AxisMappings)
 			{
-				Value += EvaluateAxisMapping(M, Snapshot);
+				if (M.Name == B.Name)
+				{
+					Value += EvaluateAxisMapping(M, Snapshot);
+				}
 			}
 		}
 		if (B.Callback) B.Callback(Value);
@@ -179,12 +277,19 @@ void UInputComponent::ProcessInput(const FInputSystemSnapshot& Snapshot, float /
 	// Action: edge 감지 (Pressed = KeyDown, Released = KeyUp).
 	for (const FActionBinding& B : ActionBindings)
 	{
+		const bool bLogicalFired = (B.Event == EInputEvent::Pressed)
+			? Snapshot.WasActionPressed(B.Name)
+			: Snapshot.WasActionReleased(B.Name);
+		if (bLogicalFired && B.Callback)
+		{
+			B.Callback();
+			continue;
+		}
+
 		for (const FActionMapping& M : ActionMappings)
 		{
 			if (M.Name != B.Name) continue;
-			const bool bFired = (B.Event == EInputEvent::Pressed)
-				? Snapshot.WasPressed(M.VKey)
-				: Snapshot.WasReleased(M.VKey);
+			const bool bFired = EvaluateActionMapping(M, B.Event, Snapshot);
 			if (bFired && B.Callback)
 			{
 				B.Callback();

@@ -2,6 +2,7 @@
 
 #include "Component/ActorComponent.h"
 #include "Core/Types/CoreTypes.h"
+#include "Input/InputTypes.h"
 
 struct FInputSystemSnapshot;
 
@@ -78,16 +79,16 @@ private:
 	struct FAxisMapping
 	{
 		FString Name;
-		EInputAxisSourceType SourceType = EInputAxisSourceType::Key;
-		int VKey = 0;
+		FInputKeyHandle Key;
 		float Scale = 1.0f;
 		const void* OwnerKey = nullptr;
 	};
-	struct FActionMapping { FString Name; int VKey = 0; const void* OwnerKey = nullptr; };
+	struct FActionMapping { FString Name; FInputKeyHandle Key; const void* OwnerKey = nullptr; };
 	struct FAxisBinding   { FString Name; const void* OwnerKey = nullptr; TFunction<void(float)> Callback; };
 	struct FActionBinding { FString Name; EInputEvent Event = EInputEvent::Pressed; const void* OwnerKey = nullptr; TFunction<void()> Callback; };
 
 	float EvaluateAxisMapping(const FAxisMapping& Mapping, const FInputSystemSnapshot& Snapshot) const;
+	bool EvaluateActionMapping(const FActionMapping& Mapping, EInputEvent Event, const FInputSystemSnapshot& Snapshot) const;
 
 	TArray<FAxisMapping>   AxisMappings;
 	TArray<FActionMapping> ActionMappings;
