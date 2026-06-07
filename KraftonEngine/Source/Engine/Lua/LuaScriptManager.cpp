@@ -5816,6 +5816,32 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         }
     );
     World.set_function(
+        "IsComponentInViewFrustum",
+        [](UPrimitiveComponent* Primitive) -> bool
+        {
+            if (!IsValid(Primitive) || !GEngine)
+            {
+                return false;
+            }
+
+            UWorld* CurrentWorld = GEngine->GetWorld();
+            if (!CurrentWorld)
+            {
+                return false;
+            }
+
+            FMinimalViewInfo POV;
+            if (!CurrentWorld->GetActivePOV(POV))
+            {
+                return false;
+            }
+
+            FConvexVolume ViewFrustum;
+            ViewFrustum.UpdateFromMatrix(POV.CalculateViewProjectionMatrix());
+            return ViewFrustum.IntersectAABB(Primitive->GetWorldBoundingBox());
+        }
+    );
+    World.set_function(
         "LineTrace",
         [](const FVector& Start, const FVector& End, sol::optional<AActor*> IgnoreActor) -> sol::table
         {
