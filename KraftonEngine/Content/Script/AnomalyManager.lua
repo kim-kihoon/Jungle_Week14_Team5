@@ -18,6 +18,14 @@ AnomalyManager.Rules = {
     PhotoInvisible,
     NoShadow,
     OffscreenAnimation,
+    BlackPhoto,
+    NearSilentCymbalMonkey
+}
+
+AnomalyManager.AllRules = {
+    PhotoInvisible,
+    NoShadow,
+    OffscreenAnimation,
     OffscreenFacePlayer,
     BlackPhoto,
     NearSilentCymbalMonkey
@@ -192,7 +200,7 @@ function AnomalyManager:_FindRuleByName(ruleName)
         return nil
     end
 
-    for _, rule in ipairs(self.Rules) do
+    for _, rule in ipairs(self.AllRules) do
         if get_rule_name(rule) == ruleName then
             return rule
         end

@@ -91,9 +91,13 @@ GameManager:ReportAnomalyShot(hit.Actor)
 1 -> PhotoInvisible
 2 -> NoShadow
 3 -> OffscreenAnimation
+4 -> OffscreenFacePlayer
+5 -> BlackPhoto
+6 -> NearSilentCymbalMonkey
 ```
 
 디버그 키는 랜덤 규칙 선택을 거치지 않고 지정한 규칙만 강제로 적용한다. 단, 대상 액터는 `AnomalyCandidate` 후보 중에서 선택한다.
+`OffscreenFacePlayer`는 디버그 전용 확인 규칙으로 유지하며, 일반 랜덤 규칙 풀에서는 제외한다.
 
 ### CymbalsMonkey 위치 마커
 
@@ -301,27 +305,26 @@ return Rule
 
 파일: `KraftonEngine/Content/Script/Anomalies/OffscreenAnimation.lua`
 
-목표는 대상이 카메라 프러스텀 밖에 있을 때만 애니메이션이 재생되는 상태다.
-
-현재 애니메이션 경로:
-
-```txt
-Content/Data/Samba Dancing/YeoulDance.uasset
-```
+목표는 대상이 카메라 프러스텀 밖에 있을 때만 대상 skeleton에 호환되는 랜덤 애니메이션이 재생되는 상태다.
 
 구현 방식:
 
 - `Spawn`에서 대상의 `SkeletalMeshComponent`를 찾는다.
 - 현재 애니메이션 경로, 재생 속도, 루프 여부, 재생 상태를 `context.State`에 저장한다.
+- `SkeletalMeshComponent:GetCompatibleAnimationPaths()`로 대상의 현재 `SkeletalMesh` skeleton에 호환되는 애니메이션 경로 목록을 가져온다.
+- 현재 재생 중인 애니메이션 경로는 후보에서 제외한다.
+- 남은 후보 중 하나를 랜덤으로 골라 `context.State.OffscreenAnimationPath`에 저장한다.
 - `Tick`마다 `World.IsActorInViewFrustum(context.Target)`으로 대상이 화면 안에 있는지 확인한다.
-- 대상이 화면 밖으로 나가면 `PlayAnimationByPath(AnimationPath, true)`를 호출한다.
+- 대상이 화면 밖으로 나가면 선택된 `OffscreenAnimationPath`로 `PlayAnimationByPath(path, true)`를 호출한다.
 - 대상이 다시 화면 안으로 들어오면 `SetPlaying(false)`로 정지한다.
 - `Despawn`에서 원래 애니메이션 경로, 재생 속도, 루프 여부, 재생 상태를 복구한다.
 
 적용 조건:
 
 - 대상 액터에 `SkeletalMeshComponent`가 있어야 한다.
+- 현재 skeleton에 호환되고 현재 재생 중이지 않은 `UAnimSequence`가 하나 이상 있어야 한다.
 - `PlayAnimationByPath` Lua 바인딩이 있어야 한다.
+- `GetCompatibleAnimationPaths` Lua 바인딩이 있어야 한다.
 - 프러스텀 판정은 `World.IsActorInViewFrustum(actor)` 바인딩을 사용한다.
 
 복구 원칙:
@@ -330,6 +333,7 @@ Content/Data/Samba Dancing/YeoulDance.uasset
 - 기존 재생 상태가 있으면 `SetPlaying(OriginalPlaying)`으로 복구한다.
 - 기존 애니메이션 경로가 없으면 강제로 새 애니메이션을 지정하지 않는다.
 - 기존 애니메이션 경로가 없으면 `StopAnimation()`으로 애니메이션을 비워 reference pose로 돌아가게 한다.
+- 호환 가능한 다른 애니메이션이 없으면 하드코딩 애니메이션으로 대체하지 않고 `Spawn` 실패로 처리한다.
 
 ## C++ / Lua 연결 지점
 
@@ -353,6 +357,7 @@ AudioComponent:SetVolume(float)
 AudioComponent:GetVolume()
 
 SkeletalMeshComponent:GetAnimationPath()
+SkeletalMeshComponent:GetCompatibleAnimationPaths()
 SkeletalMeshComponent:GetPlayRate()
 SkeletalMeshComponent:GetLooping()
 SkeletalMeshComponent:IsPlaying()
@@ -368,7 +373,7 @@ World.GetRealTimeSeconds()
 1. `KraftonEngine/Content/Script/Anomalies/` 아래에 새 Lua 파일을 추가한다.
 2. `Name`, `Spawn`, `Despawn`, 필요 시 `Tick`, `IsCleared`를 구현한다.
 3. `AnomalyManager.lua`에서 `require("Anomalies/파일명")`으로 불러온다.
-4. `AnomalyManager.Rules`에 규칙 테이블을 추가한다.
+4. `AnomalyManager.Rules`에 규칙 테이블을 추가한다. 디버그 전용 규칙은 `AnomalyManager.AllRules`에는 등록하되 `AnomalyManager.Rules` 랜덤 풀에서는 제외한다.
 5. 규칙이 변경한 액터/컴포넌트 상태는 반드시 `context.State`에 원본을 저장하고 `Despawn`에서 복구한다.
 
 주의:
