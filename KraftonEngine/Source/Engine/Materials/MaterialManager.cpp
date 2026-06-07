@@ -363,8 +363,7 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	Material->Create(UassetPath, Template, EMaterialDomain::Surface, BlendMode, std::move(Buffers));
 	Material->SetShaderPathForSerialize(DefaultShaderPath);
 	Material->SetVector4Parameter("SectionColor", SectionColor);
-	const bool bUseNormalMap = !NormalTexturePath.empty();
-	Material->SetScalarParameter("HasNormalMap", bUseNormalMap ? 1.0f : 0.0f);
+	Material->SetScalarParameter("HasNormalMap", 0.0f);
 	Material->SetScalarParameter("Opacity", std::clamp(Opacity, 0.0f, 1.0f)); // CB zero-init=0(투명) 방지
 	Material->SetScalarParameter("bEmissive", bEmissive ? 1.0f : 0.0f);
 	Material->SetScalarParameter("EmissiveIntensity", bEmissive ? EmissiveIntensity : 1.0f);
@@ -376,9 +375,12 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	if (!DiffuseTexturePath.empty())
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(DiffuseTexturePath, Device, ETextureColorSpace::SRGB))
 			Material->SetTextureParameter("DiffuseTexture", Tex);
-	if (bUseNormalMap)
+	if (!NormalTexturePath.empty())
 		if (UTexture2D* Tex = UTexture2D::LoadFromFile(NormalTexturePath, Device, ETextureColorSpace::Linear))
+		{
 			Material->SetTextureParameter("NormalTexture", Tex);
+			Material->SetScalarParameter("HasNormalMap", 1.0f);
+		}
 
 	Material->RebuildCachedSRVs();
 	SaveMaterial(Material, UassetPath);
