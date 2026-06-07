@@ -1,5 +1,6 @@
 local GameManager = {}
 local AnomalyManager = require("AnomalyManager")
+local PlacementManager = require("PlacementManager")
 
 GameManager.State = {
     Ready = "Ready",
@@ -24,6 +25,20 @@ GameManager.isPlayerDead = false
 GameManager.bLoopStopped = false
 GameManager.pressureStage = GameManager.Pressure.EntryStrike
 GameManager.manualPressureStage = nil
+GameManager.AnomalyPlacementTemplateSetName = "Debug"
+GameManager.AnomalyPlacementTemplateExtension = ".ActorTemplate"
+GameManager.AnomalyPlacementTemplateSets = {
+    Debug = {
+        Directory = "Content/Blueprint/AnomaliesPlacement/Debug",
+        Recursive = false
+    },
+    Runtime = {
+        Directory = "Content/Blueprint/AnomaliesPlacement/Runtime",
+        Recursive = false
+    }
+}
+GameManager.ActiveAnomalyPlacementRecord = nil
+GameManager.LastAnomalyPlacementError = nil
 
 GameManager._listeners = {
     StateChanged = {},
@@ -37,6 +52,8 @@ GameManager._listeners = {
 
 local WARNING_REMAINING_RATIO = 0.1
 local FINAL_WARNING_REMAINING_RATIO = 0.1
+local ANOMALY_PLACEMENT_RECORD_ID = "GameManager_AnomalyPlacement"
+local bAnomalyPlacementRandomSeeded = false
 
 local function clamp_score(value)
     value = tonumber(value) or 0
@@ -62,6 +79,30 @@ local function normalize_pressure(pressure)
     end
 
     return pressure
+end
+
+local function make_random_seed(timeSeconds)
+    local rawSeed = math.floor((tonumber(timeSeconds) or 0) * 1000000)
+    if rawSeed <= 0 then
+        return nil
+    end
+    return (rawSeed % 2147483646) + 1
+end
+
+local function seed_anomaly_placement_random_once()
+    if bAnomalyPlacementRandomSeeded then
+        return
+    end
+
+    local seed = nil
+    if World ~= nil and World.GetRealTimeSeconds ~= nil then
+        seed = make_random_seed(World.GetRealTimeSeconds())
+    end
+
+    if seed ~= nil then
+        math.randomseed(seed)
+        bAnomalyPlacementRandomSeeded = true
+    end
 end
 
 function GameManager:_GetRemainingRatio()
@@ -149,6 +190,92 @@ function GameManager:_RefreshPressureStage(reason, forceNotify)
     return self:_SetPressureStage(self:_ResolvePressureStage(), reason, forceNotify)
 end
 
+function GameManager:_ClearAnomalyPlacement()
+    local record = self.ActiveAnomalyPlacementRecord
+    self.ActiveAnomalyPlacementRecord = nil
+
+    if record == nil then
+        return false
+    end
+
+    PlacementManager:Destroy(record)
+    return true
+end
+
+function GameManager:_GetAnomalyPlacementTemplateSet()
+    local setName = self.AnomalyPlacementTemplateSetName
+    local templateSet = self.AnomalyPlacementTemplateSets[setName]
+    if templateSet == nil then
+        self.LastAnomalyPlacementError = "Anomaly placement template set not found: " .. tostring(setName)
+        return nil
+    end
+
+    if type(templateSet.Directory) ~= "string" or templateSet.Directory == "" then
+        self.LastAnomalyPlacementError = "Anomaly placement directory is empty: " .. tostring(setName)
+        return nil
+    end
+
+    return templateSet
+end
+
+function GameManager:_FindAnomalyPlacementTemplates(templateSet)
+    if World == nil or World.FindFilesByExtension == nil then
+        self.LastAnomalyPlacementError = "World.FindFilesByExtension unavailable"
+        return nil
+    end
+
+    local templates = World.FindFilesByExtension(
+        templateSet.Directory,
+        self.AnomalyPlacementTemplateExtension,
+        templateSet.Recursive == true
+    )
+
+    if type(templates) ~= "table" then
+        self.LastAnomalyPlacementError = "Anomaly placement template query failed"
+        return nil
+    end
+
+    if #templates <= 0 then
+        self.LastAnomalyPlacementError = "Anomaly placement template not found: " .. tostring(templateSet.Directory)
+        return nil
+    end
+
+    return templates
+end
+
+function GameManager:_SpawnRandomAnomalyPlacement(reason)
+    seed_anomaly_placement_random_once()
+
+    local templateSet = self:_GetAnomalyPlacementTemplateSet()
+    if templateSet == nil then
+        return false
+    end
+
+    local templates = self:_FindAnomalyPlacementTemplates(templateSet)
+    if templates == nil then
+        return false
+    end
+
+    local templatePath = templates[math.random(1, #templates)]
+    local record, message = PlacementManager:Spawn(templatePath, {
+        Id = ANOMALY_PLACEMENT_RECORD_ID
+    })
+    if record == nil then
+        self.LastAnomalyPlacementError = "Anomaly placement spawn failed: " .. tostring(message or templatePath)
+        return false
+    end
+
+    self.ActiveAnomalyPlacementRecord = record
+    self.LastAnomalyPlacementError = nil
+    return true
+end
+
+function GameManager:_RefreshAnomalyPlacementForLoop(reason)
+    AnomalyManager:DespawnCurrent(reason or "RestLoop")
+    self:_ClearAnomalyPlacement()
+    return self:_SpawnRandomAnomalyPlacement(reason or "RestLoop")
+end
+
 function GameManager:AddListener(eventName, callback)
     if not is_function(callback) then
         print("[GameManager] AddListener failed: callback must be a function")
@@ -224,15 +351,19 @@ function GameManager:StopLoop(reason)
 end
 
 function GameManager:RestLoop(reason)
+    reason = reason or "RestLoop"
     self.bLoopStopped = false
     self.remainingTime = self.timeLimit or 0
-    self:_RefreshPressureStage(reason or "RestLoop", true)
-    self:_FireEvent("LoopRested", reason or "RestLoop")
+    self:_RefreshPressureStage(reason, true)
+    self:_RefreshAnomalyPlacementForLoop(reason)
+    self:_FireEvent("LoopRested", reason)
     return true
 end
 
 function GameManager:Reset()
     AnomalyManager:Reset()
+    self:_ClearAnomalyPlacement()
+    self.LastAnomalyPlacementError = nil
     self.score = 0
     self.elapsedTime = 0
     self.remainingTime = self.timeLimit or 0
@@ -274,6 +405,8 @@ function GameManager:GameOver(reason)
     end
 
     AnomalyManager:Reset()
+    self:_ClearAnomalyPlacement()
+    self.LastAnomalyPlacementError = nil
     self.bLoopStopped = false
     self:_SetPressureStage(self.Pressure.EntryStrike, reason or "GameOver", false)
     return self:_SetState(self.State.GameOver, reason or "GameOver")
@@ -285,6 +418,8 @@ function GameManager:ClearGame(reason)
     end
 
     AnomalyManager:Reset()
+    self:_ClearAnomalyPlacement()
+    self.LastAnomalyPlacementError = nil
     self.bLoopStopped = false
     self:_SetPressureStage(self.Pressure.EntryStrike, reason or "ClearGame", false)
     return self:_SetState(self.State.Clear, reason or "ClearGame")
@@ -425,8 +560,8 @@ function GameManager:AdvanceAnomalyLoop()
     return AnomalyManager:SelectAndSpawn()
 end
 
-function GameManager:ReportAnomalyShot(actor)
-    local bHitAnomaly = AnomalyManager:ReportShot(actor)
+function GameManager:ReportAnomalyShot(actor, hit)
+    local bHitAnomaly = AnomalyManager:ReportShot(actor, hit)
     if bHitAnomaly then
         self:StopLoop("AnomalyShot")
     end
@@ -443,6 +578,25 @@ end
 
 function GameManager:GetLastAnomalyError()
     return AnomalyManager:GetLastError()
+end
+
+function GameManager:SetAnomalyPlacementTemplateSetName(name)
+    if type(name) ~= "string" or self.AnomalyPlacementTemplateSets[name] == nil then
+        self.LastAnomalyPlacementError = "Unknown anomaly placement template set: " .. tostring(name)
+        return false
+    end
+
+    self.AnomalyPlacementTemplateSetName = name
+    self.LastAnomalyPlacementError = nil
+    return true
+end
+
+function GameManager:GetAnomalyPlacementTemplateSetName()
+    return self.AnomalyPlacementTemplateSetName
+end
+
+function GameManager:GetLastAnomalyPlacementError()
+    return self.LastAnomalyPlacementError
 end
 
 function GameManager:DebugSpawnAnomalyRule(ruleName)

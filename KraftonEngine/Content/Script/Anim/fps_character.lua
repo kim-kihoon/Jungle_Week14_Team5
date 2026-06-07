@@ -329,7 +329,7 @@ local function start_pistol_fire_action(self)
     end
 end
 
-local function get_camera_trace_actor()
+local function get_camera_trace_hit()
     if World == nil or World.LineTraceObjects == nil then
         return nil
     end
@@ -351,7 +351,8 @@ local function get_camera_trace_actor()
         return nil
     end
 
-    return hit.Actor
+    hit.ShotDirection = direction
+    return hit
 end
 
 local function is_valid_actor(actor)
@@ -452,12 +453,13 @@ local function should_blackout_photo_capture()
 end
 
 local function should_play_pistol_fire_from_camera()
-    local hitActor = get_camera_trace_actor()
-    if hitActor == nil then
+    local hit = get_camera_trace_hit()
+    if hit == nil or hit.Actor == nil then
         return false
     end
 
-    if GameManager ~= nil and GameManager.ReportAnomalyShot ~= nil and GameManager:ReportAnomalyShot(hitActor) then
+    local hitActor = hit.Actor
+    if GameManager ~= nil and GameManager.ReportAnomalyShot ~= nil and GameManager:ReportAnomalyShot(hitActor, hit) then
         return true
     end
 

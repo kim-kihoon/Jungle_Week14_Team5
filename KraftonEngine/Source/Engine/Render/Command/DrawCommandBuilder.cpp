@@ -181,7 +181,13 @@ FShader* FDrawCommandBuilder::ResolveSectionShader(UMaterial* Mat, EVertexFactor
 		SecPass == ERenderPass::Transparent &&
 		Mat->GetShaderPathForSerialize() == EShaderPath::UberLit;
 
-    // 1. Graph material first-class path. Runtime-compiled graph materials carry their
+	// 1. 빌보드 컴포넌트는 UI용 텍스처 쿼드라 조명 셰이더를 타지 않는다.
+	if (VFType == EVertexFactoryType::Billboard)
+	{
+		return FShaderManager::Get().GetOrCreate(EShaderPath::Billboard);
+	}
+
+    // 2. Graph material first-class path. Runtime-compiled graph materials carry their
     //    generated shader as the material template/custom shader, and must beat the
     //    generic particle/default shader fallback.
     if (Mat && Mat->GetSourceKind() == EMaterialSourceKind::Graph)
@@ -190,11 +196,11 @@ FShader* FDrawCommandBuilder::ResolveSectionShader(UMaterial* Mat, EVertexFactor
         if (FShader* GraphShader = Mat->GetShader()) return GraphShader;
     }
 
-    // 2. custom override 강제 (CreateTransient: Gizmo/Decal/Text/SubUV, 비표준 셰이더 .mat)
+    // 3. custom override 강제 (CreateTransient: Gizmo/Decal/Text/SubUV, 비표준 셰이더 .mat)
 	if (Mat && Mat->HasCustomShader() && !bDerivableSurfaceTransparent)
 		return Mat->GetCustomShader();
 
-    // 3. 파티클 정점 팩토리 → 전용 셰이더 (FParticleVertexFactory 가 만들던 것과 동일 키)
+    // 4. 파티클 정점 팩토리 → 전용 셰이더 (FParticleVertexFactory 가 만들던 것과 동일 키)
 	switch (VFType)
 	{
 	case EVertexFactoryType::ParticleSprite: return FShaderManager::Get().GetOrCreate(EShaderPath::ParticleSprite);
@@ -204,7 +210,7 @@ FShader* FDrawCommandBuilder::ResolveSectionShader(UMaterial* Mat, EVertexFactor
 	default: break;
 	}
 
-    // 4. Surface 메시 → pass별 scene shader. 셰이더 정점 팩토리는 bGPUSkinning 으로 결정
+    // 5. Surface 메시 → pass별 scene shader. 셰이더 정점 팩토리는 bGPUSkinning 으로 결정
 	//    (CPU 스키닝은 static-layout VS).
 	const EUberLitDefines::EVertexFactory UVF = bGPUSkinning
 		? EUberLitDefines::EVertexFactory::SkeletalMesh

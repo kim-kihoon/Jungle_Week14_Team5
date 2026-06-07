@@ -7,10 +7,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cwctype>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <vector>
 #include <windows.h>  // PostQuitMessage
 #ifdef GetCurrentTime
 #undef GetCurrentTime
@@ -176,6 +178,149 @@ namespace
             Actor->SetActorRotation((RotationDelta * RelativeRotation.ToQuaternion()).ToRotator().GetNormalized());
             Actor->SetActorScale(LuaComponentMultiply(RelativeScale, ScaleRatio));
         }
+    }
+
+    std::wstring LuaToLowerWide(std::wstring Value)
+    {
+        std::transform(Value.begin(), Value.end(), Value.begin(), [](wchar_t Ch) { return static_cast<wchar_t>(std::towlower(Ch)); });
+        return Value;
+    }
+
+    std::wstring LuaNormalizeExtension(const FString& Extension)
+    {
+        std::wstring Result = FPaths::ToWide(Extension);
+        if (Result.empty())
+        {
+            return Result;
+        }
+        if (Result[0] != L'.')
+        {
+            Result.insert(Result.begin(), L'.');
+        }
+        return LuaToLowerWide(Result);
+    }
+
+    bool LuaIsPathInsideOrSame(const std::filesystem::path& Path, const std::filesystem::path& Root)
+    {
+        std::error_code Ec;
+        std::filesystem::path NormalPath = std::filesystem::weakly_canonical(Path, Ec);
+        if (Ec)
+        {
+            return false;
+        }
+
+        std::filesystem::path NormalRoot = std::filesystem::weakly_canonical(Root, Ec);
+        if (Ec)
+        {
+            return false;
+        }
+
+        std::filesystem::path Relative = NormalPath.lexically_relative(NormalRoot);
+        if (Relative.empty())
+        {
+            return false;
+        }
+
+        const std::wstring RelativeNative = Relative.native();
+        if (RelativeNative == L".")
+        {
+            return true;
+        }
+        return RelativeNative.rfind(L"..", 0) != 0 && !Relative.is_absolute();
+    }
+
+    std::vector<FString> LuaFindProjectFilesByExtension(const FString& DirectoryPath, const FString& Extension, bool bRecursive)
+    {
+        std::vector<FString> Results;
+
+        const std::wstring NormalizedExtension = LuaNormalizeExtension(Extension);
+        if (DirectoryPath.empty() || NormalizedExtension.empty() || NormalizedExtension == L".")
+        {
+            return Results;
+        }
+
+        const std::filesystem::path ProjectRoot(FPaths::RootDir());
+        std::filesystem::path       TargetDirectory(FPaths::ToWide(DirectoryPath));
+        if (!TargetDirectory.is_absolute())
+        {
+            TargetDirectory = ProjectRoot / TargetDirectory;
+        }
+        TargetDirectory = TargetDirectory.lexically_normal();
+
+        if (!LuaIsPathInsideOrSame(TargetDirectory, ProjectRoot))
+        {
+            return Results;
+        }
+
+        std::error_code Ec;
+        if (!std::filesystem::exists(TargetDirectory, Ec) || Ec)
+        {
+            return Results;
+        }
+        if (!std::filesystem::is_directory(TargetDirectory, Ec) || Ec)
+        {
+            return Results;
+        }
+
+        const std::filesystem::path NormalProjectRoot = std::filesystem::weakly_canonical(ProjectRoot, Ec);
+        if (Ec)
+        {
+            return Results;
+        }
+
+        const auto AddIfExtensionMatches = [&Results, &NormalizedExtension, &NormalProjectRoot](const std::filesystem::directory_entry& Entry)
+        {
+            std::error_code EntryEc;
+            if (!Entry.is_regular_file(EntryEc) || EntryEc)
+            {
+                return;
+            }
+
+            const std::wstring EntryExtension = LuaToLowerWide(Entry.path().extension().wstring());
+            if (EntryExtension != NormalizedExtension)
+            {
+                return;
+            }
+
+            std::filesystem::path RelativePath = Entry.path().lexically_relative(NormalProjectRoot);
+            if (RelativePath.empty())
+            {
+                return;
+            }
+            Results.push_back(FPaths::ToUtf8(RelativePath.generic_wstring()));
+        };
+
+        if (bRecursive)
+        {
+            std::filesystem::recursive_directory_iterator It(
+                TargetDirectory,
+                std::filesystem::directory_options::skip_permission_denied,
+                Ec
+            );
+            const std::filesystem::recursive_directory_iterator End;
+            while (!Ec && It != End)
+            {
+                AddIfExtensionMatches(*It);
+                It.increment(Ec);
+            }
+        }
+        else
+        {
+            std::filesystem::directory_iterator It(
+                TargetDirectory,
+                std::filesystem::directory_options::skip_permission_denied,
+                Ec
+            );
+            const std::filesystem::directory_iterator End;
+            while (!Ec && It != End)
+            {
+                AddIfExtensionMatches(*It);
+                It.increment(Ec);
+            }
+        }
+
+        std::sort(Results.begin(), Results.end());
+        return Results;
     }
 
     struct FLuaReflectedEventOverride
@@ -5019,6 +5164,44 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             constexpr float FinishEpsilon = 1.0e-4f;
             const float Length = Animation->GetPlayLength();
             return Length > 0.0f && SingleNode->GetCurrentTime() >= Length - FinishEpsilon;
+        },
+        "EnableRagdollPhysics",
+        [](USkeletalMeshComponent* Mesh) -> bool
+        {
+            return IsValid(Mesh) ? Mesh->EnableRagdollPhysics() : false;
+        },
+        "ApplyRagdollImpulse",
+        [](USkeletalMeshComponent* Mesh, const sol::object& LocationObject, const sol::object& DirectionObject, sol::optional<float> Strength) -> bool
+        {
+            if (!IsValid(Mesh))
+            {
+                return false;
+            }
+
+            FVector Location;
+            FVector Direction;
+            if (!LuaObjectToVector(LocationObject, Location) || !LuaObjectToVector(DirectionObject, Direction))
+            {
+                return false;
+            }
+
+            if (Direction.IsNearlyZero())
+            {
+                return false;
+            }
+
+            FRagdollImpulseRequest Request;
+            Request.WorldLocation = Location;
+            Request.WorldDirection = Direction.Normalized();
+            Request.Strength = Strength.value_or(0.35f);
+            Request.bAllowEscalationToFullBody = false;
+            Request.bAllowWhileMoving = true;
+            return Mesh->ApplyRagdollImpulse(Request);
+        },
+        "IsRagdollActive",
+        [](USkeletalMeshComponent* Mesh) -> bool
+        {
+            return IsValid(Mesh) ? Mesh->IsRagdollActive() : false;
         }
     );
 
@@ -5778,6 +5961,26 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
                 {
                     Result[Idx++] = Actor;
                 }
+            }
+            return Result;
+        }
+    );
+    World.set_function(
+        "FindFilesByExtension",
+        [](const FString& DirectoryPath, const FString& Extension, sol::optional<bool> bRecursive) -> sol::table
+        {
+            sol::table Result = FLuaScriptManager::GetState().create_table();
+
+            const std::vector<FString> Files = LuaFindProjectFilesByExtension(
+                DirectoryPath,
+                Extension,
+                bRecursive.value_or(false)
+            );
+
+            int Idx = 1;
+            for (const FString& File : Files)
+            {
+                Result[Idx++] = File;
             }
             return Result;
         }

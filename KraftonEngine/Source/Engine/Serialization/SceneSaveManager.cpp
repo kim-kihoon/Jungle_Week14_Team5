@@ -671,7 +671,7 @@ void FSceneSaveManager::DeserializeCamera(json::JSON& CameraJSON, FPerspectiveCa
 // Load
 // ============================================================
 
-AActor* FSceneSaveManager::DeserializeActor(json::JSON& ActorJSON, UWorld* World, FSceneLoadContext& Context)
+AActor* FSceneSaveManager::DeserializeActor(json::JSON& ActorJSON, UWorld* World, FSceneLoadContext& Context, bool bAddToWorld)
 {
 	if (!IsSceneSerializableObject(World))
 	{
@@ -684,7 +684,6 @@ AActor* FSceneSaveManager::DeserializeActor(json::JSON& ActorJSON, UWorld* World
 	if (!ActorObj || !ActorObj->IsA<AActor>()) return nullptr;
 	AActor* Actor = static_cast<AActor*>(ActorObj);
 	Context.RegisterLoadedObject(ActorJSON, Actor);
-	World->AddActor(Actor);
 
 	if (ActorJSON.hasKey(SceneKeys::Name)) {
 		Actor->SetFName(FName(ActorJSON[SceneKeys::Name].ToString()));
@@ -718,6 +717,11 @@ AActor* FSceneSaveManager::DeserializeActor(json::JSON& ActorJSON, UWorld* World
 		}
 	}
 
+	if (bAddToWorld)
+	{
+		World->AddActor(Actor);
+	}
+
 	return Actor;
 }
 
@@ -733,7 +737,7 @@ void FSceneSaveManager::FinalizeDeserializedActor(AActor* Actor, FSceneLoadConte
 	FinalizeDeserializedActors(Actors, Context);
 }
 
-void FSceneSaveManager::FinalizeDeserializedActors(const TArray<AActor*>& Actors, FSceneLoadContext& Context)
+void FSceneSaveManager::FinalizeDeserializedActors(const TArray<AActor*>& Actors, FSceneLoadContext& Context, bool bRefreshWorldRegistration)
 {
 	for (FPendingPropertyLoad& Pending : Context.PendingProperties)
 	{
@@ -766,10 +770,13 @@ void FSceneSaveManager::FinalizeDeserializedActors(const TArray<AActor*>& Actors
 			Component->CreateRenderState();
 		}
 
-		if (UWorld* World = Actor->GetWorld())
+		if (bRefreshWorldRegistration)
 		{
-			World->RemoveActorToOctree(Actor);
-			World->InsertActorToOctree(Actor);
+			if (UWorld* World = Actor->GetWorld())
+			{
+				World->RemoveActorToOctree(Actor);
+				World->InsertActorToOctree(Actor);
+			}
 		}
 	}
 }
@@ -822,16 +829,12 @@ TArray<AActor*> FSceneSaveManager::LoadActorTemplateActorsFromJSON(const FString
 	FSceneLoadContext LoadContextState;
 	auto DeserializeTemplateActor = [&](json::JSON& ActorJSON)
 	{
-		AActor* Actor = DeserializeActor(ActorJSON, TargetWorld, LoadContextState);
+		AActor* Actor = DeserializeActor(ActorJSON, TargetWorld, LoadContextState, false);
 		if (!Actor)
 		{
 			return;
 		}
 
-		const FString TemplateName = Actor->GetFName().ToString().empty()
-			? FString("Actor")
-			: Actor->GetFName().ToString();
-		Actor->SetFName(FName(MakeUniqueTemplateSpawnActorName(TargetWorld, TemplateName, Actor)));
 		LoadedActors.push_back(Actor);
 	};
 
@@ -853,7 +856,18 @@ TArray<AActor*> FSceneSaveManager::LoadActorTemplateActorsFromJSON(const FString
 		return LoadedActors;
 	}
 
-	FinalizeDeserializedActors(LoadedActors, LoadContextState);
+	FinalizeDeserializedActors(LoadedActors, LoadContextState, false);
+	for (AActor* Actor : LoadedActors)
+	{
+		if (IsSceneSerializableObject(Actor))
+		{
+			const FString TemplateName = Actor->GetFName().ToString().empty()
+				? FString("Actor")
+				: Actor->GetFName().ToString();
+			Actor->SetFName(FName(MakeUniqueTemplateSpawnActorName(TargetWorld, TemplateName, Actor)));
+			TargetWorld->AddActor(Actor);
+		}
+	}
 	return LoadedActors;
 }
 

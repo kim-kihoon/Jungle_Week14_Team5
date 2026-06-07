@@ -9,6 +9,7 @@
 #include "Render/Types/MinimalViewInfo.h"
 #include "Input/InputSystem.h"
 #include "Viewport/Viewport.h"
+#include "UI/PhotoOverlay.h"
 #include "Math/MathUtils.h"
 
 namespace
@@ -74,6 +75,7 @@ void FGameRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 	CollectCommands(Scene, Renderer, Output);
 
 	Renderer.Render(Frame, World, *Scene);
+	FPhotoOverlay::CapturePendingFromViewport(VP->GetRTTexture());
 
 	Renderer.BeginFrame();
 	Renderer.BlitToBackBuffer(VP->GetSRV());

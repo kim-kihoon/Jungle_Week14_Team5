@@ -3,6 +3,7 @@
 #include "Engine/Runtime/GameRenderPipeline.h"
 #include "Engine/Runtime/EngineInitHooks.h"
 #include "Engine/Platform/WindowsWindow.h"
+#include "Audio/AudioManager.h"
 #include "Lua/LuaScriptManager.h"
 #include "Profiling/Time/Timer.h"
 #include <windows.h>  // VK_ESCAPE
@@ -14,6 +15,7 @@
 #include "Object/Reflection/UClass.h"
 #include "Core/ProjectSettings.h"
 #include "Core/Logging/Log.h"
+#include "UI/PhotoOverlay.h"
 
 void UGameEngine::Init(FWindowsWindow* InWindow)
 {
@@ -85,7 +87,14 @@ void UGameEngine::Tick(float DeltaTime)
 		FLuaScriptManager::FireOnEscapePressed();
 	}
 
-	TickFrameBody(DeltaTime);
+	if (UWorld* World = GetWorld())
+	{
+		FAudioManager::Get().UpdateListenerFromWorld(World);
+	}
+	WorldTick(DeltaTime);
+	FAudioManager::Get().Tick();
+	FPhotoOverlay::Tick(DeltaTime);
+	Render(DeltaTime);
 
 	// World->Tick / Render 가 모두 끝난 이후에 transition 처리 — Lua callback 안에서
 	// 요청이 들어와도 Tick/Render 흐름이 valid 한 액터/컴포넌트로 진행한 뒤 안전하게 destroy.
