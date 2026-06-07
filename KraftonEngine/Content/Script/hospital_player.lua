@@ -21,6 +21,8 @@ local bDoorPromptVisible = false
 local ControlPromptWidget = nil
 local bControlPromptVisible = false
 local LastControlPromptText = nil
+local bExitDoorsUnlockedForCurrentLoop = false
+local bLastLoopStopped = false
 
 local INTERACT_KEY = 0x45 -- E
 local KEY_W = 0x57
@@ -85,6 +87,11 @@ local DOUBLE_DOOR_NAMES = {
 }
 
 local AUTO_CLOSE_DOOR_NAMES = {
+    AStaticMeshActor_16 = true,
+    AStaticMeshActor_17 = true,
+}
+
+local EXIT_DOOR_NAMES = {
     AStaticMeshActor_16 = true,
     AStaticMeshActor_17 = true,
 }
@@ -634,13 +641,34 @@ local function UpdateAutoCloseDoors(location)
             door.bPermanentlyLocked = true
         end
     end
+
+    bExitDoorsUnlockedForCurrentLoop = false
 end
 
-local function UnlockAutoCloseDoors()
-    for name, _ in pairs(AUTO_CLOSE_DOOR_NAMES) do
+local function LockExitDoorsForCurrentLoop()
+    bExitDoorsUnlockedForCurrentLoop = false
+
+    for name, _ in pairs(EXIT_DOOR_NAMES) do
+        local door = FindDoorByName(name)
+        if door ~= nil then
+            SetDoorOpenState(door, false, false)
+            door.bPermanentlyLocked = true
+        end
+    end
+end
+
+local function OpenExitDoorsForCurrentLoop()
+    if bExitDoorsUnlockedForCurrentLoop then
+        return
+    end
+
+    bExitDoorsUnlockedForCurrentLoop = true
+
+    for name, _ in pairs(EXIT_DOOR_NAMES) do
         local door = FindDoorByName(name)
         if door ~= nil then
             door.bPermanentlyLocked = false
+            SetDoorOpenState(door, true, true)
         end
     end
 end
@@ -776,6 +804,8 @@ local function InitDoors()
         SetDoorYaw(door, door.CurrentYaw)
         SyncDoorPhysics(door.Actor)
     end
+
+    LockExitDoorsForCurrentLoop()
 
     bDoorsInitialized = true
     print("[Door] initialized count=" .. tostring(#Doors))
@@ -988,6 +1018,8 @@ function BeginPlay()
     ControlPromptWidget = nil
     bControlPromptVisible = false
     LastControlPromptText = nil
+    bExitDoorsUnlockedForCurrentLoop = false
+    bLastLoopStopped = GameManager ~= nil and GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped()
 end
 
 function EndPlay()
@@ -1012,6 +1044,8 @@ function EndPlay()
     ControlPromptWidget = nil
     bControlPromptVisible = false
     LastControlPromptText = nil
+    bExitDoorsUnlockedForCurrentLoop = false
+    bLastLoopStopped = false
 end
 
 function Tick(dt)
@@ -1030,10 +1064,21 @@ function Tick(dt)
     UpdateAutoCloseDoors(location)
     UpdateAutoCloseYDoors(location)
 
+    local bLoopStopped = GameManager ~= nil
+        and GameManager.IsLoopStopped ~= nil
+        and GameManager:IsLoopStopped()
+    if bLoopStopped and not bLastLoopStopped then
+        OpenExitDoorsForCurrentLoop()
+    end
+    bLastLoopStopped = bLoopStopped
+
     if bInZone and bCanWarp then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
         GameManager:AdvanceAnomalyLoop()
-        UnlockAutoCloseDoors()
+        bLastLoopStopped = GameManager ~= nil
+            and GameManager.IsLoopStopped ~= nil
+            and GameManager:IsLoopStopped()
+        LockExitDoorsForCurrentLoop()
         RandomizeSingleDoorStatesOnWarp()
         ClearToyProjectiles()
         bCanWarp = false
