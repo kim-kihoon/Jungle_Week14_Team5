@@ -89,6 +89,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialManager.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Math/Quat.h"
 #include "Math/Rotator.h"
 #include "Math/Vector.h"
 #include "Mesh/MeshManager.h"
@@ -126,6 +127,57 @@ FSubscriptionID                             FLuaScriptManager::WatchSub = 0;
 
 namespace
 {
+    FVector LuaSafeComponentScaleRatio(const FVector& TargetScale, const FVector& SourceScale)
+    {
+        return FVector(
+            std::fabs(SourceScale.X) > 1.0e-6f ? TargetScale.X / SourceScale.X : 1.0f,
+            std::fabs(SourceScale.Y) > 1.0e-6f ? TargetScale.Y / SourceScale.Y : 1.0f,
+            std::fabs(SourceScale.Z) > 1.0e-6f ? TargetScale.Z / SourceScale.Z : 1.0f
+        );
+    }
+
+    FVector LuaComponentMultiply(const FVector& A, const FVector& B)
+    {
+        return FVector(A.X * B.X, A.Y * B.Y, A.Z * B.Z);
+    }
+
+    void LuaApplyActorTemplateGroupTransform(
+        const TArray<AActor*>& Actors,
+        const FVector&         TargetLocation,
+        const FRotator&        TargetRotation,
+        const FVector&         TargetScale)
+    {
+        if (Actors.empty() || !IsValid(Actors[0]))
+        {
+            return;
+        }
+
+        AActor*        Anchor              = Actors[0];
+        const FVector  AnchorLocation      = Anchor->GetActorLocation();
+        const FRotator AnchorRotation      = Anchor->GetActorRotation();
+        const FVector  AnchorScale         = Anchor->GetActorScale();
+        const FQuat    AnchorRotationQuat  = AnchorRotation.ToQuaternion();
+        const FQuat    TargetRotationQuat  = TargetRotation.ToQuaternion();
+        const FQuat    RotationDelta       = TargetRotationQuat * AnchorRotationQuat.Inverse();
+        const FVector  ScaleRatio          = LuaSafeComponentScaleRatio(TargetScale, AnchorScale);
+
+        for (AActor* Actor : Actors)
+        {
+            if (!IsValid(Actor))
+            {
+                continue;
+            }
+
+            const FVector  RelativeLocation = Actor->GetActorLocation() - AnchorLocation;
+            const FRotator RelativeRotation = Actor->GetActorRotation();
+            const FVector  RelativeScale    = Actor->GetActorScale();
+
+            Actor->SetActorLocation(TargetLocation + RotationDelta.RotateVector(LuaComponentMultiply(RelativeLocation, ScaleRatio)));
+            Actor->SetActorRotation((RotationDelta * RelativeRotation.ToQuaternion()).ToRotator().GetNormalized());
+            Actor->SetActorScale(LuaComponentMultiply(RelativeScale, ScaleRatio));
+        }
+    }
+
     struct FLuaReflectedEventOverride
     {
         TWeakObjectPtr<UObject> Target;
@@ -5688,6 +5740,46 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             Actor->SetActorRotation(Rotation.value_or(FVector(0, 0, 0)));
             Actor->SetActorScale(Scale.value_or(TemplateScale));
             return Actor;
+        }
+    );
+    World.set_function(
+        "SpawnActorTemplateActors",
+        [](const FString& TemplatePath, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale) -> sol::table
+        {
+            sol::table Result = FLuaScriptManager::GetState().create_table();
+            if (!GEngine) return Result;
+            UWorld* W = GEngine->GetWorld();
+            if (!W) return Result;
+
+            FString Error;
+            TArray<AActor*> Actors = FSceneSaveManager::LoadActorTemplateActorsFromJSON(TemplatePath, W, &Error);
+            if (Actors.empty())
+            {
+                if (!Error.empty())
+                {
+                    UE_LOG("[Lua] SpawnActorTemplateActors failed: %s Path=%s", Error.c_str(), TemplatePath.c_str());
+                }
+                return Result;
+            }
+
+            AActor* Anchor = Actors[0];
+            if (IsValid(Anchor))
+            {
+                const FVector  TargetLocation = Location.value_or(Anchor->GetActorLocation());
+                const FRotator TargetRotation = Rotation ? FRotator(*Rotation) : Anchor->GetActorRotation();
+                const FVector  TargetScale    = Scale.value_or(Anchor->GetActorScale());
+                LuaApplyActorTemplateGroupTransform(Actors, TargetLocation, TargetRotation, TargetScale);
+            }
+
+            int Idx = 1;
+            for (AActor* Actor : Actors)
+            {
+                if (IsValid(Actor))
+                {
+                    Result[Idx++] = Actor;
+                }
+            }
+            return Result;
         }
     );
     World.set_function(

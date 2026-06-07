@@ -45,6 +45,7 @@ public:
 
 	static void SaveSceneAsJSON(const string& SceneName, FWorldContext& WorldContext, const struct FMinimalViewInfo* PerspectivePOV = nullptr);
 	static bool SaveActorTemplateAsJSON(AActor* Actor, const FString& DirectoryPath, FString& OutCreatedPath);
+	static bool SaveActorTemplateAsJSON(const TArray<AActor*>& Actors, const FString& DirectoryPath, FString& OutCreatedPath);
 	// OverrideWorldType: 호출자가 World 의 WorldType 을 명시 — Game 빌드처럼 scene 파일에
 	// 기록된 EWorldType (보통 Editor) 을 무시하고 강제로 다른 타입으로 시작하고 싶을 때 사용.
 	// nullptr 이면 scene 파일의 값을 따른다 (없으면 Editor). UWorld 의 default WorldType
@@ -52,6 +53,7 @@ public:
 	// 사고를 막기 위해, 이 값은 Actor 생성 전에 World 에 적용된다.
 	static void LoadSceneFromJSON(const string& filepath, FWorldContext& OutWorldContext, FPerspectiveCameraData& OutCam, const EWorldType* OverrideWorldType = nullptr);
 	static AActor* LoadActorTemplateFromJSON(const FString& FilePath, UWorld* TargetWorld, FString* OutError = nullptr);
+	static TArray<AActor*> LoadActorTemplateActorsFromJSON(const FString& FilePath, UWorld* TargetWorld, FString* OutError = nullptr);
 
 	static TArray<FString> GetSceneFileList();
 
@@ -97,6 +99,7 @@ private:
 	// ---- Deserialization helpers ----
 	static AActor* DeserializeActor(json::JSON& ActorJSON, UWorld* World, FSceneLoadContext& Context);
 	static void FinalizeDeserializedActor(AActor* Actor, FSceneLoadContext& Context);
+	static void FinalizeDeserializedActors(const TArray<AActor*>& Actors, FSceneLoadContext& Context);
 	static USceneComponent* DeserializeSceneComponentTree(json::JSON& Node, AActor* Owner, FSceneLoadContext& Context);
 	static void DeserializeProperties(UObject* Obj, json::JSON& PropsJSON, FSceneLoadContext& Context);
 
