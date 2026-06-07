@@ -14,6 +14,10 @@ DebugManager.Scenarios = {
     {
         Key = "3",
         RuleName = "OffscreenAnimation"
+    },
+    {
+        Key = "4",
+        RuleName = "OffscreenFacePlayer"
     }
 }
 
