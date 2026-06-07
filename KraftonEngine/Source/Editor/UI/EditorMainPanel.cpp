@@ -220,6 +220,7 @@ void FEditorMainPanel::Create(FWindowsWindow* InWindow, FRenderer& InRenderer, U
 
 void FEditorMainPanel::Release()
 {
+	UIEditorWidget.Close();
 	AssetEditorManager.CloseAll();
 	ConsoleWidget.Shutdown();
 	ImGui_ImplDX11_Shutdown();
@@ -335,6 +336,7 @@ void FEditorMainPanel::Render(float DeltaTime)
 	RenderFooterOverlay(DeltaTime);
 
 	AssetEditorManager.Render(DeltaTime);
+	UIEditorWidget.Render(DeltaTime);
 
 	// 토스트 알림 (항상 최상위에 표시)
 	FNotificationToast::Render();
@@ -1389,6 +1391,11 @@ void FEditorMainPanel::OpenAssetEditorForObject(UObject* Object)
 	{
 		DocumentTabs.OpenOrFocusTab(Result.TabId, Result.Label, true);
 	}
+}
+
+void FEditorMainPanel::OpenUIEditor(const std::filesystem::path& Path)
+{
+	UIEditorWidget.Open(Path);
 }
 
 void FEditorMainPanel::CollectAssetEditorPreviewViewportClients(TArray<IEditorPreviewViewportClient*>& OutClients) const

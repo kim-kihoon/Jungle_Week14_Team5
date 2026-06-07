@@ -590,8 +590,7 @@ void RmlDocumentElement::OnDoubleLeftClicked(ContentBrowserContext& Context)
 		return;
 	}
 
-	const FString PackagePath = FPaths::ToUtf8(ContentItem.Path.lexically_relative(FPaths::RootDir()).generic_wstring());
-	Context.EditorEngine->GetRmlUiManager().OpenDocument(PackagePath);
+	Context.EditorEngine->OpenUIEditor(ContentItem.Path);
 }
 
 void ObjectElement::RenderContextMenu(ContentBrowserContext& Context)

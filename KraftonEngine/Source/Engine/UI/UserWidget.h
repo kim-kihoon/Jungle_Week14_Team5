@@ -18,6 +18,7 @@
 
 class APlayerController;
 class FWidgetClickEventListener;
+class FWidgetEventListener;
 namespace Rml { class ElementDocument; }
 
 class FWidgetClickEventListener final : public Rml::EventListener
@@ -37,6 +38,22 @@ private:
 	FString FunctionName;
 };
 
+class FWidgetEventListener final : public Rml::EventListener
+{
+public:
+	FWidgetEventListener(FString InElementId, FString InEventName, sol::protected_function InCallback);
+
+	void ProcessEvent(Rml::Event& Event) override;
+
+	const FString& GetElementId() const { return ElementId; }
+	const FString& GetEventName() const { return EventName; }
+
+private:
+	FString ElementId;
+	FString EventName;
+	sol::protected_function Callback;
+};
+
 UCLASS()
 class UUserWidget : public UObject
 {
@@ -52,12 +69,15 @@ public:
 	UFUNCTION(Callable, Category="UI")
 	void RemoveFromParent();
 	void BindClick(const FString& ElementId, sol::protected_function Callback);
+	void BindEvent(const FString& ElementId, const FString& EventName, sol::protected_function Callback);
 	void RegisterEventListeners();
 	void ClearEventListeners();
 	UFUNCTION(Callable, Category="UI")
 	void SetText(const FString& ElementId, const FString& Text);
 	UFUNCTION(Callable, Category="UI")
 	bool SetProperty(const FString& ElementId, const FString& PropertyName, const FString& Value);
+	UFUNCTION(Callable, Category="UI")
+	bool SetAttribute(const FString& ElementId, const FString& AttributeName, const FString& Value);
 
 	UFUNCTION(Pure, Category="UI")
 	APlayerController* GetOwningPlayer() const { return OwningPlayer; }
@@ -113,11 +133,20 @@ private:
 	void RegisterDeclarativeEventListeners(Rml::Element* Root);
 
 private:
+	struct FWidgetEventBinding
+	{
+		FString ElementId;
+		FString EventName;
+		sol::protected_function Callback;
+	};
+
 	TWeakObjectPtr<APlayerController> OwningPlayer;
 	Rml::ElementDocument* Document = nullptr;
 	FString DocumentPath;
 	TArray<std::pair<FString, sol::protected_function>> PendingClickBindings;
 	TArray<FWidgetClickEventListener*> ClickListeners;
+	TArray<FWidgetEventBinding> PendingEventBindings;
+	TArray<FWidgetEventListener*> EventListeners;
 	int32 ZOrder = 0;
 	bool bInViewport = false;
 	bool bDocumentLoaded = false;

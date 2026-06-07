@@ -6387,6 +6387,11 @@ void FLuaScriptManager::RegisterUIBindings(sol::state& Lua)
         {
             Widget.BindClick(ElementId, Callback);
         },
+        "bind_event",
+        [](UUserWidget& Widget, const FString& ElementId, const FString& EventName, sol::protected_function Callback)
+        {
+            Widget.BindEvent(ElementId, EventName, Callback);
+        },
         "SetText",
         &UUserWidget::SetText,
         "set_text",
@@ -6395,6 +6400,10 @@ void FLuaScriptManager::RegisterUIBindings(sol::state& Lua)
         &UUserWidget::SetProperty,
         "set_property",
         &UUserWidget::SetProperty,
+        "SetAttribute",
+        &UUserWidget::SetAttribute,
+        "set_attribute",
+        &UUserWidget::SetAttribute,
         "SetWantsMouse",
         &UUserWidget::SetWantsMouse,
         "WantsMouse",
