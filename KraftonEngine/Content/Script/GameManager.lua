@@ -3,6 +3,7 @@ local AnomalyManager = require("AnomalyManager")
 local LeaderboardManager = require("LeaderboardManager")
 local PlacementManager = require("PlacementManager")
 local JumpScareManager = require("JumpScareManager")
+local LoopManager = require("LoopManager")
 
 GameManager.State = {
     Ready = "Ready",
@@ -354,41 +355,29 @@ function GameManager:OnCymbalMonkeyCycleReset(callback)
 end
 
 function GameManager:IsCymbalMonkeyCycleStarted()
-    return self.bCymbalMonkeyCycleStarted == true
+    return LoopManager:IsCymbalMonkeyCycleStarted()
 end
 
 function GameManager:StartCymbalMonkeyCycle()
-    if self.bCymbalMonkeyCycleStarted then
-        return false
-    end
-    if self.state ~= self.State.Playing or self.bLoopStopped then
-        return false
-    end
-
-    self.bCymbalMonkeyCycleStarted = true
-    self:_FireEvent("CymbalMonkeyCycleStarted", "StartCymbalMonkeyCycle")
-    return true
+    local bStarted = LoopManager:StartCymbalMonkeyCycle(self)
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
+    return bStarted
 end
 
 function GameManager:ResetCymbalMonkeyCycle()
-    local bWasStarted = self.bCymbalMonkeyCycleStarted == true
-    self.bCymbalMonkeyCycleStarted = false
-    self:_FireEvent("CymbalMonkeyCycleReset", "ResetCymbalMonkeyCycle")
+    local bWasStarted = LoopManager:ResetCymbalMonkeyCycle(self, "ResetCymbalMonkeyCycle")
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     return bWasStarted
 end
 
 function GameManager:IsLoopStopped()
-    return self.bLoopStopped == true
+    return LoopManager:IsLoopStopped()
 end
 
 function GameManager:StopLoop(reason)
-    if self.bLoopStopped then
-        return false
-    end
-
-    self.bLoopStopped = true
-    self:_FireEvent("LoopStopped", reason or "StopLoop")
-    return true
+    local bStopped = LoopManager:StopLoop(self, reason)
+    self.bLoopStopped = LoopManager:IsLoopStopped()
+    return bStopped
 end
 
 function GameManager:RestLoop(reason)
@@ -406,8 +395,9 @@ function GameManager:Reset()
     self.totalGameTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
-    self.bLoopStopped = false
-    self.bCymbalMonkeyCycleStarted = false
+    LoopManager:Reset()
+    self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     self.manualPressureStage = nil
     self:_SetPressureStage(self.Pressure.EntryStrike, "Reset", false)
     self:_SetState(self.State.Ready, "Reset")
@@ -418,7 +408,9 @@ function GameManager:StartGame()
     self.totalGameTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
-    self.bLoopStopped = true
+    LoopManager:StartStopped()
+    self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     self:_SetState(self.State.Playing, "StartGame")
     self:_RefreshPressureStage("StartGame", true)
     self:_SetupAnomaly("StartGame")
@@ -449,7 +441,9 @@ function GameManager:GameOver(reason)
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
-    self.bLoopStopped = false
+    LoopManager:Reset()
+    self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     self:_SetPressureStage(self.Pressure.EntryStrike, reason or "GameOver", false)
     return self:_SetState(self.State.GameOver, reason or "GameOver")
 end
@@ -477,7 +471,9 @@ function GameManager:ClearGame(reason)
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
-    self.bLoopStopped = false
+    LoopManager:Reset()
+    self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     self:_SetPressureStage(self.Pressure.EntryStrike, clearReason, false)
     return self:_SetState(self.State.Clear, clearReason)
 end
@@ -500,11 +496,11 @@ function GameManager:Tick(dt)
     self.totalGameTime = self.totalGameTime + dt
 
     AnomalyManager:Tick(dt)
-    if self.bLoopStopped then
+    if LoopManager:IsLoopStopped() then
         return
     end
 
-    if not self.bCymbalMonkeyCycleStarted then
+    if not LoopManager:IsCymbalMonkeyCycleStarted() then
         return
     end
 
@@ -639,30 +635,23 @@ function GameManager:GetState()
 end
 
 function GameManager:OnWarp(reason)
-    if self.state ~= self.State.Playing then
-        return false
-    end
-
-    reason = reason or "OnWarp"
-    self.bCymbalMonkeyCycleStarted = false
-    self:_FireEvent("CymbalMonkeyCycleReset", reason)
-    return self:_SetupAnomaly(reason)
+    local bWarped = LoopManager:OnWarp(self, reason, function(setupReason)
+        return self:_SetupAnomaly(setupReason)
+    end)
+    self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
+    return bWarped
 end
 
 function GameManager:OnLoopStart(reason)
-    if self.state ~= self.State.Playing or not self.bLoopStopped then
-        return false
-    end
-
-    reason = reason or "OnLoopStart"
-    self.bLoopStopped = false
-    self.remainingTime = self.timeLimit or 0
-    self.bCymbalMonkeyCycleStarted = false
-    self:_RefreshPressureStage(reason, true)
-    self:_FireEvent("CymbalMonkeyCycleReset", reason)
-    self:_FireEvent("LoopRested", reason)
-    JumpScareManager:ActivateRandom()
-    return true
+    local bStarted = LoopManager:OnLoopStart(self, reason, function(startReason)
+        self.remainingTime = self.timeLimit or 0
+        self:_RefreshPressureStage(startReason, true)
+        JumpScareManager:ActivateRandom()
+    end)
+    self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
+    return bStarted
 end
 
 function GameManager:SetJumpScareActiveCount(count)

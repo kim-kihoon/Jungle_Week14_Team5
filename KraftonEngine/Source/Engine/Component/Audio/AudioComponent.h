@@ -33,6 +33,10 @@ public:
 	void SetVolume(float InVolume);
 	UFUNCTION(Pure, Category="Audio")
 	float GetVolume() const { return Volume; }
+	UFUNCTION(Callable, Category="Audio")
+	bool MuteForStartup();
+	UFUNCTION(Callable, Category="Audio")
+	bool RestoreStartupMute();
 
 	void PlayOneShot(const FString& InSoundPath, float InVolume, float InPitch, bool bInSpatialize = true);
 
@@ -50,6 +54,9 @@ private:
 
 	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Auto Play")
 	bool bAutoPlay = true;
+
+	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Mute Until Start")
+	bool bMuteUntilStart = false;
 
 	UPROPERTY(Edit, Save, Category="Audio", DisplayName="Loop")
 	bool bLoop = true;
@@ -74,5 +81,7 @@ private:
 
 	bool bLoaded = false;
 	bool bPlaying = false;
+	bool bStartupMuteActive = false;
+	float StartupMuteRestoreVolume = 1.0f;
 	TSet<FString> OneShotAudioKeys;
 };

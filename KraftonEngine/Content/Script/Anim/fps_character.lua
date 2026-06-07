@@ -3,6 +3,8 @@ local PISTOL_WALK_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_
 local PISTOL_FIRE_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Fire.uasset"
 local CAMERA_MESH_PATH = "Content/Data/camera/camera_StaticMesh.uasset"
 local GameManager = require("GameManager")
+local SoundManager = require("SoundManager")
+local ToolManager = require("ToolManager")
 
 local FPS_SPEED_THRESHOLD = 0.5
 local FPS_IDLE_TO_WALK_BLEND = 0.15
@@ -21,16 +23,12 @@ local CAMERA_TRACE_DISTANCE = 1000.0
 local FAKE_TARGET_TAG = "Fake"
 local BLACK_PHOTO_RULE_NAME = "BlackPhoto"
 local TOY_PROJECTILE_TAG = "ToyProjectile"
-local PARTY_BLOWER_SOUND_KEY = "PartyBlower"
-local PARTY_BLOWER_SOUND_VOLUME = 0.25
 
-local TOOL_PISTOL = 0
-local TOOL_CAMERA = 1
+local TOOL_PISTOL = ToolManager.Tool.Pistol
+local TOOL_CAMERA = ToolManager.Tool.Camera
 
-local function sync_hospital_tool_state(tool)
-    if HospitalPlayer ~= nil then
-        HospitalPlayer.current_tool = tool
-    end
+local function sync_tool_state(tool)
+    ToolManager:SetCurrentTool(tool)
 end
 
 local SWITCH_NONE = 0
@@ -281,13 +279,7 @@ local function get_crosshair_aim_target(owner)
 end
 
 local function play_party_blower_audio()
-    if Audio == nil or Audio.Play == nil then
-        return
-    end
-
-    pcall(function()
-        Audio.Play(PARTY_BLOWER_SOUND_KEY, PARTY_BLOWER_SOUND_VOLUME)
-    end)
+    SoundManager:PlayPartyBlower()
 end
 
 local function spawn_projectile_from_muzzle()
@@ -492,7 +484,7 @@ local function should_play_pistol_fire_from_camera()
 end
 
 local function show_pistol()
-    sync_hospital_tool_state(TOOL_PISTOL)
+    sync_tool_state(TOOL_PISTOL)
     Anim.set_crosshair_visible(true)
     Anim.set_owner_mesh_pitch(ARMS_READY_PITCH)
     Anim.set_owner_mesh_visibility(true)
@@ -502,7 +494,7 @@ local function show_pistol()
 end
 
 local function show_camera()
-    sync_hospital_tool_state(TOOL_CAMERA)
+    sync_tool_state(TOOL_CAMERA)
     Anim.set_crosshair_visible(false)
     Anim.set_owner_mesh_pitch(ARMS_DOWN_PITCH)
     Anim.set_owner_mesh_visibility(false)
@@ -659,7 +651,7 @@ function init(self)
     Anim.set_root_node(fps)
     self.FpsStateMachine = fps
     show_pistol()
-    sync_hospital_tool_state(TOOL_PISTOL)
+    sync_tool_state(TOOL_PISTOL)
 end
 
 function update(self, dt)
