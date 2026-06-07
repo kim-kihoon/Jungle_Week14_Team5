@@ -1728,8 +1728,11 @@ FPhysicsShapeDesc FPhysXPhysicsScene::BuildShapeDescFromComponent_GameThread(
             !RootComponent->IsKinematic();
         UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh();
         FStaticMesh* MeshAsset = StaticMesh ? StaticMesh->GetStaticMeshAsset() : nullptr;
+        const FString StaticMeshPath = StaticMeshComponent->GetStaticMeshPath();
+        const bool bUseSimpleStaticMeshCollision =
+            StaticMeshPath.find("Content/Data/hospital-objects/") != FString::npos;
 
-        if (bRootBodyIsStatic && MeshAsset && MeshAsset->Vertices.size() >= 3 && MeshAsset->Indices.size() >= 3)
+        if (!bUseSimpleStaticMeshCollision && bRootBodyIsStatic && MeshAsset && MeshAsset->Vertices.size() >= 3 && MeshAsset->Indices.size() >= 3)
         {
             auto MeshData = std::make_shared<FPhysicsShapeDesc::FTriangleMeshData>();
             MeshData->Vertices.reserve(MeshAsset->Vertices.size());
