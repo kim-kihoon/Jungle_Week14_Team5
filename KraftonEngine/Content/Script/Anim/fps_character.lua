@@ -49,17 +49,18 @@ local CAMERA_READY_Z = -0.2
 local CAMERA_DOWN_X = 0.5
 local CAMERA_DOWN_Y = 0.0
 local CAMERA_DOWN_Z = -1.0
-local CAMERA_BOB_RATE = 7.5
+local CAMERA_BOB_RATE = 9.0
 local CAMERA_BOB_SMOOTH = 8.0
-local CAMERA_BOB_FORWARD_AMOUNT = 0.010
-local CAMERA_BOB_SIDE_AMOUNT = 0.010
-local CAMERA_BOB_UP_AMOUNT = 0.015
-local HEAD_BOB_ROLL_DEGREES = 1.3
-local HEAD_BOB_PITCH_DEGREES = 0.64
-local HEAD_BOB_OFFSET_Z = 0.006
-local HEAD_BOB_ROLL_PHASE_OFFSET = 0.3
-local HEAD_BOB_SMOOTH = 12.0
+local CAMERA_BOB_FORWARD_AMOUNT = 0.017
+local CAMERA_BOB_SIDE_AMOUNT = 0.022
+local CAMERA_BOB_UP_AMOUNT = 0.026
+local HEAD_BOB_ROLL_DEGREES = 2.75
+local HEAD_BOB_PITCH_DEGREES = 1.35
+local HEAD_BOB_OFFSET_Z = 0.014
+local HEAD_BOB_ROLL_PHASE_OFFSET = 0.42
+local HEAD_BOB_SMOOTH = 17.0
 local HEAD_BOB_AIM_SCALE = 0.15
+local WALK_BOB_WEIGHT_SPEED = 3.2
 local FOOTSTEP_PHASE_HALF = math.pi
 local TWO_PI = math.pi * 2.0
 
@@ -110,13 +111,13 @@ local function set_camera_mesh_position(alpha, bob_x, bob_y, bob_z)
 end
 
 local function get_walk_bob_speed_factor(weight)
-    return lerp(0.45, 1.0, weight)
+    return lerp(0.55, 1.0, weight)
 end
 
 local function update_walk_bob(self, dt)
     local targetWeight = 0.0
     if self.Speed > self.SpeedThreshold then
-        targetWeight = clamp01((self.Speed - self.SpeedThreshold) / 4.0)
+        targetWeight = clamp01((self.Speed - self.SpeedThreshold) / WALK_BOB_WEIGHT_SPEED)
     end
 
     self.WalkBobWeight = lerp(self.WalkBobWeight, targetWeight, clamp01(dt * CAMERA_BOB_SMOOTH))
