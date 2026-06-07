@@ -4,7 +4,7 @@
 
 #include "Engine/Runtime/Engine.h"
 #include "Engine/Runtime/EngineInitHooks.h"
-#include "Game/Player/HospitalPlayerActor.h"
+#include "GameFramework/Pawn/LuaCharacter.h"
 #include "Lua/LuaScriptManager.h"
 
 // ============================================================
@@ -23,7 +23,7 @@ void RegisterGameLuaBindings(sol::state& Lua)
 	sol::table HospitalPlayer = Lua.create_table();
 	HospitalPlayer["play_pistol_fire_effect"] = [](AActor* Owner)
 	{
-		AHospitalPlayerActor* Player = Cast<AHospitalPlayerActor>(Owner);
+		ALuaCharacter* Player = Cast<ALuaCharacter>(Owner);
 		if (!Player)
 		{
 			return false;
