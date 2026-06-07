@@ -3143,12 +3143,6 @@ void USkeletalMeshComponent::Serialize(FArchive& Ar)
 
 }
 
-void USkeletalMeshComponent::OnPostLoad(FArchive& Ar)
-{
-    Super::OnPostLoad(Ar);
-    InitializeAnimation();
-}
-
 bool USkeletalMeshComponent::EvaluateAnimInstance(float DeltaTime)
 {
     if (!IsValid(this) || IsPendingKill()) return false;

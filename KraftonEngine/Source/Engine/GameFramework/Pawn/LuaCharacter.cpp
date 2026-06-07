@@ -203,7 +203,6 @@ void ALuaCharacter::OnPostLoad(FArchive& Ar)
 {
 	Super::OnPostLoad(Ar);
 	RefreshLuaCharacterComponentReferences();
-	ConfigureFirstPersonViewRig();
 }
 
 void ALuaCharacter::RefreshLuaCharacterComponentReferences()
@@ -216,6 +215,9 @@ void ALuaCharacter::RefreshLuaCharacterComponentReferences()
 
 void ALuaCharacter::BeginPlay()
 {
+	RefreshLuaCharacterComponentReferences();
+	ConfigureFirstPersonViewRig();
+
 	Super::BeginPlay();
 	EnsurePistolMuzzleFlashLight();
 	if (PistolMuzzleFlashParticle)
