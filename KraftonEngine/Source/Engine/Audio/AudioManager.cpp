@@ -463,7 +463,7 @@ void FAudioManager::LoadDefaultAudios()
 {
 	LoadAudio("CameraShutter", "Camera/CameraShutter.mp3", false);
 	LoadAudio("PhotoOut", "Camera/PhotoOut.mp3", false);
-	LoadAudio("PistolFire", "Pistol/pistolFire.mp3", false);
+	LoadAudio("PistolFire", "SFX/pistol-fire.mp3", false);
 	LoadAudio("Tinnitus", "Pistol/tinnitus.mp3", false);
 	LoadAudio("DoorOpen", "SFX/door-open.mp3", false, true);
 	LoadAudio("HeavyDoorOpen", "SFX/heavy-door-open.mp3", false, true);
