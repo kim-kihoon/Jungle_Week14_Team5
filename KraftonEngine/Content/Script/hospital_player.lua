@@ -123,6 +123,18 @@ local CYMBAL_TRIGGER_DOOR_NAMES = {
 
 local MAX_OPEN_SINGLE_DOORS_ON_WARP = 5
 local TOY_PROJECTILE_TAG = "ToyProjectile"
+local ENTRY_DOOR_TAG = "DoorEntry"
+
+local function IsEntryDoor(door)
+    if door == nil or door.Actor == nil or door.Actor.HasTag == nil then
+        return false
+    end
+
+    local ok, bHasTag = pcall(function()
+        return door.Actor:HasTag(ENTRY_DOOR_TAG)
+    end)
+    return ok and bHasTag == true
+end
 
 local function IsInTriggerZone(location)
     return location.Y > TRIGGER_Y_MIN and location.X < TRIGGER_X_MAX
@@ -559,6 +571,22 @@ local function IsSingleDoor(door)
     return door ~= nil and DOUBLE_DOOR_NAMES[door.Name] ~= true
 end
 
+local function TryOnLoopStartOnDoorOpen(door, bWasOpen)
+    if door == nil or bWasOpen or not door.IsOpen then
+        return
+    end
+    if not IsEntryDoor(door) then
+        return
+    end
+    if GameManager == nil or GameManager.OnLoopStart == nil then
+        return
+    end
+
+    pcall(function()
+        GameManager:OnLoopStart("DoorEntryOpened")
+    end)
+end
+
 local function TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
     if door == nil or bWasOpen or not door.IsOpen then
         return
@@ -578,6 +606,11 @@ local function TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
     end
 end
 
+local function HandleDoorOpened(door, bWasOpen)
+    TryOnLoopStartOnDoorOpen(door, bWasOpen)
+    TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
+end
+
 local function SetDoorOpenState(door, bOpen, bPlaySound)
     if door == nil or door.Actor == nil or door.IsOpen == bOpen then
         return
@@ -595,7 +628,7 @@ local function SetDoorOpenState(door, bOpen, bPlaySound)
     SyncDoorPhysics(door.Actor)
 
     if bOpen then
-        TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
+        HandleDoorOpened(door, bWasOpen)
     end
 
     if not bPlaySound then
@@ -743,7 +776,7 @@ local function ToggleDoor(door)
     SyncDoorPhysics(door.Actor)
 
     if door.IsOpen then
-        TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
+        HandleDoorOpened(door, bWasOpen)
         local openVolume = door.OpenSoundKey == DOOR_OPEN_SOUND_KEY and DOOR_OPEN_SOUND_VOLUME or DOOR_SOUND_VOLUME
         PlayDoorAudioAt(door.Actor, door.OpenSoundKey, openVolume)
     elseif bWasOpen then
@@ -1275,7 +1308,7 @@ function Tick(dt)
 
     if bInZone and bCanWarp then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
-        GameManager:AdvanceAnomalyLoop()
+        GameManager:OnWarp("PlayerWarp")
         bLastLoopStopped = GameManager ~= nil
             and GameManager.IsLoopStopped ~= nil
             and GameManager:IsLoopStopped()

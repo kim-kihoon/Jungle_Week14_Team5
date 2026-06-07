@@ -2,20 +2,21 @@
 
 ## 목적
 
-- 플레이어가 루프 지점에 도달했을 때 새로운 이상현상을 하나 활성화한다.
+- 게임 시작 또는 플레이어 워프 시 새로운 이상현상을 하나 활성화한다.
 - 이상현상 대상은 `AnomalyCandidate` 태그가 붙은 액터 중에서 선택한다.
 - 한 루프에는 액터 하나와 규칙 하나만 활성화한다.
 - 플레이어가 현재 활성 이상현상 대상을 총으로 맞추면 이상현상을 클리어 상태로 표시하고 루프를 정지한다.
 - 정지된 루프에서는 게임 시간이 흐르지 않고 `CymbalMonkey` 애니메이션도 멈춘다.
-- 다음 루프 또는 게임 시작 시 루프를 복구하고 새 이상현상을 로드한다.
+- `DoorEntry` 태그 문이 열리면 루프 시간을 초기화하고 시간 갱신을 재개한다.
 
 ## 전체 구조
 
 ```txt
 GameManager
-  ├─ 루프 진입점 제공
+  ├─ 게임 시작과 워프 시 이상현상 세팅
+  ├─ DoorEntry 문 열림 시 루프 시작 처리
   ├─ 총격 판정 보고 진입점 제공
-  ├─ StopLoop / RestLoop으로 루프 정지와 복구 처리
+  ├─ StopLoop / OnLoopStart로 루프 정지와 복구 처리
   └─ 게임 상태 리셋 시 이상현상 정리
 
 AnomalyManager
@@ -45,20 +46,32 @@ AnomalyCandidate
 
 `AnomalyManager`는 `World.FindActorsByTag("AnomalyCandidate")`로 후보를 수집한다. 후보가 없으면 이상현상을 활성화하지 않고 실패 사유만 남긴다.
 
-### 루프 이벤트에서 호출
+### 게임 시작과 워프 이벤트에서 호출
 
-플레이어 위치 리셋 직후 아래 함수를 호출한다. 게임 시작 시에도 같은 흐름으로 초기 이상현상을 로드한다.
+게임 시작 시 `GameManager:StartGame()`은 초기 이상현상 세팅을 수행한다. 이때 타이머는 바로 흐르지 않도록 루프 정지 상태로 시작한다.
+
+플레이어 워프 직후에는 아래 함수를 호출해서 배치와 새 이상현상을 다시 세팅한다. 이 함수는 타이머를 재설정하지 않는다.
 
 ```lua
 local GameManager = require("GameManager")
 
-GameManager:AdvanceAnomalyLoop()
+GameManager:OnWarp("PlayerWarp")
 ```
 
 호출 결과는 성공 여부를 `boolean`으로 반환한다.
 
 - `true`: 이상현상 하나가 활성화됨
 - `false`: 게임이 Playing 상태가 아니거나 후보/규칙 적용에 실패함
+
+### 루프 시작 문 이벤트에서 호출
+
+`DoorEntry` 태그가 붙은 문이 닫힌 상태에서 열린 순간 아래 함수를 호출한다. 이 함수는 타이머를 `timeLimit`으로 되돌리고 루프 정지 상태를 해제한다.
+
+```lua
+GameManager:OnLoopStart("DoorEntryOpened")
+```
+
+이상현상 세팅은 `StartGame()`과 `OnWarp()`의 책임이며, `OnLoopStart()`는 타이머와 루프 재개만 담당한다.
 
 ### 총격 판정에서 호출
 
@@ -97,18 +110,44 @@ CymbalsMonkeyPositionCandidate
 
 ## 구현 흐름
 
-### 일반 루프
+### 게임 시작 세팅
 
 ```txt
-GameManager:AdvanceAnomalyLoop()
-  ├─ GameManager:RestLoop()
-  └─ AnomalyManager:SelectAndSpawn()
+GameManager:StartGame()
+  ├─ Playing 상태 진입
+  ├─ 루프 정지 상태로 시작
+  └─ GameManager:_SetupAnomaly("StartGame")
        ├─ 기존 활성 이상현상 Despawn
-       ├─ AnomalyCandidate 후보 수집
-       ├─ 후보 액터 1개 랜덤 선택
-       ├─ 규칙 1개 랜덤 선택
-       ├─ 규칙 Spawn(context) 호출
-       └─ 성공 시 대상에 ActiveAnomalyTarget 태그 부여
+       ├─ 기존 배치 제거
+       ├─ 새 배치 Spawn
+       └─ AnomalyManager:SelectAndSpawn()
+            ├─ AnomalyCandidate 후보 수집
+            ├─ 후보 액터 1개 랜덤 선택
+            ├─ 규칙 1개 랜덤 선택
+            ├─ 규칙 Spawn(context) 호출
+            └─ 성공 시 대상에 ActiveAnomalyTarget 태그 부여
+```
+
+### 워프 루프
+
+```txt
+GameManager:OnWarp("PlayerWarp")
+  └─ GameManager:_SetupAnomaly("PlayerWarp")
+       ├─ 기존 활성 이상현상 Despawn
+       ├─ 기존 배치 제거
+       ├─ 새 배치 Spawn
+       └─ AnomalyManager:SelectAndSpawn()
+```
+
+`OnWarp`는 타이머와 루프 정지 상태를 바꾸지 않는다.
+
+### 루프 시작
+
+```txt
+GameManager:OnLoopStart("DoorEntryOpened")
+  ├─ remainingTime을 timeLimit 초기값으로 복구
+  ├─ 시간 갱신 재개
+  └─ LoopRested 이벤트로 CymbalMonkey 애니메이션 재개
 ```
 
 ### 디버그 루프
@@ -136,18 +175,15 @@ GameManager:ReportAnomalyShot(actor)
        └─ LoopStopped 이벤트로 CymbalMonkey 애니메이션 정지
 ```
 
-### 루프 복구
+### 호환 루프
 
 ```txt
 GameManager:AdvanceAnomalyLoop()
-  ├─ GameManager:RestLoop()
-  │    ├─ remainingTime을 timeLimit 초기값으로 복구
-  │    ├─ 시간 갱신 재개
-  │    └─ LoopRested 이벤트로 CymbalMonkey 애니메이션 재개
-  └─ AnomalyManager:SelectAndSpawn()
-       ├─ 이전 이상현상 Despawn
-       └─ 새 이상현상 Spawn
+  ├─ GameManager:OnWarp("AdvanceAnomalyLoop")
+  └─ GameManager:OnLoopStart("AdvanceAnomalyLoop")
 ```
+
+신규 플레이 흐름에서는 `AdvanceAnomalyLoop()`를 직접 호출하지 않고 `OnWarp()`와 `OnLoopStart()`를 각각 호출한다.
 
 ### CymbalsMonkey 순간이동
 
@@ -170,7 +206,7 @@ CymbalMonkey:Tick(dt)
 
 `AnomalyManager:Reset()`은 현재 활성 이상현상이 있으면 규칙의 `Despawn(context)`을 호출해서 태그, 그림자, 애니메이션 상태를 복구한다. `GameManager`는 이때 루프 정지 상태도 함께 정리한다.
 
-새 이상현상을 로드하는 `AnomalyManager:SelectAndSpawn()`과 `AnomalyManager:SelectAndSpawnRule(ruleName)`도 시작 시 기존 활성 이상현상을 `Despawn`한다. 따라서 총격으로 클리어된 이상현상은 다음 루프 진입이나 디버그 규칙 전환 시 복구된 뒤 새 이상현상이 적용된다.
+새 이상현상을 로드하는 `GameManager:_SetupAnomaly()`, `AnomalyManager:SelectAndSpawn()`과 `AnomalyManager:SelectAndSpawnRule(ruleName)`도 시작 시 기존 활성 이상현상을 `Despawn`한다. 따라서 총격으로 클리어된 이상현상은 다음 워프나 디버그 규칙 전환 시 복구된 뒤 새 이상현상이 적용된다.
 
 ## Anomaly Rule 인터페이스
 
@@ -350,7 +386,7 @@ World.GetRealTimeSeconds()
 - `3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
 - 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어되는지 확인한다.
 - 활성 대상을 쏘면 게임 시간이 멈추고 `CymbalMonkey` 애니메이션도 정지하는지 확인한다.
-- 다음 루프를 돌면 `remainingTime`이 초기값으로 복구되고, 시간이 다시 흐르며 `CymbalMonkey` 애니메이션이 재개되는지 확인한다.
+- `DoorEntry` 문을 열면 `remainingTime`이 초기값으로 복구되고, 시간이 다시 흐르며 `CymbalMonkey` 애니메이션이 재개되는지 확인한다.
 - 씬을 재시작하거나 게임이 리셋될 때 이전 이상현상 상태가 복구되는지 확인한다.
 
 ## OffscreenFacePlayer 추가 규칙
