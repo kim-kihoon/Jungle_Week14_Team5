@@ -8,6 +8,7 @@ local ToolManager = require("ToolManager")
 local GameOverMonkey = require("GameOverMonkey")
 local StageManager = require("StageManager")
 local EndingManager = require("EndingManager")
+local StartupManager = require("StartupManager")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
@@ -621,17 +622,21 @@ local function StartTitleTransitionCoroutine()
     ResumeTitleTransition(0.0)
 end
 
-local function ScheduleTitleMusic()
+local function PlayTitleMusicNow()
     local playFn = SoundManager.PlayTitleMusicIfNeeded or SoundManager.PlayTitleMusic
+    playFn(SoundManager)
+end
+
+local function ScheduleTitleMusic()
     if StartCoroutine == nil or Wait == nil then
-        playFn(SoundManager)
+        PlayTitleMusicNow()
         return
     end
 
     StartCoroutine(function()
         Wait(0.0)
         if bTitleMode and not bTitleTransitioning then
-            playFn(SoundManager)
+            PlayTitleMusicNow()
         end
     end)
 end
@@ -645,6 +650,7 @@ end
 
 function BeginPlay()
     StopTitleTransitionCoroutine()
+    StartupManager:Cancel()
     InitialPlayerLocation = nil
     InitialPlayerRotation = nil
     InitialPlayerControlRotation = nil
@@ -657,17 +663,22 @@ function BeginPlay()
     DoorManager:Reset()
     DoorManager:ResetSessionState()
     SoundManager:EnterTitleState()
+    PlayTitleMusicNow()
     ToolManager:Reset()
     UIManager:ResetHospital()
     if HospitalPlayer ~= nil then
         HospitalPlayer.title_mode = true
     end
-    EnterTitleScreen()
     CaptureTitleCamera()
+    StartupManager:Begin(function()
+        EnterTitleScreen()
+        CaptureTitleCamera()
+    end)
 end
 
 function EndPlay()
     StopTitleTransitionCoroutine()
+    StartupManager:Cancel()
     UnbindGameOverStateChanged()
     GameOverMonkey:Shutdown()
     EndingManager:Reset()
@@ -687,6 +698,12 @@ function Tick(dt)
     end
 
     GameOverMonkey:Tick(dt)
+
+    if StartupManager:IsActive() then
+        CaptureTitleCamera()
+        SyncCrosshairVisibility()
+        return
+    end
 
     if bTitleTransitioning then
         ResumeTitleTransition(dt)
