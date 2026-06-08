@@ -34,7 +34,7 @@ EndingManager.MONKEY_ENTRY_ANIMATION_PATH =
 EndingManager.MONKEY_STRIKE_ANIMATION_PATH =
     "Content/Data/CymbalMonkey/CymbalMonkey_Joints_ArmOnlyCymbalStrike.uasset"
 EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS = 3.0
-EndingManager.MONKEY_STRIKE_PLAY_RATE = 0.5
+EndingManager.MONKEY_STRIKE_PLAY_RATE = 1.0
 
 -- 엔딩 진입 후 카메라 연출 타이밍 (초)
 EndingManager.STAGGER_DELAY = 2.0
