@@ -3,8 +3,13 @@
 #include "Object/Reflection/ObjectFactory.h"
 #include "UI/UIManager.h"
 
+#include <cfloat>
+#include <cmath>
+
 namespace
 {
+constexpr const char* UI_NAV_SELECTED_CLASS = "ui-nav-selected";
+
 FString EscapeRmlText(const FString& Text)
 {
 	FString Escaped;
@@ -23,6 +28,16 @@ FString EscapeRmlText(const FString& Text)
 	}
 	return Escaped;
 }
+
+bool IsTruthyAttribute(const Rml::String& Value)
+{
+	return Value == "true" || Value == "1";
+}
+
+float SquaredDistance(float X, float Y)
+{
+	return X * X + Y * Y;
+}
 }
 
 FWidgetClickEventListener::FWidgetClickEventListener(FString InElementId, sol::protected_function InCallback)
@@ -39,6 +54,11 @@ FWidgetClickEventListener::FWidgetClickEventListener(FString InElementId, FStrin
 }
 
 void FWidgetClickEventListener::ProcessEvent(Rml::Event& /*Event*/)
+{
+	Execute();
+}
+
+void FWidgetClickEventListener::Execute()
 {
 	if (Callback.valid())
 	{
@@ -200,6 +220,8 @@ void UUserWidget::RegisterEventListeners()
 	}
 
 	RegisterDeclarativeEventListeners(Document);
+	RefreshNavigationButtons();
+	ApplyNavigationSelection();
 }
 
 void UUserWidget::RegisterDeclarativeEventListeners(Rml::Element* Root)
@@ -270,6 +292,263 @@ void UUserWidget::ClearEventListeners()
 		delete Listener;
 	}
 	ClickListeners.clear();
+
+	ClearNavigationSelection();
+	NavigationButtons.clear();
+}
+
+bool UUserWidget::NavigateSelection(int32 DirectionX, int32 DirectionY)
+{
+	if (!Document || (DirectionX == 0 && DirectionY == 0))
+	{
+		return false;
+	}
+
+	RefreshNavigationButtons();
+	if (NavigationButtons.empty())
+	{
+		return false;
+	}
+
+	if (NavigationSelectionIndex < 0 || NavigationSelectionIndex >= static_cast<int32>(NavigationButtons.size()))
+	{
+		NavigationSelectionIndex = 0;
+		ApplyNavigationSelection();
+		return true;
+	}
+
+	const FNavigationButton& Current = NavigationButtons[NavigationSelectionIndex];
+	const float DirectionLength = std::sqrt(static_cast<float>(DirectionX * DirectionX + DirectionY * DirectionY));
+	const float DirX = static_cast<float>(DirectionX) / DirectionLength;
+	const float DirY = static_cast<float>(DirectionY) / DirectionLength;
+
+	int32 BestIndex = -1;
+	float BestScore = FLT_MAX;
+	for (int32 Index = 0; Index < static_cast<int32>(NavigationButtons.size()); ++Index)
+	{
+		if (Index == NavigationSelectionIndex)
+		{
+			continue;
+		}
+
+		const FNavigationButton& Candidate = NavigationButtons[Index];
+		const float DeltaX = Candidate.CenterX - Current.CenterX;
+		const float DeltaY = Candidate.CenterY - Current.CenterY;
+		const float Dot = DeltaX * DirX + DeltaY * DirY;
+		if (Dot <= 0.0f)
+		{
+			continue;
+		}
+
+		const float DistanceSquared = SquaredDistance(DeltaX, DeltaY);
+		const float PerpendicularSquared = (std::max)(0.0f, DistanceSquared - Dot * Dot);
+		const float Score = PerpendicularSquared * 4.0f + Dot;
+		if (Score < BestScore)
+		{
+			BestScore = Score;
+			BestIndex = Index;
+		}
+	}
+
+	if (BestIndex < 0)
+	{
+		return false;
+	}
+
+	NavigationSelectionIndex = BestIndex;
+	ApplyNavigationSelection();
+	return true;
+}
+
+bool UUserWidget::ActivateNavigationSelection()
+{
+	if (!Document)
+	{
+		return false;
+	}
+
+	RefreshNavigationButtons();
+	if (NavigationButtons.empty())
+	{
+		return false;
+	}
+
+	if (NavigationSelectionIndex < 0 || NavigationSelectionIndex >= static_cast<int32>(NavigationButtons.size()))
+	{
+		NavigationSelectionIndex = 0;
+		ApplyNavigationSelection();
+	}
+
+	return ActivateNavigationElement(NavigationButtons[NavigationSelectionIndex].ElementId);
+}
+
+bool UUserWidget::ActivateCloseNavigationTarget()
+{
+	if (!Document)
+	{
+		return false;
+	}
+
+	RefreshNavigationButtons();
+	const int32 CloseIndex = FindCloseNavigationButtonIndex();
+	if (CloseIndex < 0)
+	{
+		return false;
+	}
+
+	NavigationSelectionIndex = CloseIndex;
+	ApplyNavigationSelection();
+	return ActivateNavigationElement(NavigationButtons[CloseIndex].ElementId);
+}
+
+void UUserWidget::ClearNavigationSelection()
+{
+	if (NavigationSelectionIndex >= 0 && NavigationSelectionIndex < static_cast<int32>(NavigationButtons.size()))
+	{
+		RestoreNavigationButtonStyle(NavigationButtons[NavigationSelectionIndex].ElementId);
+	}
+	NavigationSelectionIndex = -1;
+}
+
+void UUserWidget::RefreshNavigationButtons()
+{
+	if (!Document)
+	{
+		ClearNavigationSelection();
+		NavigationButtons.clear();
+		return;
+	}
+
+	const FString PreviousSelection = NavigationSelectionIndex >= 0 && NavigationSelectionIndex < static_cast<int32>(NavigationButtons.size())
+		? NavigationButtons[NavigationSelectionIndex].ElementId
+		: FString();
+
+	if (!PreviousSelection.empty())
+	{
+		RestoreNavigationButtonStyle(PreviousSelection);
+	}
+
+	NavigationButtons.clear();
+	CollectNavigationButtons(Document);
+
+	NavigationSelectionIndex = -1;
+	for (int32 Index = 0; Index < static_cast<int32>(NavigationButtons.size()); ++Index)
+	{
+		if (NavigationButtons[Index].ElementId == PreviousSelection)
+		{
+			NavigationSelectionIndex = Index;
+			break;
+		}
+	}
+
+	if (NavigationSelectionIndex < 0 && !NavigationButtons.empty())
+	{
+		NavigationSelectionIndex = 0;
+	}
+}
+
+void UUserWidget::CollectNavigationButtons(Rml::Element* Root)
+{
+	if (!Root)
+	{
+		return;
+	}
+
+	const Rml::String ElementId = Root->GetId();
+	const Rml::String ElementType = Root->GetAttribute<Rml::String>("data-type", "");
+	const bool bVisible = Root->GetAttribute<Rml::String>("data-visible", "true") != "false";
+	const bool bLocked = IsTruthyAttribute(Root->GetAttribute<Rml::String>("data-locked", "false"));
+	if (!ElementId.empty() && ElementType == "Button" && bVisible && !bLocked)
+	{
+		FNavigationButton Button;
+		Button.ElementId = ElementId;
+		Button.CenterX = Root->GetAbsoluteLeft() + Root->GetOffsetWidth() * 0.5f;
+		Button.CenterY = Root->GetAbsoluteTop() + Root->GetOffsetHeight() * 0.5f;
+		Button.Width = Root->GetOffsetWidth();
+		Button.Height = Root->GetOffsetHeight();
+		Button.bCloseTarget = Root->GetAttribute<Rml::String>("data-on-click", "") == "ClosePopup";
+		NavigationButtons.push_back(Button);
+	}
+
+	const int ChildCount = Root->GetNumChildren();
+	for (int ChildIndex = 0; ChildIndex < ChildCount; ++ChildIndex)
+	{
+		CollectNavigationButtons(Root->GetChild(ChildIndex));
+	}
+}
+
+void UUserWidget::ApplyNavigationSelection()
+{
+	if (!Document)
+	{
+		return;
+	}
+
+	for (const FNavigationButton& Button : NavigationButtons)
+	{
+		RestoreNavigationButtonStyle(Button.ElementId);
+	}
+
+	if (NavigationSelectionIndex < 0 || NavigationSelectionIndex >= static_cast<int32>(NavigationButtons.size()))
+	{
+		return;
+	}
+
+	const FNavigationButton& Button = NavigationButtons[NavigationSelectionIndex];
+	Rml::Element* Element = Document->GetElementById(Button.ElementId.c_str());
+	if (!Element)
+	{
+		return;
+	}
+
+	Element->SetClass(UI_NAV_SELECTED_CLASS, true);
+}
+
+void UUserWidget::RestoreNavigationButtonStyle(const FString& ElementId)
+{
+	if (!Document || ElementId.empty())
+	{
+		return;
+	}
+
+	Rml::Element* Element = Document->GetElementById(ElementId.c_str());
+	if (!Element)
+	{
+		return;
+	}
+
+	Element->SetClass(UI_NAV_SELECTED_CLASS, false);
+}
+
+bool UUserWidget::ActivateNavigationElement(const FString& ElementId)
+{
+	if (ElementId.empty())
+	{
+		return false;
+	}
+
+	for (FWidgetClickEventListener* Listener : ClickListeners)
+	{
+		if (Listener && Listener->GetElementId() == ElementId)
+		{
+			Listener->Execute();
+			return true;
+		}
+	}
+
+	return false;
+}
+
+int32 UUserWidget::FindCloseNavigationButtonIndex() const
+{
+	for (int32 Index = 0; Index < static_cast<int32>(NavigationButtons.size()); ++Index)
+	{
+		if (NavigationButtons[Index].bCloseTarget)
+		{
+			return Index;
+		}
+	}
+	return -1;
 }
 
 void UUserWidget::SetText(const FString& ElementId, const FString& Text)

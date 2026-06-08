@@ -132,6 +132,8 @@ private:
 	void CloseDocument(UUserWidget* Widget);
 	void CompactInvalidWidgets();
 	void ProcessInput(const FFrameContext& Frame);
+	void ProcessNavigationInput();
+	UUserWidget* GetTopNavigationWidget() const;
 	void RemoveFromViewportImmediate(UUserWidget* Widget);
 	void FlushDeferredViewportRemovals();
 
@@ -148,4 +150,7 @@ private:
 	bool bRmlInitialized = false;
 	bool bDispatchingRmlEvents = false;
 	UWorld* DispatchWorld = nullptr;
+	double NextNavigationRepeatTime = 0.0;
+	int32 HeldNavigationX = 0;
+	int32 HeldNavigationY = 0;
 };

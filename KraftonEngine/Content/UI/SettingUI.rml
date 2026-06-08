@@ -37,7 +37,8 @@
 			color: #FFFFFF;
 			background-color: rgba(0, 0, 0, 0);
 		}
-		.text-button:hover {
+		.text-button:hover,
+		.ui-nav-selected {
 			color: rgb(71, 255, 105);
 		}
 	</style>

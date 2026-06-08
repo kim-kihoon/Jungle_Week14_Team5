@@ -176,7 +176,7 @@ void InputSystem::AddActionMapping(const FString& Name, const FString& KeyName)
 
 void InputSystem::AddActionMapping(const FString& Name, FInputKeyHandle Key)
 {
-	if (!Name.empty() && Key.IsButton())
+	if (!Name.empty() && (Key.IsButton() || Key.Kind == EInputKeyKind::GamepadAxis))
 	{
 		ActionMappings.push_back(FInputMapping{ Name, Key, 1.0f });
 		bInputMappingsInitialized = true;

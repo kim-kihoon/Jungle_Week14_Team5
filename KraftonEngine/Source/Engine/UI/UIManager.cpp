@@ -33,6 +33,7 @@
 #include <cctype>
 #include <chrono>
 #include <filesystem>
+#include <cmath>
 #include <memory>
 
 namespace
@@ -71,6 +72,9 @@ namespace
 	};
 
 	constexpr const char* UIShaderPath = "Shaders/UI/RmlUi.hlsl";
+	constexpr float NavigationStickThreshold = 0.5f;
+	constexpr double NavigationInitialRepeatDelay = 0.32;
+	constexpr double NavigationRepeatDelay = 0.12;
 
 	std::filesystem::path ToProjectPath(const FString& Path)
 	{
@@ -140,6 +144,44 @@ namespace
 			return Value;
 		};
 		return ToLower(Text).find(ToLower(Needle)) != FString::npos;
+	}
+
+	bool WasGamepadButtonPressed(const FInputDeviceSnapshot& Snapshot, EGamepadButton Button)
+	{
+		const int32 ButtonIndex = static_cast<int32>(Button);
+		return ButtonIndex >= 0 &&
+			ButtonIndex < static_cast<int32>(EGamepadButton::Count) &&
+			Snapshot.Buttons[ButtonIndex] &&
+			!Snapshot.PrevButtons[ButtonIndex];
+	}
+
+	bool IsGamepadButtonDown(const FInputDeviceSnapshot& Snapshot, EGamepadButton Button)
+	{
+		const int32 ButtonIndex = static_cast<int32>(Button);
+		return ButtonIndex >= 0 &&
+			ButtonIndex < static_cast<int32>(EGamepadButton::Count) &&
+			Snapshot.Buttons[ButtonIndex];
+	}
+
+	float GetGamepadAxisValue(const FInputDeviceSnapshot& Snapshot, EGamepadAxis Axis)
+	{
+		const int32 AxisIndex = static_cast<int32>(Axis);
+		return AxisIndex >= 0 && AxisIndex < static_cast<int32>(EGamepadAxis::Count)
+			? Snapshot.Axes[AxisIndex]
+			: 0.0f;
+	}
+
+	int32 AxisToNavigationDirection(float Value)
+	{
+		if (Value <= -NavigationStickThreshold)
+		{
+			return -1;
+		}
+		if (Value >= NavigationStickThreshold)
+		{
+			return 1;
+		}
+		return 0;
 	}
 }
 
@@ -1090,7 +1132,141 @@ void UUIManager::ProcessInput(const FFrameContext& Frame)
 	{
 		RmlContext->ProcessMouseWheel(WheelDelta, KeyModifierState);
 	}
+	ProcessNavigationInput();
 	bDispatchingRmlEvents = false;
+}
+
+void UUIManager::ProcessNavigationInput()
+{
+	UUserWidget* Widget = GetTopNavigationWidget();
+	if (!IsValid(Widget))
+	{
+		HeldNavigationX = 0;
+		HeldNavigationY = 0;
+		NextNavigationRepeatTime = 0.0;
+		return;
+	}
+
+	InputSystem& Input = InputSystem::Get();
+	const FInputDeviceSnapshot& Gamepad = Input.GetGamepadSnapshot();
+
+	if (Input.GetKeyDown(VK_RETURN) ||
+		Input.GetKeyDown(VK_SPACE) ||
+		WasGamepadButtonPressed(Gamepad, EGamepadButton::FaceDown))
+	{
+		Widget->ActivateNavigationSelection();
+	}
+
+	if (Input.GetKeyDown(VK_ESCAPE) ||
+		Input.GetKeyDown(VK_BACK) ||
+		WasGamepadButtonPressed(Gamepad, EGamepadButton::FaceRight) ||
+		WasGamepadButtonPressed(Gamepad, EGamepadButton::Back))
+	{
+		Widget->ActivateCloseNavigationTarget();
+	}
+
+	int32 DirectionX = 0;
+	int32 DirectionY = 0;
+	if (Input.GetKeyDown(VK_LEFT) || Input.GetKeyDown('A') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadLeft))
+	{
+		DirectionX = -1;
+	}
+	else if (Input.GetKeyDown(VK_RIGHT) || Input.GetKeyDown('D') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadRight))
+	{
+		DirectionX = 1;
+	}
+
+	if (Input.GetKeyDown(VK_UP) || Input.GetKeyDown('W') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadUp))
+	{
+		DirectionY = -1;
+	}
+	else if (Input.GetKeyDown(VK_DOWN) || Input.GetKeyDown('S') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadDown))
+	{
+		DirectionY = 1;
+	}
+
+	if (DirectionX != 0 || DirectionY != 0)
+	{
+		Widget->NavigateSelection(DirectionX, DirectionY);
+		HeldNavigationX = DirectionX;
+		HeldNavigationY = DirectionY;
+		NextNavigationRepeatTime = (SystemInterface ? SystemInterface->GetElapsedTime() : 0.0) + NavigationInitialRepeatDelay;
+		return;
+	}
+
+	int32 HeldX = 0;
+	int32 HeldY = 0;
+	if (IsGamepadButtonDown(Gamepad, EGamepadButton::DPadLeft))
+	{
+		HeldX = -1;
+	}
+	else if (IsGamepadButtonDown(Gamepad, EGamepadButton::DPadRight))
+	{
+		HeldX = 1;
+	}
+	else
+	{
+		HeldX = AxisToNavigationDirection(GetGamepadAxisValue(Gamepad, EGamepadAxis::LeftStickX));
+	}
+
+	if (IsGamepadButtonDown(Gamepad, EGamepadButton::DPadUp))
+	{
+		HeldY = -1;
+	}
+	else if (IsGamepadButtonDown(Gamepad, EGamepadButton::DPadDown))
+	{
+		HeldY = 1;
+	}
+	else
+	{
+		HeldY = AxisToNavigationDirection(GetGamepadAxisValue(Gamepad, EGamepadAxis::LeftStickY));
+	}
+
+	if (HeldX == 0 && HeldY == 0)
+	{
+		HeldNavigationX = 0;
+		HeldNavigationY = 0;
+		NextNavigationRepeatTime = 0.0;
+		return;
+	}
+
+	const double CurrentTime = SystemInterface ? SystemInterface->GetElapsedTime() : 0.0;
+	const bool bNewHeldDirection = HeldX != HeldNavigationX || HeldY != HeldNavigationY;
+	if (bNewHeldDirection)
+	{
+		Widget->NavigateSelection(HeldX, HeldY);
+		HeldNavigationX = HeldX;
+		HeldNavigationY = HeldY;
+		NextNavigationRepeatTime = CurrentTime + NavigationInitialRepeatDelay;
+		return;
+	}
+
+	if (CurrentTime >= NextNavigationRepeatTime)
+	{
+		Widget->NavigateSelection(HeldX, HeldY);
+		NextNavigationRepeatTime = CurrentTime + NavigationRepeatDelay;
+	}
+}
+
+UUserWidget* UUIManager::GetTopNavigationWidget() const
+{
+	for (auto It = ViewportWidgets.rbegin(); It != ViewportWidgets.rend(); ++It)
+	{
+		UUserWidget* Widget = *It;
+		if (!IsValid(Widget) || !Widget->IsInViewport() || !Widget->IsDocumentLoaded())
+		{
+			continue;
+		}
+		if (std::find(PendingRemoveWidgets.begin(), PendingRemoveWidgets.end(), Widget) != PendingRemoveWidgets.end())
+		{
+			continue;
+		}
+		if (Widget->WantsKeyboard())
+		{
+			return Widget;
+		}
+	}
+	return nullptr;
 }
 
 void UUIManager::FlushDeferredViewportRemovals()

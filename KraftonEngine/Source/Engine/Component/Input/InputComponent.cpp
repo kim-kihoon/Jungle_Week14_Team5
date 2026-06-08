@@ -124,7 +124,7 @@ void UInputComponent::AddActionMappingForOwner(const void* OwnerKey, const FStri
 	M.Name = Name;
 	M.Key = ResolveInputKeyHandle(KeyName);
 	M.OwnerKey = OwnerKey;
-	if (M.Key.IsButton())
+	if (M.Key.IsButton() || M.Key.Kind == EInputKeyKind::GamepadAxis)
 	{
 		ActionMappings.push_back(std::move(M));
 	}
@@ -247,6 +247,20 @@ bool UInputComponent::EvaluateActionMapping(const FActionMapping& Mapping, EInpu
 
 		const bool bDown = Snapshot.GamepadSnapshot.Buttons[ButtonIndex];
 		const bool bWasDown = Snapshot.GamepadSnapshot.PrevButtons[ButtonIndex];
+		return Event == EInputEvent::Pressed ? (bDown && !bWasDown) : (!bDown && bWasDown);
+	}
+
+	if (Mapping.Key.Kind == EInputKeyKind::GamepadAxis)
+	{
+		constexpr float TriggerActionThreshold = 0.5f;
+		const int32 AxisIndex = Mapping.Key.KeyCode;
+		if (AxisIndex < 0 || AxisIndex >= static_cast<int32>(EGamepadAxis::Count))
+		{
+			return false;
+		}
+
+		const bool bDown = Snapshot.GamepadSnapshot.Axes[AxisIndex] >= TriggerActionThreshold;
+		const bool bWasDown = Snapshot.GamepadSnapshot.PrevAxes[AxisIndex] >= TriggerActionThreshold;
 		return Event == EInputEvent::Pressed ? (bDown && !bWasDown) : (!bDown && bWasDown);
 	}
 
