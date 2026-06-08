@@ -481,6 +481,10 @@ function GameManager:IsCymbalMonkeyCycleStarted()
     return LoopManager:IsCymbalMonkeyCycleStarted()
 end
 
+function GameManager:IsCymbalDoorTriggerUsed()
+    return LoopManager:IsCymbalDoorTriggerUsed()
+end
+
 function GameManager:StartCymbalMonkeyCycle()
     local bStarted = LoopManager:StartCymbalMonkeyCycle(self)
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
@@ -500,6 +504,7 @@ end
 function GameManager:StopLoop(reason)
     local bStopped = LoopManager:StopLoop(self, reason)
     self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     return bStopped
 end
 

@@ -2,15 +2,22 @@ local LoopManager = {}
 
 LoopManager.bLoopStopped = false
 LoopManager.bCymbalMonkeyCycleStarted = false
+LoopManager.bCymbalDoorTriggerUsed = false
 
 function LoopManager:Reset()
     self.bLoopStopped = false
     self.bCymbalMonkeyCycleStarted = false
+    self.bCymbalDoorTriggerUsed = false
 end
 
 function LoopManager:StartStopped()
     self.bLoopStopped = true
     self.bCymbalMonkeyCycleStarted = false
+    self.bCymbalDoorTriggerUsed = false
+end
+
+function LoopManager:IsCymbalDoorTriggerUsed()
+    return self.bCymbalDoorTriggerUsed == true
 end
 
 function LoopManager:IsLoopStopped()
@@ -27,6 +34,12 @@ function LoopManager:StopLoop(gameManager, reason)
     end
 
     self.bLoopStopped = true
+    if self.bCymbalMonkeyCycleStarted then
+        self.bCymbalMonkeyCycleStarted = false
+        if gameManager ~= nil and gameManager._FireEvent ~= nil then
+            gameManager:_FireEvent("CymbalMonkeyCycleReset", reason or "StopLoop")
+        end
+    end
     if gameManager ~= nil and gameManager._FireEvent ~= nil then
         gameManager:_FireEvent("LoopStopped", reason or "StopLoop")
     end
@@ -44,6 +57,9 @@ function LoopManager:ResetCymbalMonkeyCycle(gameManager, reason)
 end
 
 function LoopManager:StartCymbalMonkeyCycle(gameManager)
+    if self.bCymbalDoorTriggerUsed then
+        return false
+    end
     if self.bCymbalMonkeyCycleStarted then
         return false
     end
@@ -55,6 +71,7 @@ function LoopManager:StartCymbalMonkeyCycle(gameManager)
     end
 
     self.bCymbalMonkeyCycleStarted = true
+    self.bCymbalDoorTriggerUsed = true
     if gameManager._FireEvent ~= nil then
         gameManager:_FireEvent("CymbalMonkeyCycleStarted", "StartCymbalMonkeyCycle")
     end
@@ -67,6 +84,7 @@ function LoopManager:OnWarp(gameManager, reason, setupCallback)
     end
 
     reason = reason or "OnWarp"
+    self.bCymbalDoorTriggerUsed = false
     self:ResetCymbalMonkeyCycle(gameManager, reason)
 
     if type(setupCallback) ~= "function" then
@@ -85,7 +103,6 @@ function LoopManager:OnLoopStart(gameManager, reason, onStarted)
 
     reason = reason or "OnLoopStart"
     self.bLoopStopped = false
-    self:ResetCymbalMonkeyCycle(gameManager, reason)
 
     if type(onStarted) == "function" then
         onStarted(reason)

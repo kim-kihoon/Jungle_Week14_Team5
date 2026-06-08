@@ -382,6 +382,12 @@ function DoorManager:TryOnLoopStartOnDoorOpen(door, bWasOpen)
     if not is_entry_door(door) then
         return
     end
+    if CYMBAL_TRIGGER_DOOR_NAMES[door.Name] == true
+        and GameManager ~= nil
+        and GameManager.IsCymbalDoorTriggerUsed ~= nil
+        and GameManager:IsCymbalDoorTriggerUsed() then
+        return
+    end
     if GameManager == nil or GameManager.OnLoopStart == nil then
         return
     end
@@ -399,6 +405,9 @@ function DoorManager:TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
         return
     end
     if GameManager == nil or GameManager.StartCymbalMonkeyCycle == nil then
+        return
+    end
+    if GameManager.IsCymbalDoorTriggerUsed ~= nil and GameManager:IsCymbalDoorTriggerUsed() then
         return
     end
 
