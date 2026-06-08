@@ -5,6 +5,7 @@ local DoorManager = require("DoorManager")
 local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
 local ToolManager = require("ToolManager")
+local GameOverMonkey = require("GameOverMonkey")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
@@ -27,13 +28,117 @@ local TITLE_MONKEY_START_FUNCTION = "PlayStartAnimation"
 local TITLE_FADE_OUT_SECONDS = 0.75
 local TITLE_BLACK_HOLD_SECONDS = 0.1
 local TITLE_FADE_IN_SECONDS = 0.75
+local GAME_OVER_PRESENTATION_SECONDS = 2.0
 
 local bTitleTransitioning = false
 local TitleTransitionCoroutine = nil
 local TitleTransitionWaitRemaining = 0.0
+local GameOverStateChangedHandle = nil
+local GameOverPresentationCoroutine = nil
+local GameOverPresentationWaitRemaining = 0.0
+local InitialPlayerLocation = nil
+local InitialPlayerRotation = nil
+local InitialPlayerControlRotation = nil
 
 local function IsInTriggerZone(location)
     return location.Y > TRIGGER_Y_MIN and location.X < TRIGGER_X_MAX
+end
+
+local function CopyVec3(value)
+    if value == nil then
+        return nil
+    end
+
+    return Vec3(value.X or 0.0, value.Y or 0.0, value.Z or 0.0)
+end
+
+local function GetActorRotation(actor)
+    if actor == nil then
+        return nil
+    end
+
+    local ok, rotation = pcall(function()
+        return actor.Rotation
+    end)
+    if ok then
+        return rotation
+    end
+    return nil
+end
+
+local function GetPlayerPawn()
+    if obj == nil or obj.AsPawn == nil then
+        return nil
+    end
+
+    local ok, pawn = pcall(function()
+        return obj:AsPawn()
+    end)
+    if ok then
+        return pawn
+    end
+    return nil
+end
+
+local function GetPawnControlRotation(pawn)
+    if pawn == nil or pawn.GetControlRotation == nil then
+        return nil
+    end
+
+    local ok, rotation = pcall(function()
+        return pawn:GetControlRotation()
+    end)
+    if ok then
+        return rotation
+    end
+    return nil
+end
+
+local function CaptureInitialPlayerTransform()
+    if obj == nil then
+        return false
+    end
+
+    local pawn = GetPlayerPawn()
+    InitialPlayerLocation = CopyVec3(obj:GetLocation())
+    InitialPlayerRotation = CopyVec3(GetActorRotation(obj))
+    InitialPlayerControlRotation = CopyVec3(GetPawnControlRotation(pawn))
+    return InitialPlayerLocation ~= nil
+        and InitialPlayerRotation ~= nil
+        and InitialPlayerControlRotation ~= nil
+end
+
+local function RestoreInitialPlayerTransform()
+    if obj == nil then
+        return false
+    end
+
+    local pawn = GetPlayerPawn()
+    local bRestored = false
+    if InitialPlayerLocation ~= nil and obj.SetLocation ~= nil then
+        local ok = pcall(function()
+            obj:SetLocation(InitialPlayerLocation)
+        end)
+        bRestored = bRestored or ok
+    end
+
+    if InitialPlayerRotation ~= nil and obj.SetRotation ~= nil then
+        local ok = pcall(function()
+            obj:SetRotation(InitialPlayerRotation)
+        end)
+        bRestored = bRestored or ok
+    end
+
+    if InitialPlayerControlRotation ~= nil
+        and pawn ~= nil
+        and pawn.SetControlRotation ~= nil then
+        local ok = pcall(function()
+            pawn:SetControlRotation(InitialPlayerControlRotation)
+        end)
+        bRestored = bRestored or ok
+    end
+
+    return bRestored
 end
 
 local function IsKeyDown(key)
@@ -312,6 +417,106 @@ local function StopTitleTransitionCoroutine()
     bTitleTransitioning = false
 end
 
+local function StopGameOverPresentationCoroutine()
+    GameOverPresentationCoroutine = nil
+    GameOverPresentationWaitRemaining = 0.0
+end
+
+local function ClearGameOverPresentation()
+    StopGameOverPresentationCoroutine()
+    GameOverMonkey:ClearPresentation()
+    UIManager:DisposeGameOver()
+end
+
+local function WaitGameOverPresentation(seconds)
+    coroutine.yield(tonumber(seconds) or 0.0)
+end
+
+local function OpenGameOverMenu()
+    UIManager:ShowGameOver()
+end
+
+local function ResumeGameOverPresentation(dt)
+    if GameOverPresentationCoroutine == nil then
+        return
+    end
+
+    if coroutine.status(GameOverPresentationCoroutine) == "dead" then
+        StopGameOverPresentationCoroutine()
+        return
+    end
+
+    GameOverPresentationWaitRemaining = GameOverPresentationWaitRemaining - (tonumber(dt) or 0.0)
+    if GameOverPresentationWaitRemaining > 0.0 then
+        return
+    end
+
+    local ok, waitSeconds = coroutine.resume(GameOverPresentationCoroutine)
+    if not ok then
+        StopGameOverPresentationCoroutine()
+        return
+    end
+
+    if coroutine.status(GameOverPresentationCoroutine) == "dead" then
+        StopGameOverPresentationCoroutine()
+        return
+    end
+
+    GameOverPresentationWaitRemaining = math.max(0.0, tonumber(waitSeconds) or 0.0)
+end
+
+local function StartGameOverPresentationCoroutine()
+    StopGameOverPresentationCoroutine()
+    UIManager:DisposeGameOver()
+
+    local bPresentationStarted = GameOverMonkey:PlayPresentationAnimation()
+
+    GameOverPresentationWaitRemaining = 0.0
+    GameOverPresentationCoroutine = coroutine.create(function()
+        if bPresentationStarted then
+            WaitGameOverPresentation(GAME_OVER_PRESENTATION_SECONDS)
+        end
+        OpenGameOverMenu()
+    end)
+
+    ResumeGameOverPresentation(0.0)
+    return bPresentationStarted
+end
+
+local function HandleGameStateChanged(nextState)
+    if GameManager ~= nil
+        and GameManager.State ~= nil
+        and nextState == GameManager.State.GameOver then
+        StartGameOverPresentationCoroutine()
+        return
+    end
+
+    ClearGameOverPresentation()
+end
+
+local function BindGameOverStateChanged()
+    if GameOverStateChangedHandle ~= nil
+        or GameManager == nil
+        or GameManager.OnStateChanged == nil then
+        return
+    end
+
+    GameOverStateChangedHandle = GameManager:OnStateChanged(function(nextState)
+        HandleGameStateChanged(nextState)
+    end)
+end
+
+local function UnbindGameOverStateChanged()
+    if GameOverStateChangedHandle == nil then
+        return
+    end
+
+    if GameManager ~= nil and GameManager.RemoveListener ~= nil then
+        GameManager:RemoveListener("StateChanged", GameOverStateChangedHandle)
+    end
+    GameOverStateChangedHandle = nil
+end
+
 local function ApplyGameplayStart()
     bTitleMode = false
     bLastLoopStopped = IsLoopStopped()
@@ -321,6 +526,7 @@ local function ApplyGameplayStart()
     end
     UIManager:DisposeTitle()
     CapturePlayerCamera()
+    CaptureInitialPlayerTransform()
     DeactivateTitleActors()
 end
 
@@ -375,9 +581,15 @@ end
 
 function BeginPlay()
     StopTitleTransitionCoroutine()
+    StopGameOverPresentationCoroutine()
+    InitialPlayerLocation = nil
+    InitialPlayerRotation = nil
+    InitialPlayerControlRotation = nil
     bCanWarp = true
     bLastLoopStopped = IsLoopStopped()
     bTitleMode = true
+    GameOverMonkey:Initialize(obj)
+    BindGameOverStateChanged()
     DoorManager:Reset()
     SoundManager:EnterTitleState()
     ToolManager:Reset()
@@ -391,6 +603,9 @@ end
 
 function EndPlay()
     StopTitleTransitionCoroutine()
+    UnbindGameOverStateChanged()
+    GameOverMonkey:Shutdown()
+    StopGameOverPresentationCoroutine()
     bCanWarp = true
     bLastLoopStopped = false
     DoorManager:Reset()
@@ -407,6 +622,8 @@ function Tick(dt)
         return
     end
 
+    ResumeGameOverPresentation(dt)
+
     if bTitleTransitioning then
         ResumeTitleTransition(dt)
         if bTitleMode then
@@ -417,6 +634,12 @@ function Tick(dt)
 
     if bTitleMode then
         CaptureTitleCamera()
+        return
+    end
+
+    if GameManager ~= nil
+        and GameManager.GetState ~= nil
+        and GameManager:GetState() == GameManager.State.GameOver then
         return
     end
 
@@ -471,6 +694,24 @@ function StartGame()
     UIManager:CloseTitlePopup()
     PlayTitleMonkeyStartAnimation()
     StartTitleTransitionCoroutine()
+end
+
+function RestartGame()
+    StopTitleTransitionCoroutine()
+    ClearGameOverPresentation()
+    RestoreInitialPlayerTransform()
+    bCanWarp = true
+    bTitleMode = false
+    DoorManager:Reset()
+    SoundManager:EnterPlayingState()
+    ToolManager:Reset()
+    UIManager:ResetHospital()
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = false
+    end
+    CapturePlayerCamera()
+    GameManager:RestartGame()
+    bLastLoopStopped = IsLoopStopped()
 end
 
 function ShowSetting()

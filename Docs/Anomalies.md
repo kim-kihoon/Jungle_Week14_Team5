@@ -28,7 +28,9 @@ AnomalyManager
 Anomalies/*.lua
   ├─ PhotoInvisible
   ├─ NoShadow
-  └─ OffscreenAnimation
+  ├─ OffscreenAnimation
+  ├─ OffscreenFacePlayerPhotoInvisible
+  └─ OffscreenFacePlayerBlackPhoto
 
 DebugManager
   └─ 숫자 키 입력으로 특정 규칙 강제 적용
@@ -96,10 +98,12 @@ GameManager:ReportAnomalyShot(hit.Actor)
 4 -> OffscreenFacePlayer
 5 -> BlackPhoto
 6 -> NearSilentCymbalMonkey
+7 -> OffscreenFacePlayerPhotoInvisible
+8 -> OffscreenFacePlayerBlackPhoto
 ```
 
 디버그 키는 랜덤 규칙 선택을 거치지 않고 지정한 규칙만 강제로 적용한다. 단, 대상 액터는 `AnomalyCandidate` 후보 중에서 선택한다.
-`OffscreenFacePlayer`는 디버그 전용 확인 규칙으로 유지하며, 일반 랜덤 규칙 풀에서는 제외한다.
+`OffscreenFacePlayer` 단독 규칙은 디버그 전용 확인 규칙으로 유지하며, 일반 랜덤 규칙 풀에서는 제외한다. 랜덤 풀에는 사진 이상현상을 결합한 `OffscreenFacePlayerPhotoInvisible`, `OffscreenFacePlayerBlackPhoto`를 넣는다.
 
 ### CymbalsMonkey 위치 마커
 
@@ -394,6 +398,8 @@ World.GetRealTimeSeconds()
 - `1`을 눌렀을 때 활성 대상에 `PhotoInvisible` 태그가 붙는지 확인한다.
 - `2`를 눌렀을 때 대상 본체는 보이고 그림자만 사라지는지 확인한다.
 - `3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
+- `7`을 눌렀을 때 PhotoInvisible과 OffscreenFacePlayer 회전 로직이 함께 적용되는지 확인한다.
+- `8`을 눌렀을 때 BlackPhoto와 OffscreenFacePlayer 회전 로직이 함께 적용되는지 확인한다.
 - 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어되는지 확인한다.
 - 활성 대상을 쏘면 게임 시간이 멈추고 `CymbalMonkey` 애니메이션도 정지하는지 확인한다.
 - 한 스테이지에서 권총 발사는 정답 이상현상, `Fake` 태그 대상, 일반 투사체 발사를 합쳐 3회까지만 가능하다.
@@ -423,6 +429,8 @@ World.GetRealTimeSeconds()
 4 -> OffscreenFacePlayer
 5 -> BlackPhoto
 6 -> NearSilentCymbalMonkey
+7 -> OffscreenFacePlayerPhotoInvisible
+8 -> OffscreenFacePlayerBlackPhoto
 ```
 
 `World.IsComponentInViewFrustum(component)`는 현재 월드의 활성 POV로 프러스텀을 만들고, 전달된 `UPrimitiveComponent`의 월드 AABB와 교차하는지 검사한다. 이 바인딩은 액터 루트 AABB와 실제 보이는 스켈레탈 메시 AABB가 달라지는 경우를 피하기 위해 사용한다.
@@ -437,12 +445,23 @@ World.GetRealTimeSeconds()
 - 최초 관측 후 프러스텀 판정에는 라인트레이스를 사용하지 않는다.
 - 라인트레이스 대상점은 대상 원점이 아니라 대상의 X/Y에 카메라 높이 Z를 맞춘 위치를 사용한다.
 
+### OffscreenFacePlayer 결합 규칙
+
+`OffscreenFacePlayerPhotoInvisible`와 `OffscreenFacePlayerBlackPhoto`는 `OffscreenFacePlayer`의 관측 후 비프러스텀 yaw 회전 로직을 그대로 사용하면서 사진 계열 이상현상을 함께 적용하는 규칙이다.
+
+- `OffscreenFacePlayerPhotoInvisible`: `PhotoInvisible` 태그를 함께 붙여 사진 렌더에서 대상이 빠지게 한다.
+- `OffscreenFacePlayerBlackPhoto`: `PhotoBlackoutTarget` 태그를 함께 붙여 대상이 촬영 순간 프러스텀과 라인트레이스 조건을 만족하면 사진 내부 캡처 이미지를 검게 만든다.
+- 두 규칙은 일반 랜덤 규칙 풀에 포함한다.
+- `OffscreenFacePlayer` 단독 규칙은 디버그 전용으로만 유지한다.
+- `Despawn`에서는 원래 없던 사진 태그만 제거하고, `OffscreenFacePlayer`가 저장한 원래 회전도 복구한다.
+
 ## BlackPhoto 추가 규칙
 
 `BlackPhoto`는 활성 이상현상 대상이 촬영 순간 카메라에 관측될 때, 해당 사진 한 장의 내부 캡처 이미지를 전체 검은색으로 만드는 규칙이다.
 
 - 디버그 단축키: `5`
 - 태그: 활성 대상에 `PhotoBlackoutTarget` 태그를 붙이고, 원래 없던 태그만 `Despawn`에서 제거한다.
+- 촬영 판정은 룰 이름이 아니라 활성 대상의 `PhotoBlackoutTarget` 태그를 기준으로 한다.
 - 관측 조건: 대상이 프러스텀 안에 있고, 카메라에서 대상까지 `World.LineTraceObjects`가 막히지 않아야 한다.
 - 프러스텀 기준: 스켈레탈 메시가 있으면 `World.IsComponentInViewFrustum(mesh)`를 사용하고, 없으면 `World.IsActorInViewFrustum(actor)`를 사용한다.
 - 라인트레이스 대상점: 대상의 X/Y에 카메라 높이 Z를 맞춘 위치를 사용한다.

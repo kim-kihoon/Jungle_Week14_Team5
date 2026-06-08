@@ -21,7 +21,7 @@ local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemp
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
 local FAKE_TARGET_TAG = "Fake"
-local BLACK_PHOTO_RULE_NAME = "BlackPhoto"
+local PHOTO_BLACKOUT_TARGET_TAG = "PhotoBlackoutTarget"
 local TOY_PROJECTILE_TAG = "ToyProjectile"
 
 local TOOL_PISTOL = ToolManager.Tool.Pistol
@@ -282,6 +282,10 @@ local function play_party_blower_audio()
     SoundManager:PlayPartyBlower()
 end
 
+local function play_empty_gun_shot_audio()
+    SoundManager:PlayEmptyGunShot()
+end
+
 local function spawn_projectile_from_muzzle()
     if World == nil or World.SpawnActorTemplate == nil then
         return nil
@@ -443,16 +447,15 @@ end
 
 local function should_blackout_photo_capture()
     if GameManager == nil or
-        GameManager.GetActiveAnomalyRuleName == nil or
         GameManager.GetActiveAnomalyTarget == nil then
         return false
     end
 
-    if GameManager:GetActiveAnomalyRuleName() ~= BLACK_PHOTO_RULE_NAME then
+    local target = GameManager:GetActiveAnomalyTarget()
+    if target == nil or target.HasTag == nil or not target:HasTag(PHOTO_BLACKOUT_TARGET_TAG) then
         return false
     end
 
-    local target = GameManager:GetActiveAnomalyTarget()
     if not is_actor_in_camera_frustum(target) then
         return false
     end
@@ -488,6 +491,37 @@ local function consume_pistol_bullet()
         return true
     end
     return GameManager:ConsumePlayerBullet()
+end
+
+local function report_pistol_shot_failure()
+    if GameManager == nil or GameManager.ReportPlayerShotFailure == nil then
+        return false
+    end
+    return GameManager:ReportPlayerShotFailure("PistolShotMiss")
+end
+
+local function can_fire_pistol()
+    if GameManager ~= nil
+        and GameManager.IsLoopStopped ~= nil
+        and GameManager:IsLoopStopped() then
+        return false
+    end
+
+    return true
+end
+
+local function try_consume_pistol_bullet_for_fire()
+    if not can_fire_pistol() then
+        play_empty_gun_shot_audio()
+        return false
+    end
+
+    if not consume_pistol_bullet() then
+        play_empty_gun_shot_audio()
+        return false
+    end
+
+    return true
 end
 
 local function can_request_photo_capture()
@@ -691,11 +725,12 @@ function update(self, dt)
                 update_switch_to_pistol(self, 0.0)
             end
         elseif self.CurrentTool == TOOL_PISTOL and (is_action_pressed("Fire") or Anim.is_left_mouse_pressed()) then
-            if consume_pistol_bullet() then
+            if try_consume_pistol_bullet_for_fire() then
                 local handledHit = should_play_pistol_fire_from_camera()
                 if handledHit then
                     start_pistol_fire_action(self)
                 else
+                    report_pistol_shot_failure()
                     play_party_blower_audio()
                     spawn_projectile_from_muzzle()
                 end

@@ -26,6 +26,14 @@ DebugManager.Scenarios = {
     {
         Key = "6",
         RuleName = "NearSilentCymbalMonkey"
+    },
+    {
+        Key = "7",
+        RuleName = "OffscreenFacePlayerPhotoInvisible"
+    },
+    {
+        Key = "8",
+        RuleName = "OffscreenFacePlayerBlackPhoto"
     }
 }
 

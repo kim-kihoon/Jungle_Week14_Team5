@@ -32,6 +32,12 @@ GameManager.pressureStage = GameManager.Pressure.EntryStrike
 GameManager.manualPressureStage = nil
 GameManager.maxPlayerBulletsPerStage = 3
 GameManager.playerBulletsRemaining = GameManager.maxPlayerBulletsPerStage
+GameManager.failedShotCount = 0
+GameManager.maxFailedShotsBeforeGameOver = 3
+GameManager.bFailureTimeDrainActive = false
+GameManager.failureTimeDrainDuration = 3.0
+GameManager.failureTimeDrainElapsed = 0.0
+GameManager.failureTimeDrainStartRemaining = 0.0
 GameManager.AnomalyPlacementTemplateSetName = "Runtime"
 GameManager.AnomalyPlacementTemplateExtension = ".ActorTemplate"
 GameManager.AnomalyPlacementTemplateSets = {
@@ -112,6 +118,17 @@ local function seed_anomaly_placement_random_once()
         math.randomseed(seed)
         bAnomalyPlacementRandomSeeded = true
     end
+end
+
+local function ease_out_cubic(value)
+    if value < 0.0 then
+        value = 0.0
+    elseif value > 1.0 then
+        value = 1.0
+    end
+
+    local inverse = 1.0 - value
+    return 1.0 - inverse * inverse * inverse
 end
 
 function GameManager:_GetRemainingRatio()
@@ -201,6 +218,55 @@ end
 
 function GameManager:_ResetPlayerBulletsForStage()
     self.playerBulletsRemaining = self.maxPlayerBulletsPerStage
+    self.failedShotCount = 0
+    self:_ResetFailureTimeDrain()
+end
+
+function GameManager:_ResetFailureTimeDrain()
+    self.bFailureTimeDrainActive = false
+    self.failureTimeDrainElapsed = 0.0
+    self.failureTimeDrainStartRemaining = 0.0
+end
+
+function GameManager:_StartFailureTimeDrain(reason)
+    if self.bFailureTimeDrainActive then
+        return false
+    end
+
+    self.bFailureTimeDrainActive = true
+    self.failureTimeDrainElapsed = 0.0
+    self.failureTimeDrainStartRemaining = math.max(0.0, tonumber(self.remainingTime) or 0.0)
+    self:_SetPressureStage(self.Pressure.FinalWarning, reason or "FailedShots", true)
+    return true
+end
+
+function GameManager:_TickFailureTimeDrain(dt)
+    if not self.bFailureTimeDrainActive then
+        return false
+    end
+
+    local duration = tonumber(self.failureTimeDrainDuration) or 0.0
+    if duration <= 0.0 then
+        self.remainingTime = 0
+    else
+        self.failureTimeDrainElapsed = self.failureTimeDrainElapsed + dt
+        local alpha = self.failureTimeDrainElapsed / duration
+        local drainedRatio = ease_out_cubic(alpha)
+        self.remainingTime = self.failureTimeDrainStartRemaining * (1.0 - drainedRatio)
+        if self.remainingTime < 0.0 then
+            self.remainingTime = 0
+        end
+    end
+
+    self:_RefreshPressureStage("FailureTimeDrain", false)
+
+    if self.remainingTime <= 0.0 then
+        self.remainingTime = 0
+        self:_FireEvent("TimeExpired")
+        self:GameOver("FailedShots")
+    end
+
+    return true
 end
 
 function GameManager:_ClearAnomalyPlacement()
@@ -402,6 +468,8 @@ function GameManager:Reset()
     self.totalGameTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
+    self.failedShotCount = 0
+    self:_ResetFailureTimeDrain()
     LoopManager:Reset()
     self.bLoopStopped = LoopManager:IsLoopStopped()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
@@ -415,6 +483,8 @@ function GameManager:StartGame()
     self.totalGameTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
+    self.failedShotCount = 0
+    self:_ResetFailureTimeDrain()
     LoopManager:StartStopped()
     self.bLoopStopped = LoopManager:IsLoopStopped()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
@@ -448,6 +518,7 @@ function GameManager:GameOver(reason)
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
+    self:_ResetFailureTimeDrain()
     LoopManager:Reset()
     self.bLoopStopped = LoopManager:IsLoopStopped()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
@@ -478,6 +549,7 @@ function GameManager:ClearGame(reason)
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
     self.LastAnomalyPlacementError = nil
+    self:_ResetFailureTimeDrain()
     LoopManager:Reset()
     self.bLoopStopped = LoopManager:IsLoopStopped()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
@@ -503,6 +575,10 @@ function GameManager:Tick(dt)
     self.totalGameTime = self.totalGameTime + dt
 
     AnomalyManager:Tick(dt)
+    if self:_TickFailureTimeDrain(dt) then
+        return
+    end
+
     if LoopManager:IsLoopStopped() then
         return
     end
@@ -618,6 +694,30 @@ function GameManager:ConsumePlayerBullet()
 
     self.playerBulletsRemaining = bulletsRemaining - 1
     return true
+end
+
+function GameManager:ReportPlayerShotFailure(reason)
+    if self.state ~= self.State.Playing then
+        return false
+    end
+    if self.bFailureTimeDrainActive then
+        return true
+    end
+
+    self.failedShotCount = math.min(
+        self.maxFailedShotsBeforeGameOver,
+        (tonumber(self.failedShotCount) or 0) + 1
+    )
+
+    if self.failedShotCount >= self.maxFailedShotsBeforeGameOver then
+        return self:_StartFailureTimeDrain(reason or "FailedShots")
+    end
+
+    return false
+end
+
+function GameManager:GetFailedShotCount()
+    return self.failedShotCount
 end
 
 function GameManager:SetPressureStageOverride(pressure)
