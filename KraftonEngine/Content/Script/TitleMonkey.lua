@@ -1,7 +1,7 @@
 local READY_ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_ArmOnlyCymbalEntry.uasset"
 local STRIKE_ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_ArmOnlyCymbalStrike.uasset"
 local READY_ANIMATION_PLAY_RATE = 0.1
-local STRIKE_ANIMATION_PLAY_RATE = 2.0
+local STRIKE_ANIMATION_PLAY_RATE = 1.0
 
 local STATE_NONE = 0
 local STATE_READY = 1

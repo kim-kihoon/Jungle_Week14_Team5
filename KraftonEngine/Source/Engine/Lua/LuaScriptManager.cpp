@@ -78,6 +78,7 @@
 #include "GameFramework/World.h"
 #include "UI/CrosshairOverlay.h"
 #include "GameFramework/Actor/ParticleSystemActor.h"
+#include "GameFramework/Actor/StaticMeshActor.h"
 #include "GameFramework/Camera/CameraModifier.h"
 #include "Render/Scene/FScene.h"
 #include "GameFramework/Camera/CameraShakeBase.h"
@@ -325,6 +326,85 @@ namespace
 
         std::sort(Results.begin(), Results.end());
         return Results;
+    }
+
+    bool LuaResolveSaveTextPath(const FString& RelativePath, std::filesystem::path& OutPath)
+    {
+        if (RelativePath.empty())
+        {
+            return false;
+        }
+
+        std::filesystem::path SaveRoot(FPaths::SaveDir());
+        std::filesystem::path Target(FPaths::ToWide(RelativePath));
+        if (Target.is_absolute())
+        {
+            return false;
+        }
+
+        Target = (SaveRoot / Target).lexically_normal();
+        SaveRoot = SaveRoot.lexically_normal();
+
+        const std::filesystem::path Relative = Target.lexically_relative(SaveRoot);
+        if (Relative.empty() || Relative.is_absolute())
+        {
+            return false;
+        }
+
+        const std::wstring RelativeNative = Relative.native();
+        if (RelativeNative == L"." || RelativeNative.rfind(L"..", 0) == 0)
+        {
+            return false;
+        }
+
+        OutPath = Target;
+        return true;
+    }
+
+    bool LuaWriteSaveTextFile(const FString& RelativePath, const FString& Text)
+    {
+        std::filesystem::path TargetPath;
+        if (!LuaResolveSaveTextPath(RelativePath, TargetPath))
+        {
+            return false;
+        }
+
+        std::error_code Ec;
+        std::filesystem::create_directories(TargetPath.parent_path(), Ec);
+        if (Ec)
+        {
+            return false;
+        }
+
+        std::ofstream File(TargetPath, std::ios::binary | std::ios::trunc);
+        if (!File.is_open())
+        {
+            return false;
+        }
+
+        File.write(Text.data(), static_cast<std::streamsize>(Text.size()));
+        return File.good();
+    }
+
+    sol::object LuaReadSaveTextFile(sol::this_state State, const FString& RelativePath)
+    {
+        sol::state_view Lua(State);
+
+        std::filesystem::path TargetPath;
+        if (!LuaResolveSaveTextPath(RelativePath, TargetPath))
+        {
+            return sol::make_object(Lua, sol::nil);
+        }
+
+        std::ifstream File(TargetPath, std::ios::binary);
+        if (!File.is_open())
+        {
+            return sol::make_object(Lua, sol::nil);
+        }
+
+        std::ostringstream Buffer;
+        Buffer << File.rdbuf();
+        return sol::make_object(Lua, Buffer.str());
     }
 
     struct FLuaReflectedEventOverride
@@ -2689,9 +2769,9 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
     sol::table AudioManager = Lua.create_named_table("AudioManager");
     AudioManager.set_function(
         "Load",
-        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop)
+        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop, sol::optional<bool> b3D)
         {
-            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false));
+            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false), b3D.value_or(false));
         }
     );
     AudioManager.set_function(
@@ -2699,6 +2779,13 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         [](const FString& SoundName, float Volume)
         {
             FAudioManager::Get().PlayAudio(SoundName, Volume);
+        }
+    );
+    AudioManager.set_function(
+        "PlayFadeOut",
+        [](const FString& SoundName, float Volume, float FadeOutSeconds, sol::optional<float> Pitch)
+        {
+            FAudioManager::Get().PlayAudioFadeOut(SoundName, Volume, FadeOutSeconds, Pitch.value_or(1.0f));
         }
     );
     AudioManager.set_function(
@@ -3079,9 +3166,9 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
 
     Lua.set_function(
         "LoadAudio",
-        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop)
+        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop, sol::optional<bool> b3D)
         {
-            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false));
+            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false), b3D.value_or(false));
         }
     );
 }
@@ -6224,6 +6311,31 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         }
     );
     World.set_function(
+        "SpawnStaticMeshActor",
+        [](const FString& MeshPath, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale) -> AActor*
+        {
+            if (!GEngine || MeshPath.empty() || MeshPath == "None") return nullptr;
+            UWorld* W = GEngine->GetWorld();
+            if (!W) return nullptr;
+
+            AStaticMeshActor* Actor = W->SpawnActor<AStaticMeshActor>();
+            if (!IsValid(Actor)) return nullptr;
+
+            Actor->InitDefaultComponents(MeshPath);
+            UStaticMeshComponent* MeshComponent = Actor->GetStaticMeshComponent();
+            if (!IsValid(MeshComponent) || !IsValid(MeshComponent->GetStaticMesh()))
+            {
+                W->DestroyActor(Actor);
+                return nullptr;
+            }
+
+            Actor->SetActorLocation(Location.value_or(FVector(0, 0, 0)));
+            Actor->SetActorRotation(Rotation.value_or(FVector(0, 0, 0)));
+            Actor->SetActorScale(Scale.value_or(FVector(1, 1, 1)));
+            return Actor;
+        }
+    );
+    World.set_function(
         "SpawnActorTemplate",
         [](const FString& TemplatePath, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale) -> AActor*
         {
@@ -6309,6 +6421,8 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             return Result;
         }
     );
+    World.set_function("ReadSaveTextFile", &LuaReadSaveTextFile);
+    World.set_function("WriteSaveTextFile", &LuaWriteSaveTextFile);
     World.set_function(
         "SpawnPawn",
         [](const FString& ClassName, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale, sol::optional<bool> bPossess) -> APawn*

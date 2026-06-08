@@ -19,6 +19,7 @@
 #include "Component/Light/LightComponentBase.h"
 #include "Core/ProjectSettings.h"
 #include "Math/MathUtils.h"
+#include "UI/PhotoOverlay.h"
 
 namespace
 {
@@ -209,7 +210,13 @@ void FEditorRenderPipeline::RenderViewport(FLevelEditorViewportClient* VC, FRend
 	// GPU Occlusion — 이전 프레임 결과 읽기 (이 뷰포트 전용)
 	GPUOcclusion.ReadbackResults(Ctx);
 
+	const bool bIsCaptureViewport = bShouldUseGameCamera || VC == Editor->GetActiveViewport();
+
 	PrepareViewport(VC, VP, Ctx);
+	if (bIsCaptureViewport)
+	{
+		FPhotoOverlay::PreparePendingCaptureWorldState(World);
+	}
 	BuildFrame(VC, POV, VP, World);
 
 	FCollectOutput Output;
@@ -221,6 +228,10 @@ void FEditorRenderPipeline::RenderViewport(FLevelEditorViewportClient* VC, FRend
 	{
 		SCOPE_STAT_CAT("Renderer.Render", "4_ExecutePass");
 		Renderer.Render(Frame, World, Scene);
+	}
+	if (bIsCaptureViewport)
+	{
+		FPhotoOverlay::CapturePendingFromViewport(VP->GetRTTexture());
 	}
 
 	// GPU Occlusion — Render 후 DepthBuffer가 유효할 때 디스패치 (이 뷰포트 전용)

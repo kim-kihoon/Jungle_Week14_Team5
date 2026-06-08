@@ -91,6 +91,21 @@ private:
 
 	UPROPERTY(Edit, Save, Category="Script|JumpScare", DisplayName="Move Duration", Min=0.01f, Max=10.0f, Speed=0.01f)
 	float JumpScareMoveDuration = 0.5f;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare|Audio", DisplayName="Sound", AssetType="Audio")
+	FString JumpScareSoundPath;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare|Audio", DisplayName="Volume", Min=0.0f, Max=10.0f, Speed=0.01f)
+	float JumpScareSoundVolume = 1.0f;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare|Audio", DisplayName="Pitch", Min=0.1f, Max=4.0f, Speed=0.01f)
+	float JumpScareSoundPitch = 1.0f;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare|Audio", DisplayName="Min Distance", Min=0.0f, Max=1000.0f, Speed=0.1f)
+	float JumpScareSoundMinDistance = 1.0f;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare|Audio", DisplayName="Max Distance", Min=0.0f, Max=1000.0f, Speed=0.1f)
+	float JumpScareSoundMaxDistance = 12.0f;
 	
 	sol::environment Env;
 	sol::protected_function LuaBeginPlay;

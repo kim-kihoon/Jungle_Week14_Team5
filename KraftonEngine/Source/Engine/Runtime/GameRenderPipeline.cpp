@@ -63,12 +63,13 @@ void FGameRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 	Frame.WorldType = World->GetWorldType();
 
 	FViewportRenderOptions Opts;
-	Opts.ViewMode = EViewMode::Lit_Phong;
+	Opts.ViewMode = EViewMode::Lit_Lambert;
 	Frame.SetRenderOptions(Opts);
 
 	FScene* Scene = &World->GetScene();
 
 	PrepareViewport(VP, Ctx);
+	FPhotoOverlay::PreparePendingCaptureWorldState(World);
 	BuildFrame(VP, POV, Scene, World);
 
 	FCollectOutput Output;

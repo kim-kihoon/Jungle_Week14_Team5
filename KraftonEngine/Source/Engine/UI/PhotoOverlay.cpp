@@ -1,12 +1,16 @@
 ﻿#include "UI/PhotoOverlay.h"
 
 #include "Audio/AudioManager.h"
+#include "Component/PrimitiveComponent.h"
 #include "Component/Primitive/PhotoPolaroidComponent.h"
+#include "Component/Primitive/SkinnedMeshComponent.h"
 #include "Component/Primitive/StaticMeshComponent.h"
 #include "GameFramework/AActor.h"
 #include "GameFramework/World.h"
 #include "Math/Matrix.h"
 #include "Math/Quat.h"
+#include "Math/Rotator.h"
+#include "Mesh/Skeletal/SkeletalMesh.h"
 #include "Object/Object.h"
 #include "Object/Ptr/WeakObjectPtr.h"
 #include "Platform/Paths.h"
@@ -14,7 +18,9 @@
 #include "WICTextureLoader.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 
@@ -27,6 +33,13 @@ namespace
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
 	constexpr const char* HeldCameraMeshPath = "Content/Data/camera/camera_StaticMesh.uasset";
 	constexpr const char* HeldCameraMeshFileName = "camera_StaticMesh.uasset";
+	constexpr const char* PhotoGhostReplacementTargetTagName = "PhotoGhostReplacementTarget";
+	constexpr const char* PhotoGhostReplacementActorTagName = "PhotoGhostReplacementActor";
+	constexpr const char* PhotoBoneTwistTargetTagName = "PhotoBoneTwistTarget";
+	constexpr float PhotoBoneTwistMaxDegrees = 35.0f;
+	constexpr float PhotoBoneTwistRootMaxDegrees = 8.0f;
+	constexpr uint32 PhotoBoneTwistRandomModulus = 2147483647u;
+	constexpr uint32 PhotoBoneTwistRandomMultiplier = 48271u;
 	constexpr float HeldCameraPhotoForwardOffset = 0.06f;
 	constexpr float HeldCameraPhotoRightOffset = 0.0f;
 	constexpr float HeldCameraPhotoBaseUpOffset = 0.0f;
@@ -49,12 +62,31 @@ namespace
 	uint32 FrameWidth = 0;
 	uint32 FrameHeight = 0;
 	ID3D11ShaderResourceView* FrameSRV = nullptr;
-	TArray<TWeakObjectPtr<AActor>> CaptureHiddenActors;
-	TArray<TWeakObjectPtr<UStaticMeshComponent>> CaptureHiddenComponents;
+	struct FCaptureActorVisibilityState
+	{
+		TWeakObjectPtr<AActor> Actor;
+		bool bWasVisible = false;
+	};
+	TArray<FCaptureActorVisibilityState> CaptureActorVisibilityStates;
+	struct FCaptureComponentVisibilityState
+	{
+		TWeakObjectPtr<UPrimitiveComponent> Component;
+		bool bWasVisible = false;
+	};
+	TArray<FCaptureComponentVisibilityState> CaptureComponentVisibilityStates;
+	struct FPhotoBoneTwistPoseState
+	{
+		TWeakObjectPtr<USkinnedMeshComponent> Mesh;
+		TArray<FTransform> LocalPose;
+	};
+	TArray<FPhotoBoneTwistPoseState> PhotoBoneTwistPoseStates;
+	uint32 PhotoBoneTwistRandomState = 0;
 	TWeakObjectPtr<UWorld> PendingCaptureWorld;
+	FName PendingCaptureExcludeActorTag = FName::None;
 	TWeakObjectPtr<AActor> PhotoActor;
 	TWeakObjectPtr<UPhotoPolaroidComponent> PhotoComponent;
 	TWeakObjectPtr<UStaticMeshComponent> HeldCameraMeshComponent;
+	bool bCaptureWorldStatePrepared = false;
 
 	std::filesystem::path ToProjectPath(const FString& Path)
 	{
@@ -75,6 +107,47 @@ namespace
 	{
 		const float InvAlpha = 1.0f - Clamp01(Alpha);
 		return 1.0f - InvAlpha * InvAlpha * InvAlpha;
+	}
+
+	uint32 MakePhotoBoneTwistSeed()
+	{
+		using Clock = std::chrono::high_resolution_clock;
+		const int64 Now = static_cast<int64>(Clock::now().time_since_epoch().count());
+		const uint32 Seed = static_cast<uint32>(Now ^ (Now >> 32));
+		return Seed == 0 ? 1u : Seed;
+	}
+
+	float DrawPhotoBoneTwistRandomUnit()
+	{
+		if (PhotoBoneTwistRandomState == 0)
+		{
+			PhotoBoneTwistRandomState = MakePhotoBoneTwistSeed();
+		}
+
+		PhotoBoneTwistRandomState = static_cast<uint32>(
+			(static_cast<uint64>(PhotoBoneTwistRandomState) * PhotoBoneTwistRandomMultiplier) %
+			PhotoBoneTwistRandomModulus);
+		if (PhotoBoneTwistRandomState == 0)
+		{
+			PhotoBoneTwistRandomState = 1u;
+		}
+
+		return static_cast<float>(PhotoBoneTwistRandomState) / static_cast<float>(PhotoBoneTwistRandomModulus);
+	}
+
+	float DrawPhotoBoneTwistDegrees(float MaxAbsDegrees)
+	{
+		return (DrawPhotoBoneTwistRandomUnit() * 2.0f - 1.0f) * MaxAbsDegrees;
+	}
+
+	FQuat MakePhotoBoneTwistDelta(int32 BoneIndex)
+	{
+		const float MaxDegrees = BoneIndex == 0 ? PhotoBoneTwistRootMaxDegrees : PhotoBoneTwistMaxDegrees;
+		const FRotator DeltaRotator(
+			DrawPhotoBoneTwistDegrees(MaxDegrees),
+			DrawPhotoBoneTwistDegrees(MaxDegrees),
+			DrawPhotoBoneTwistDegrees(MaxDegrees));
+		return DeltaRotator.ToQuaternion();
 	}
 
 	void PlayCameraShutterAudio()
@@ -99,6 +172,81 @@ namespace
 			StaticMeshPath == HeldCameraMeshPath ||
 			StaticMeshPath.find(HeldCameraMeshPath) != FString::npos ||
 			StaticMeshPath.find(HeldCameraMeshFileName) != FString::npos;
+	}
+
+	bool IsPhotoBoneTwistTarget(AActor* Actor)
+	{
+		return Actor && Actor->HasTag(FName(PhotoBoneTwistTargetTagName));
+	}
+
+	bool IsPhotoGhostReplacementTarget(AActor* Actor)
+	{
+		return Actor && Actor->HasTag(FName(PhotoGhostReplacementTargetTagName));
+	}
+
+	bool IsPhotoGhostReplacementActor(AActor* Actor)
+	{
+		return Actor && Actor->HasTag(FName(PhotoGhostReplacementActorTagName));
+	}
+
+	bool IsActorVisibilityTracked(AActor* Actor)
+	{
+		for (const FCaptureActorVisibilityState& State : CaptureActorVisibilityStates)
+		{
+			if (State.Actor.Get() == Actor)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void SetActorVisibilityForCapture(AActor* Actor, bool bVisible)
+	{
+		if (!Actor)
+		{
+			return;
+		}
+
+		if (!IsActorVisibilityTracked(Actor))
+		{
+			FCaptureActorVisibilityState State;
+			State.Actor = TWeakObjectPtr<AActor>(Actor);
+			State.bWasVisible = Actor->IsVisible();
+			CaptureActorVisibilityStates.push_back(State);
+		}
+
+		Actor->SetVisible(bVisible);
+	}
+
+	bool IsComponentVisibilityTracked(UPrimitiveComponent* Component)
+	{
+		for (const FCaptureComponentVisibilityState& State : CaptureComponentVisibilityStates)
+		{
+			if (State.Component.Get() == Component)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void SetComponentVisibilityForCapture(UPrimitiveComponent* Component, bool bVisible)
+	{
+		if (!Component)
+		{
+			return;
+		}
+
+		if (!IsComponentVisibilityTracked(Component))
+		{
+			FCaptureComponentVisibilityState State;
+			State.Component = TWeakObjectPtr<UPrimitiveComponent>(Component);
+			State.bWasVisible = Component->IsVisible();
+			CaptureComponentVisibilityStates.push_back(State);
+		}
+
+		Component->SetVisibility(bVisible);
 	}
 
 	UStaticMeshComponent* FindHeldCameraMeshComponent(UWorld* World)
@@ -265,8 +413,84 @@ namespace
 			return;
 		}
 
-		HeldCamera->SetVisibility(false);
-		CaptureHiddenComponents.push_back(TWeakObjectPtr<UStaticMeshComponent>(HeldCamera));
+		SetComponentVisibilityForCapture(HeldCamera, false);
+	}
+
+	void PreparePhotoGhostReplacementForCapture(UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		for (AActor* Actor : World->GetActors())
+		{
+			if (!Actor)
+			{
+				continue;
+			}
+
+			if (IsPhotoGhostReplacementTarget(Actor) && Actor->IsVisible())
+			{
+				SetActorVisibilityForCapture(Actor, false);
+			}
+
+			if (IsPhotoGhostReplacementActor(Actor))
+			{
+				SetActorVisibilityForCapture(Actor, true);
+			}
+		}
+	}
+
+	void PreparePhotoBoneTwistForCapture(UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		for (AActor* Actor : World->GetActors())
+		{
+			if (!Actor || !Actor->IsVisible() || !IsPhotoBoneTwistTarget(Actor))
+			{
+				continue;
+			}
+
+			for (UActorComponent* ActorComponent : Actor->GetComponents())
+			{
+				USkinnedMeshComponent* MeshComponent = Cast<USkinnedMeshComponent>(ActorComponent);
+				if (!MeshComponent || !MeshComponent->IsVisible())
+				{
+					continue;
+				}
+
+				USkeletalMesh* SkeletalMesh = MeshComponent->GetSkeletalMesh();
+				FSkeletalMesh* SkeletalMeshAsset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
+				if (!SkeletalMeshAsset || SkeletalMeshAsset->Bones.empty())
+				{
+					continue;
+				}
+
+				FPhotoBoneTwistPoseState PoseState;
+				PoseState.Mesh = TWeakObjectPtr<USkinnedMeshComponent>(MeshComponent);
+				PoseState.LocalPose.reserve(SkeletalMeshAsset->Bones.size());
+
+				const int32 BoneCount = static_cast<int32>(SkeletalMeshAsset->Bones.size());
+				for (int32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+				{
+					PoseState.LocalPose.push_back(MeshComponent->GetBoneLocalTransformByIndex(BoneIndex));
+				}
+
+				for (int32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+				{
+					FTransform TwistedTransform = PoseState.LocalPose[BoneIndex];
+					TwistedTransform.Rotation = (TwistedTransform.Rotation * MakePhotoBoneTwistDelta(BoneIndex)).GetNormalized();
+					MeshComponent->SetBoneLocalTransformByIndex(BoneIndex, TwistedTransform);
+				}
+
+				PhotoBoneTwistPoseStates.push_back(PoseState);
+			}
+		}
 	}
 }
 
@@ -276,7 +500,10 @@ void FPhotoOverlay::RequestCapture()
 	RestoreHiddenActors();
 	ResetPhotoForNewCapture();
 	FlashTime = 0.0f;
+	PendingCaptureWorld.Reset();
+	PendingCaptureExcludeActorTag = FName::None;
 	bCaptureBlackoutRequested = false;
+	bCaptureWorldStatePrepared = false;
 	bCaptureRequested = true;
 }
 
@@ -287,25 +514,47 @@ void FPhotoOverlay::RequestCapture(UWorld* World, const FName& ExcludeActorTag, 
 	ResetPhotoForNewCapture();
 	FlashTime = 0.0f;
 	PendingCaptureWorld = World;
+	PendingCaptureExcludeActorTag = ExcludeActorTag;
 	bCaptureBlackoutRequested = bBlackout;
+	bCaptureWorldStatePrepared = false;
+	bCaptureRequested = true;
+}
 
-	if (World && ExcludeActorTag.IsValid() && ExcludeActorTag != FName::None)
+void FPhotoOverlay::PreparePendingCaptureWorldState(UWorld* World)
+{
+	if (!bCaptureRequested || bCaptureWorldStatePrepared)
 	{
-		for (AActor* Actor : World->GetActors())
+		return;
+	}
+
+	UWorld* CaptureWorld = PendingCaptureWorld.Get();
+	if (!CaptureWorld)
+	{
+		CaptureWorld = World;
+	}
+
+	if (!CaptureWorld)
+	{
+		return;
+	}
+
+	if (PendingCaptureExcludeActorTag.IsValid() && PendingCaptureExcludeActorTag != FName::None)
+	{
+		for (AActor* Actor : CaptureWorld->GetActors())
 		{
-			if (!Actor || !Actor->IsVisible() || !Actor->HasTag(ExcludeActorTag))
+			if (!Actor || !Actor->IsVisible() || !Actor->HasTag(PendingCaptureExcludeActorTag) || IsPhotoGhostReplacementTarget(Actor))
 			{
 				continue;
 			}
 
-			Actor->SetVisible(false);
-			CaptureHiddenActors.push_back(TWeakObjectPtr<AActor>(Actor));
+			SetActorVisibilityForCapture(Actor, false);
 		}
 	}
 
-	HideHeldCameraForCapture(World);
-
-	bCaptureRequested = true;
+	PreparePhotoGhostReplacementForCapture(CaptureWorld);
+	PreparePhotoBoneTwistForCapture(CaptureWorld);
+	HideHeldCameraForCapture(CaptureWorld);
+	bCaptureWorldStatePrepared = true;
 }
 
 void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
@@ -318,6 +567,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	{
 		bCaptureRequested = false;
 		bCaptureBlackoutRequested = false;
+		bCaptureWorldStatePrepared = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
@@ -327,6 +577,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	if (!EnsureResources(SourceTexture))
 	{
 		bCaptureBlackoutRequested = false;
+		bCaptureWorldStatePrepared = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
@@ -337,6 +588,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	if (!Device)
 	{
 		bCaptureBlackoutRequested = false;
+		bCaptureWorldStatePrepared = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
@@ -350,6 +602,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	{
 		Device->Release();
 		bCaptureBlackoutRequested = false;
+		bCaptureWorldStatePrepared = false;
 		bPhotoSpawnPending = false;
 		RestoreHiddenActors();
 		return;
@@ -373,6 +626,7 @@ void FPhotoOverlay::CapturePendingFromViewport(ID3D11Texture2D* SourceTexture)
 	}
 
 	bCaptureBlackoutRequested = false;
+	bCaptureWorldStatePrepared = false;
 	Device->Release();
 	Context->Release();
 	RestoreHiddenActors();
@@ -476,23 +730,36 @@ float FPhotoOverlay::GetFrameAspectRatio()
 
 void FPhotoOverlay::RestoreHiddenActors()
 {
-	for (TWeakObjectPtr<UStaticMeshComponent>& ComponentPtr : CaptureHiddenComponents)
+	for (FPhotoBoneTwistPoseState& State : PhotoBoneTwistPoseStates)
 	{
-		if (UStaticMeshComponent* Component = ComponentPtr.Get())
+		if (USkinnedMeshComponent* Mesh = State.Mesh.Get())
 		{
-			Component->SetVisibility(true);
+			const int32 BoneCount = static_cast<int32>(State.LocalPose.size());
+			for (int32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+			{
+				Mesh->SetBoneLocalTransformByIndex(BoneIndex, State.LocalPose[BoneIndex]);
+			}
 		}
 	}
-	CaptureHiddenComponents.clear();
+	PhotoBoneTwistPoseStates.clear();
 
-	for (TWeakObjectPtr<AActor>& ActorPtr : CaptureHiddenActors)
+	for (FCaptureComponentVisibilityState& State : CaptureComponentVisibilityStates)
 	{
-		if (AActor* Actor = ActorPtr.Get())
+		if (UPrimitiveComponent* Component = State.Component.Get())
 		{
-			Actor->SetVisible(true);
+			Component->SetVisibility(State.bWasVisible);
 		}
 	}
-	CaptureHiddenActors.clear();
+	CaptureComponentVisibilityStates.clear();
+
+	for (FCaptureActorVisibilityState& State : CaptureActorVisibilityStates)
+	{
+		if (AActor* Actor = State.Actor.Get())
+		{
+			Actor->SetVisible(State.bWasVisible);
+		}
+	}
+	CaptureActorVisibilityStates.clear();
 }
 
 bool FPhotoOverlay::EnsureResources(ID3D11Texture2D* SourceTexture)

@@ -3,6 +3,7 @@ local DebugManager = {}
 DebugManager.bEnabled = true
 DebugManager.OutlineKey = "Q"
 DebugManager.OutlineActionName = "DebugAnomalyOutline"
+DebugManager.ClearKey = "C"
 
 DebugManager.Scenarios = {
     {
@@ -11,31 +12,23 @@ DebugManager.Scenarios = {
     },
     {
         Key = "2",
-        RuleName = "NoShadow"
-    },
-    {
-        Key = "3",
-        RuleName = "OffscreenAnimation"
-    },
-    {
-        Key = "4",
-        RuleName = "OffscreenFacePlayer"
-    },
-    {
-        Key = "5",
-        RuleName = "BlackPhoto"
-    },
-    {
-        Key = "6",
-        RuleName = "NearSilentCymbalMonkey"
-    },
-    {
-        Key = "7",
         RuleName = "PhotoLookAtInvisible"
     },
     {
-        Key = "8",
+        Key = "3",
         RuleName = "PhotoLookAtBlackPhoto"
+    },
+    {
+        Key = "4",
+        RuleName = "BlackPhoto"
+    },
+    {
+        Key = "5",
+        RuleName = "PhotoGhostReplacement"
+    },
+    {
+        Key = "6",
+        RuleName = "PhotoBoneTwist"
     }
 }
 
@@ -78,6 +71,19 @@ function DebugManager:SetActiveAnomalyOutlineVisible(gameManager, bVisible)
     return GameManager:SetActiveAnomalyOutlineVisible(bVisible == true)
 end
 
+function DebugManager:ClearGame(gameManager)
+    if gameManager == nil or gameManager.ClearGame == nil then
+        print("[DebugManager] GameManager.ClearGame unavailable")
+        return false
+    end
+
+    local ok = gameManager:ClearGame("DebugClear")
+    if ok then
+        print("[DebugManager] ClearGame triggered")
+    end
+    return ok == true
+end
+
 function DebugManager:Tick(dt, gameManager)
     if not self:IsEnabled() then
         return
@@ -101,6 +107,11 @@ function DebugManager:Tick(dt, gameManager)
     self:SetActiveAnomalyOutlineVisible(gameManager, bOutlineHeld)
 
     if Input.GetKeyDown == nil then
+        return
+    end
+
+    if Input.GetKeyDown(self.ClearKey) then
+        self:ClearGame(gameManager)
         return
     end
 

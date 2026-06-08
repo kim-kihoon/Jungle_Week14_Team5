@@ -306,6 +306,7 @@ void FAudioManager::PlayAudioFadeOut(const FString& Key, float Volume, float Fad
 	System->getSoftwareFormat(&SampleRate, nullptr, nullptr);
 	if (SampleRate <= 0 || FadeOutSeconds <= 0.0f)
 	{
+		Channel->stop();
 		return;
 	}
 
@@ -313,12 +314,18 @@ void FAudioManager::PlayAudioFadeOut(const FString& Key, float Volume, float Fad
 	unsigned long long ParentClock = 0;
 	if (Channel->getDSPClock(&DspClock, &ParentClock) != FMOD_OK)
 	{
+		Channel->stop();
 		return;
 	}
 
-	const unsigned long long FadeDuration = static_cast<unsigned long long>(FadeOutSeconds * static_cast<float>(SampleRate));
+	const unsigned long long FadeDuration = std::max<unsigned long long>(
+		1,
+		static_cast<unsigned long long>(FadeOutSeconds * static_cast<float>(SampleRate))
+	);
+	const unsigned long long FadeEndClock = ParentClock + FadeDuration;
 	Channel->addFadePoint(ParentClock, ClampedVolume);
-	Channel->addFadePoint(ParentClock + FadeDuration, 0.0f);
+	Channel->addFadePoint(FadeEndClock, 0.0f);
+	Channel->setDelay(0, FadeEndClock, true);
 }
 
 void FAudioManager::PlayBGM(const FString& Key, float Volume)

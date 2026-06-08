@@ -1,382 +1,195 @@
 # Anomaly System
 
-## 인게임 Anomaly 타겟 Outline 디버그
-
-현재 활성 Anomaly 타겟을 에디터 선택처럼 외곽선으로 표시하는 인게임 디버그 기능을 제공한다. 이 기능은 에디터 `SelectionManager`와 분리되어 있으며 Outliner, Details, Gizmo 선택 상태를 변경하지 않는다.
-
-- 키보드/마우스 입력: `Q`를 누르고 있는 동안 표시
-- 플스 패드 입력: `L2` (`Gamepad_LeftTrigger`)를 누르고 있는 동안 표시
-- 처리 흐름: `DebugManager` 입력 유지 상태 감지 -> `GameManager:SetActiveAnomalyOutlineVisible(bool)` -> 활성 Anomaly 타겟 `Actor:SetGameplayOutline(bool)`
-- 새 Anomaly 로드, `Reset`, `GameOver`, `ClearGame` 시 기존 outline은 자동 해제된다.
-- 활성 Anomaly 타겟이 없으면 outline을 표시하지 않는다.
-
-## 랜덤 Anomaly 풀 정책
-
-랜덤 루프에서 사용하는 `AnomalyManager.Rules`와 디버그 강제 적용에서 사용하는 `AnomalyManager.AllRules`는 분리되어 있다.
-
-- 랜덤 풀 포함: `PhotoInvisible`, `OffscreenAnimation`, `PhotoLookAtInvisible`, `PhotoLookAtBlackPhoto`, `BlackPhoto`
-- 랜덤 풀 제외: `NoShadow`, `NearSilentCymbalMonkey`
-- 디버그 전용 유지: `2 -> NoShadow`, `6 -> NearSilentCymbalMonkey`
-
-`NoShadow`와 `NearSilentCymbalMonkey`는 랜덤으로는 등장하지 않지만, 디버그 키로는 기존처럼 강제 적용할 수 있다.
-
-Anomaly 랜덤 선택은 `AnomalyManager` 내부 전용 RNG를 사용한다. `GameManager`, `JumpScareManager`, `DoorManager` 등이 사용하는 Lua 전역 `math.random` 상태와 섞이지 않게 유지한다.
-
 ## 목적
 
-- 게임 시작 또는 플레이어 워프 시 새로운 이상현상을 하나 활성화한다.
-- 이상현상 대상은 `AnomalyCandidate` 태그가 붙은 액터 중에서 선택한다.
-- 한 루프에는 액터 하나와 규칙 하나만 활성화한다.
-- 플레이어가 현재 활성 이상현상 대상을 총으로 맞추면 이상현상을 클리어 상태로 표시하고 루프를 정지한다.
-- 정지된 루프에서는 게임 시간이 흐르지 않고 `CymbalMonkey` 애니메이션도 멈춘다.
-- `DoorEntry` 태그 문이 열리면 루프 시간을 초기화하고 시간 갱신을 재개한다.
+- 게임 시작 또는 플레이어 루프 시점마다 `AnomalyCandidate` 태그가 붙은 액터 중 하나를 선택한다.
+- 선택된 액터에는 랜덤 Anomaly 규칙 하나만 적용한다.
+- 플레이어가 현재 활성 Anomaly 대상을 총으로 맞추면 클리어 상태를 기록하고 `GameManager:StopLoop()`를 호출한다.
+- 총으로 맞춘 직후에는 Anomaly 효과를 바로 원복하지 않는다. 다음 Anomaly 로드, 리셋, 게임 종료 시 기존 효과를 정리한다.
 
-## 전체 구조
+## 구조
 
 ```txt
 GameManager
-  ├─ 게임 시작과 워프 시 이상현상 세팅
-  ├─ DoorEntry 문 열림 시 루프 시작 처리
-  ├─ 총격 판정 보고 진입점 제공
-  ├─ StopLoop / OnLoopStart로 루프 정지와 복구 처리
-  └─ 게임 상태 리셋 시 이상현상 정리
+  - 게임 시작, 루프 시작, 정답 처리, 게임 상태 관리
+  - StopLoop / RestLoop / OnLoopStart / OnWarp 제공
 
 AnomalyManager
-  ├─ 후보 액터 수집
-  ├─ 규칙 선택과 적용
-  ├─ 활성 이상현상 상태 저장
-  └─ Tick / Despawn / ReportShot 처리
+  - 후보 수집
+  - 랜덤 규칙 선택
+  - 활성 Anomaly 상태 저장
+  - Tick / Despawn / ReportShot 처리
 
 Anomalies/*.lua
-  ├─ PhotoInvisible
-  ├─ NoShadow
-  ├─ OffscreenAnimation
-  ├─ PhotoLookAtInvisible
-  └─ PhotoLookAtBlackPhoto
+  - 각 Anomaly 규칙의 Spawn / Tick / Despawn / IsCleared 구현
 
 DebugManager
-  └─ 숫자 키 입력으로 특정 규칙 강제 적용
+  - 숫자키로 특정 규칙 강제 적용
+  - Q 또는 패드 L2를 누르고 있는 동안 활성 대상 outline 표시
 ```
 
-## 사용 방법
-
-### 후보 액터 세팅
-
-이상현상 후보가 될 액터에 아래 태그를 붙인다.
+## 태그
 
 ```txt
 AnomalyCandidate
-```
-
-`AnomalyManager`는 `World.FindActorsByTag("AnomalyCandidate")`로 후보를 수집한다. 후보가 없으면 이상현상을 활성화하지 않고 실패 사유만 남긴다.
-
-### 게임 시작과 워프 이벤트에서 호출
-
-게임 시작 시 `GameManager:StartGame()`은 초기 이상현상 세팅을 수행한다. 이때 타이머는 바로 흐르지 않도록 루프 정지 상태로 시작한다.
-새 스테이지가 세팅되면 플레이어 권총 탄환은 3발로 초기화된다.
-
-플레이어 워프 직후에는 아래 함수를 호출해서 배치와 새 이상현상을 다시 세팅한다. 이 함수는 타이머를 재설정하지 않는다.
-
-```lua
-local GameManager = require("GameManager")
-
-GameManager:OnWarp("PlayerWarp")
-```
-
-호출 결과는 성공 여부를 `boolean`으로 반환한다.
-
-- `true`: 이상현상 하나가 활성화됨
-- `false`: 게임이 Playing 상태가 아니거나 후보/규칙 적용에 실패함
-
-### 루프 시작 문 이벤트에서 호출
-
-`DoorEntry` 태그가 붙은 문이 닫힌 상태에서 열린 순간 아래 함수를 호출한다. 이 함수는 타이머를 `timeLimit`으로 되돌리고 루프 정지 상태를 해제한다.
-
-```lua
-GameManager:OnLoopStart("DoorEntryOpened")
-```
-
-이상현상 세팅은 `StartGame()`과 `OnWarp()`의 책임이며, `OnLoopStart()`는 타이머와 루프 재개만 담당한다.
-
-### 총격 판정에서 호출
-
-현재 플레이어 카메라 기준 라인트레이스 명중 액터를 아래 함수로 전달한다.
-
-```lua
-GameManager:ReportAnomalyShot(hit.Actor)
-```
-
-현재 활성 이상현상 대상과 같은 액터를 맞추면 `true`를 반환하고 `GameManager:StopLoop()`을 호출한다. 이때 활성 이상현상은 즉시 원복하지 않고, 게임 시간과 `CymbalMonkey` 애니메이션만 정지한다. 대상이 아니면 `false`를 반환하며 기존 투사체 스폰 흐름을 계속 진행하면 된다.
-권총 발사 탄환은 총격 판정 전에 소모되므로 정답 이상현상, `Fake` 태그 대상, 일반 투사체 발사가 모두 스테이지당 3발 제한에 포함된다.
-
-### 디버그 키
-
-`GameManagerActor.lua`의 Tick에서 `DebugManager:Tick(dt, GameManager)`를 호출한다. 현재 매핑은 키보드 상단 숫자 키 기준으로 다음과 같다.
-
-```txt
-1 -> PhotoInvisible
-2 -> NoShadow
-3 -> OffscreenAnimation
-4 -> OffscreenFacePlayer
-5 -> BlackPhoto
-6 -> NearSilentCymbalMonkey
-7 -> PhotoLookAtInvisible
-8 -> PhotoLookAtBlackPhoto
-```
-
-디버그 키는 랜덤 규칙 선택을 거치지 않고 지정한 규칙만 강제로 적용한다. 단, 대상 액터는 `AnomalyCandidate` 후보 중에서 선택한다.
-`OffscreenFacePlayer` 단독 규칙은 디버그 전용 확인 규칙으로 유지하며, 일반 랜덤 규칙 풀에서는 제외한다. 랜덤 풀에는 촬영 순간 플레이어를 바라보는 사진 이상현상인 `PhotoLookAtInvisible`, `PhotoLookAtBlackPhoto`를 넣는다.
-
-### CymbalsMonkey 위치 마커
-
-`CymbalMonkey.lua`는 아래 태그를 가진 마커 액터로 순간이동 위치를 결정한다.
-
-```txt
+ActiveAnomalyTarget
+PhotoInvisible
+PhotoBlackoutTarget
+PhotoGhostReplacementTarget
+PhotoGhostReplacementActor
+PhotoBoneTwistTarget
+CymbalsMonkey
 CymbalsMonkeyInitPosition
 CymbalsMonkeyPositionCandidate
 ```
 
-- `CymbalsMonkeyInitPosition`: 게임 시작, 초기화, 루프 복구 시 원숭이가 돌아갈 위치/회전이다.
-- `CymbalsMonkeyPositionCandidate`: 원숭이가 관측 후 시야에서 벗어났을 때 이동할 후보 위치/회전이다.
-- 후보가 없거나 플레이어 위치에서 후보 위치까지 라인트레이스가 장애물에 막히지 않는 후보가 없으면 이동하지 않는다.
+- `AnomalyCandidate`: 랜덤 Anomaly 후보 액터에 붙인다.
+- `ActiveAnomalyTarget`: 현재 활성 Anomaly 대상에 런타임으로 붙는다.
+- `PhotoInvisible`: 촬영 결과에서 대상이 빠지는 규칙에 사용한다.
+- `PhotoBlackoutTarget`: 촬영 조건을 만족하면 사진 내부 이미지를 검게 만드는 규칙에 사용한다.
+- `PhotoGhostReplacementTarget`: 사진에서 원본 대신 Ghost actor가 보이게 할 원본 대상에 붙인다.
+- `PhotoGhostReplacementActor`: 촬영 순간에만 표시할 별도 Ghost actor에 붙인다.
+- `PhotoBoneTwistTarget`: 촬영 순간에만 skeletal mesh bone 회전을 무작위로 비트는 규칙에 사용한다.
 
-## 구현 흐름
+## 랜덤 풀과 디버그 풀
 
-### 게임 시작 세팅
+`AnomalyManager.Rules`는 실제 루프 랜덤 선택에 사용하고, `AnomalyManager.AllRules`는 디버그 강제 적용 이름 검색에 사용한다.
 
-```txt
-GameManager:StartGame()
-  ├─ Playing 상태 진입
-  ├─ 플레이어 권총 탄환 3발 초기화
-  ├─ 루프 정지 상태로 시작
-  └─ GameManager:_SetupAnomaly("StartGame")
-       ├─ 기존 활성 이상현상 Despawn
-       ├─ 기존 배치 제거
-       ├─ 새 배치 Spawn
-       └─ AnomalyManager:SelectAndSpawn()
-            ├─ AnomalyCandidate 후보 수집
-            ├─ 후보 액터 1개 랜덤 선택
-            ├─ 규칙 1개 랜덤 선택
-            ├─ 규칙 Spawn(context) 호출
-            └─ 성공 시 대상에 ActiveAnomalyTarget 태그 부여
-```
+- 랜덤 풀 포함: `PhotoInvisible`, `PhotoLookAtInvisible`, `PhotoLookAtBlackPhoto`, `BlackPhoto`, `PhotoGhostReplacement`, `PhotoBoneTwist`
+- 랜덤 풀 제외: `NoShadow`, `OffscreenAnimation`, `OffscreenFacePlayer`, `NearSilentCymbalMonkey`
+- 디버그 강제 적용: `AllRules`에 등록된 규칙은 `GameManager:DebugSpawnAnomalyRule(ruleName)`로 직접 호출할 수 있다.
 
-### 워프 루프
+기본 디버그 키:
 
 ```txt
-GameManager:OnWarp("PlayerWarp")
-  └─ GameManager:_SetupAnomaly("PlayerWarp")
-       ├─ 플레이어 권총 탄환 3발 초기화
-       ├─ 기존 활성 이상현상 Despawn
-       ├─ 기존 배치 제거
-       ├─ 새 배치 Spawn
-       └─ AnomalyManager:SelectAndSpawn()
+1 -> PhotoInvisible
+2 -> PhotoLookAtInvisible
+3 -> PhotoLookAtBlackPhoto
+4 -> BlackPhoto
+5 -> PhotoGhostReplacement
+6 -> PhotoBoneTwist
 ```
 
-`OnWarp`는 타이머와 루프 정지 상태를 바꾸지 않는다.
+## 게임 흐름
+
+### 게임 시작
+
+`GameManager:StartGame()`은 게임 상태를 `Playing`으로 바꾸고 `RestLoop()`를 호출한 뒤 초기 Anomaly를 로드한다. 시작 시 플레이어 탄약도 3발로 초기화한다.
+
+### 플레이어 워프
+
+`hospital_player.lua`에서 플레이어 워프가 실제 수행된 직후 `GameManager:OnWarp("PlayerWarp")`를 호출한다.
+
+`OnWarp()`는 내부에서 `AdvanceAnomalyLoop()` 흐름을 실행한다. 기존 활성 Anomaly가 있으면 먼저 `DespawnCurrent("SelectAndSpawn")`로 원복하고, 새 대상과 새 규칙을 선택한다.
 
 ### 루프 시작
 
-```txt
-GameManager:OnLoopStart("DoorEntryOpened")
-  ├─ remainingTime을 timeLimit 초기값으로 복구
-  ├─ 시간 갱신 재개
-  └─ LoopRested 이벤트로 CymbalMonkey 애니메이션 재개
-```
+`DoorEntry` 태그 문이 열리면 `GameManager:OnLoopStart("DoorEntryOpened")`를 호출한다.
 
-### 디버그 루프
+이 함수는 `remainingTime`을 초기값으로 되돌리고, `StopLoop()`로 멈춘 시간과 원숭이 애니메이션을 다시 진행 가능한 상태로 만든다. Anomaly 재선택은 `StartGame()`과 `OnWarp()`가 담당한다.
 
-```txt
-DebugManager:Tick(dt, GameManager)
-  └─ Input.GetKeyDown("1" / "2" / "3")
-       └─ GameManager:DebugSpawnAnomalyRule(ruleName)
-            └─ AnomalyManager:SelectAndSpawnRule(ruleName)
-                 ├─ 기존 활성 이상현상 Despawn
-                 ├─ 규칙 이름으로 규칙 검색
-                 ├─ AnomalyCandidate 후보 수집
-                 └─ 해당 규칙을 적용 가능한 후보에 Spawn
-```
+### 정답 총격
 
-### 총격 클리어
+총격 라인트레이스가 현재 활성 대상 또는 `ActiveAnomalyTarget` 태그 액터를 맞추면 `GameManager:ReportAnomalyShot(hit.Actor, hit)`가 `true`를 반환한다.
 
-```txt
-GameManager:ReportAnomalyShot(actor)
-  ├─ AnomalyManager:ReportShot(actor)
-  │    ├─ 활성 대상과 같은 액터인지 확인
-  │    └─ AnomalyManager:OnClear(active, "Shot")
-  └─ 정답이면 GameManager:StopLoop()
-       ├─ elapsedTime / remainingTime 갱신 정지
-       └─ LoopStopped 이벤트로 CymbalMonkey 애니메이션 정지
-```
+정답이면 `AnomalyManager:OnClear()`가 클리어 상태를 기록하고 `GameManager:StopLoop()`가 호출된다. 이때 게임 시간과 `CymbalMonkey` 애니메이션은 멈추지만 Anomaly 효과는 즉시 원복하지 않는다.
 
-### 호환 루프
+### 실패와 게임 오버
 
-```txt
-GameManager:AdvanceAnomalyLoop()
-  ├─ GameManager:OnWarp("AdvanceAnomalyLoop")
-  └─ GameManager:OnLoopStart("AdvanceAnomalyLoop")
-```
+총 3번 실패하면 남은 시간이 3초 동안 빠르게 줄어든 뒤 게임 오버 흐름으로 진입한다. 감소 곡선은 처음에 빠르고 점점 느려지는 비선형 형태다.
 
-신규 플레이 흐름에서는 `AdvanceAnomalyLoop()`를 직접 호출하지 않고 `OnWarp()`와 `OnLoopStart()`를 각각 호출한다.
+게임 오버 조건이 만족되면 `GameOverMonkey` 모듈이 원숭이 연출 애니메이션만 재생하고, 호출한 쪽에서 코루틴 대기 후 GameOver 메뉴를 연다.
 
-### CymbalsMonkey 순간이동
+## 사진 캡처
 
-```txt
-CymbalMonkey:Tick(dt)
-  ├─ 프러스텀 + 라인트레이스로 원숭이 관측 여부 확인
-  ├─ 한 번 관측되면 bObservedSinceTeleport = true
-  └─ 관측된 뒤 프러스텀 밖으로 벗어나면 후보 위치 검색
-       ├─ CymbalsMonkeyPositionCandidate 후보 수집
-       ├─ 플레이어 위치에서 후보 위치까지 LineTraceObjects 검사
-       ├─ 막히지 않은 후보 중 플레이어와 가장 가까운 후보 선택
-       └─ 원숭이를 후보 위치/회전으로 이동 후 관측 상태 초기화
-```
+`ULuaAnimInstance::request_photo_capture`는 촬영 요청 시 `PhotoInvisible` 태그를 전달한다.
 
-시야에 들어옴과 시야에서 나감은 모두 `World.IsActorInViewFrustum(obj)`와 `World.LineTraceObjects(...)`를 함께 사용한다. 프러스텀 안에 있으면 라인트레이스가 막혀도 이동하지 않는다. 프러스텀 안에 있어도 카메라에서 원숭이 위치까지 라인트레이스가 장애물에 막히면 관측되지 않은 상태로 본다. 라인트레이스가 아무 것도 맞추지 않으면 대상까지 막힘이 없는 것으로 처리한다.
+렌더 파이프라인은 실제 캡처 직전 `FPhotoOverlay::PreparePendingCaptureWorldState(World)`를 호출한다. 이 단계에서 사진에만 적용되는 상태 변경을 수행하고, 캡처 직후 즉시 원복한다.
 
-### 리셋과 복구
+현재 사진 캡처 전용 처리는 다음과 같다.
 
-`GameManager:Reset()`, `GameManager:GameOver()`, `GameManager:ClearGame()`은 모두 `AnomalyManager:Reset()`을 호출한다.
+- `PhotoInvisible`: `PhotoInvisible` 태그 액터를 캡처 중에만 숨긴다.
+- `BlackPhoto`: 조건을 만족한 한 장의 사진 내부 이미지만 검게 만든다.
+- `PhotoGhostReplacement`: 원본 대상 actor는 숨기고, 미리 생성해 둔 별도 Ghost actor를 캡처 중에만 표시한다.
+- `PhotoBoneTwist`: `PhotoBoneTwistTarget` 태그 액터의 skeletal mesh bone local rotation을 캡처 중에만 무작위로 비틀고 직후 복구한다.
+- 플레이어가 들고 있는 카메라 mesh는 캡처 중에만 숨긴다.
 
-`AnomalyManager:Reset()`은 현재 활성 이상현상이 있으면 규칙의 `Despawn(context)`을 호출해서 태그, 그림자, 애니메이션 상태를 복구한다. `GameManager`는 이때 루프 정지 상태도 함께 정리한다.
-
-새 이상현상을 로드하는 `GameManager:_SetupAnomaly()`, `AnomalyManager:SelectAndSpawn()`과 `AnomalyManager:SelectAndSpawnRule(ruleName)`도 시작 시 기존 활성 이상현상을 `Despawn`한다. 따라서 총격으로 클리어된 이상현상은 다음 워프나 디버그 규칙 전환 시 복구된 뒤 새 이상현상이 적용된다.
-
-## Anomaly Rule 인터페이스
-
-모든 규칙은 같은 인터페이스를 사용한다.
-
-```lua
-local Rule = {}
-
-Rule.Name = "RuleName"
-
-function Rule:Spawn(context)
-    return true
-end
-
-function Rule:Tick(context)
-end
-
-function Rule:Despawn(context)
-end
-
-function Rule:IsCleared(context)
-    return context.State.bCleared == true
-end
-
-return Rule
-```
-
-`Spawn(context)`가 `false, "reason"`을 반환하면 해당 규칙 적용은 실패한다. 디버그 강제 적용에서는 다른 후보 액터를 순회해서 같은 규칙을 다시 시도한다.
-
-### Context 구성
-
-```lua
-{
-    Manager = AnomalyManager,
-    Target = targetActor,
-    Rule = rule,
-    Tags = AnomalyManager.Tags,
-    State = {}
-}
-```
-
-- `Target`: 이상현상이 적용될 액터
-- `Tags`: 공통 태그 이름 모음
-- `State`: 규칙이 원본 상태를 저장하는 임시 테이블
-- `DeltaTime`: Tick 호출 시 추가됨
-- `Reason`: Despawn 호출 시 추가됨
-
-## 규칙 구현 원리
+## 규칙별 구현 원리
 
 ### PhotoInvisible
 
-파일: `KraftonEngine/Content/Script/Anomalies/PhotoInvisible.lua`
+- `Spawn`: 대상에 `PhotoInvisible` 태그를 붙인다.
+- `Despawn`: 원래 없던 `PhotoInvisible` 태그만 제거한다.
+- 캡처 처리: `FPhotoOverlay`가 태그 액터를 캡처 중에만 숨긴다.
 
-목표는 월드에서는 보이지만 사진 캡처 결과에서는 보이지 않는 대상이다.
+### BlackPhoto
 
-구현 방식:
+- `Spawn`: 대상에 `PhotoBlackoutTarget` 태그를 붙인다.
+- 촬영 입력 시점에 활성 대상이 카메라 프러스텀 안에 있고 라인트레이스가 막히지 않으면 `request_photo_capture(true)`로 블랙아웃을 요청한다.
+- 블랙아웃은 폴라로이드 프레임이 아니라 사진 내부 캡처 이미지 전체에만 적용된다.
+- 블랙아웃 여부는 매 촬영마다 다시 판정한다.
 
-- `Spawn`에서 대상 액터에 `PhotoInvisible` 태그를 추가한다.
-- 대상이 원래 `PhotoInvisible` 태그를 가지고 있었는지 `context.State.HadPhotoInvisibleTag`에 저장한다.
-- 사진 캡처 C++ 경로는 `PhotoInvisible` 태그가 붙은 액터를 사진 렌더에서 숨긴다.
-- `Despawn`에서는 원래 태그가 없던 대상에 대해서만 `PhotoInvisible` 태그를 제거한다.
+### PhotoLookAtInvisible
 
-복구 원칙:
+- 촬영 요청 직전에 대상 yaw를 플레이어 방향으로 돌린다.
+- 동시에 `PhotoInvisible` 태그를 사용해서 사진 결과에서 대상이 빠지게 한다.
+- `Tick`에서 계속 회전하지 않고 촬영 시점에만 회전한다.
 
-- 규칙이 추가한 태그만 제거한다.
-- 에디터나 다른 시스템이 미리 붙인 태그는 보존한다.
+### PhotoLookAtBlackPhoto
 
-### NoShadow
+- 촬영 요청 직전에 대상 yaw를 플레이어 방향으로 돌린다.
+- 동시에 `PhotoBlackoutTarget` 태그를 사용한다.
+- 대상이 프러스텀과 라인트레이스 조건을 만족하면 해당 사진만 검게 나온다.
 
-파일: `KraftonEngine/Content/Script/Anomalies/NoShadow.lua`
+### PhotoGhostReplacement
 
-목표는 대상 본체는 보이지만 그림자만 사라지는 상태다.
+- `Spawn`: `World.SpawnStaticMeshActor("Content/Data/Ghost/Ghost.uasset", ...)`로 별도 Ghost actor를 대상 위치, 회전, 스케일에 생성한다.
+- 평상시: Ghost actor에는 `PhotoGhostReplacementActor` 태그를 붙이고 `SetVisible(false)`로 숨겨 둔다.
+- 원본 대상: `PhotoGhostReplacementTarget` 태그만 붙인다. 원본 대상에는 `StaticMeshComponent`를 추가하지 않는다.
+- 캡처 직전: `FPhotoOverlay`가 `PhotoGhostReplacementTarget` actor를 숨기고, `PhotoGhostReplacementActor` actor를 표시한다.
+- 캡처 직후: 두 actor의 visibility를 촬영 전 상태로 복구한다.
+- `Despawn`: 원래 없던 target 태그만 제거하고, 생성해 둔 Ghost actor를 `Destroy()`로 제거한다.
+- `Content/Data/Ghost/Ghost.uasset`가 없거나 static mesh 로드에 실패하면 룰 `Spawn`은 실패한다.
 
-구현 방식:
+### PhotoBoneTwist
 
-- 대상의 루트 `PrimitiveComponent`를 우선 찾는다.
-- 루트 primitive가 없으면 대표 primitive를 사용한다.
-- `Spawn`에서 `GetCastShadow()` 값을 저장한 뒤 `SetCastShadow(false)`를 호출한다.
-- `Despawn`에서 저장해 둔 원래 그림자 상태로 복구한다.
-
-적용 조건:
-
-- 대상 액터에서 primitive 컴포넌트를 얻을 수 있어야 한다.
-- `SetCastShadow`, `GetCastShadow` Lua 바인딩이 있어야 한다.
-
-복구 원칙:
-
-- 그림자를 무조건 켜지 않는다.
-- 적용 전 값이 `false`였으면 해제 후에도 `false`로 유지한다.
+- `Spawn`: 대상에 skeletal mesh가 있는지 확인하고 `PhotoBoneTwistTarget` 태그를 붙인다.
+- 캡처 직전: 현재 local bone pose를 저장하고 각 bone의 local rotation에 무작위 delta rotation을 곱한다.
+- root bone은 전체 위치감이 크게 흔들리지 않도록 작은 각도로 제한한다.
+- 캡처 직후: 저장한 local pose를 즉시 복구한다.
+- `Despawn`: 원래 없던 `PhotoBoneTwistTarget` 태그만 제거한다. bone pose는 촬영 직후 이미 복구되어 있어야 한다.
 
 ### OffscreenAnimation
 
-파일: `KraftonEngine/Content/Script/Anomalies/OffscreenAnimation.lua`
+- 대상 skeletal mesh의 skeleton과 호환되는 animation asset 목록을 조회한다.
+- 현재 재생 중인 animation은 후보에서 제외한다.
+- 후보가 없으면 하드코딩 fallback 없이 `Spawn` 실패로 처리한다.
+- 대상이 프러스텀 밖이면 선택된 animation을 재생하고, 프러스텀 안이면 정지한다.
+- 원래 animation이 없던 대상은 `StopAnimation()`으로 reference pose에 돌아가게 한다.
 
-목표는 대상이 카메라 프러스텀 밖에 있을 때만 대상 skeleton에 호환되는 랜덤 애니메이션이 재생되는 상태다.
+### OffscreenFacePlayer
 
-구현 방식:
+- 플레이어가 대상을 한 번 관측하기 전까지는 동작하지 않는다.
+- 최초 관측은 프러스텀 판정과 라인트레이스 판정을 함께 사용한다.
+- 최초 관측 이후 대상이 프러스텀 밖에 있을 때만 actor yaw를 플레이어 방향으로 갱신한다.
+- 이 단독 규칙은 랜덤 풀에는 포함하지 않는다.
 
-- `Spawn`에서 대상의 `SkeletalMeshComponent`를 찾는다.
-- 현재 애니메이션 경로, 재생 속도, 루프 여부, 재생 상태를 `context.State`에 저장한다.
-- `SkeletalMeshComponent:GetCompatibleAnimationPaths()`로 대상의 현재 `SkeletalMesh` skeleton에 호환되는 애니메이션 경로 목록을 가져온다.
-- 현재 재생 중인 애니메이션 경로는 후보에서 제외한다.
-- 남은 후보 중 하나를 랜덤으로 골라 `context.State.OffscreenAnimationPath`에 저장한다.
-- `Tick`마다 `World.IsActorInViewFrustum(context.Target)`으로 대상이 화면 안에 있는지 확인한다.
-- 대상이 화면 밖으로 나가면 선택된 `OffscreenAnimationPath`로 `PlayAnimationByPath(path, true)`를 호출한다.
-- 대상이 다시 화면 안으로 들어오면 `SetPlaying(false)`로 정지한다.
-- `Despawn`에서 원래 애니메이션 경로, 재생 속도, 루프 여부, 재생 상태를 복구한다.
+### NoShadow
 
-적용 조건:
+- 대상 primitive component의 `CastShadow` 값을 저장한 뒤 false로 바꾼다.
+- `Despawn`에서 저장한 원래 값으로 복구한다.
+- 이 규칙은 랜덤 풀에는 포함하지 않는다.
 
-- 대상 액터에 `SkeletalMeshComponent`가 있어야 한다.
-- 현재 skeleton에 호환되고 현재 재생 중이지 않은 `UAnimSequence`가 하나 이상 있어야 한다.
-- `PlayAnimationByPath` Lua 바인딩이 있어야 한다.
-- `GetCompatibleAnimationPaths` Lua 바인딩이 있어야 한다.
-- 프러스텀 판정은 `World.IsActorInViewFrustum(actor)` 바인딩을 사용한다.
+### NearSilentCymbalMonkey
 
-복구 원칙:
+- `World.FindActorsByTag("CymbalsMonkey")`로 원숭이 액터를 찾는다.
+- 플레이어가 활성 Anomaly 대상 2.5m 이내에 들어가면 원숭이 `AudioComponent` 볼륨을 0으로 바꾼다.
+- 범위 밖으로 나가거나 `Despawn`되면 원래 볼륨으로 복구한다.
+- 이 규칙은 랜덤 풀에는 포함하지 않는다.
 
-- 기존 애니메이션 정보를 저장했다가 가능한 범위에서 되돌린다.
-- 기존 재생 상태가 있으면 `SetPlaying(OriginalPlaying)`으로 복구한다.
-- 기존 애니메이션 경로가 없으면 강제로 새 애니메이션을 지정하지 않는다.
-- 기존 애니메이션 경로가 없으면 `StopAnimation()`으로 애니메이션을 비워 reference pose로 돌아가게 한다.
-- 호환 가능한 다른 애니메이션이 없으면 하드코딩 애니메이션으로 대체하지 않고 `Spawn` 실패로 처리한다.
+## Lua 바인딩
 
-## C++ / Lua 연결 지점
-
-### 사진 캡처
-
-`ULuaAnimInstance::request_photo_capture`는 사진 촬영 시 `PhotoInvisible` 태그를 기준으로 대상을 숨긴다.
-`ULuaAnimInstance::is_photo_capture_available`은 이전 사진의 캡처 요청, 사진 배출, 인화가 끝났을 때만 true를 반환한다.
-
-기존 `Fake` 태그는 이상현상 판정에 사용하지 않는다. 활성 이상현상 대상은 `ActiveAnomalyTarget` 태그를 사용한다.
-
-### 컴포넌트 바인딩
-
-`LuaScriptManager.cpp`에서 이상현상 규칙용 바인딩을 제공한다.
+Anomaly 시스템에서 사용하는 주요 바인딩은 다음과 같다.
 
 ```txt
 PrimitiveComponent:SetCastShadow(bool)
@@ -384,6 +197,8 @@ PrimitiveComponent:GetCastShadow()
 PrimitiveComponent:SetVisibility(bool)
 PrimitiveComponent:IsVisible()
 Actor:GetAudioComponent()
+Actor:SetGameplayOutline(bool)
+Actor:Destroy()
 AudioComponent:SetVolume(float)
 AudioComponent:GetVolume()
 
@@ -392,112 +207,23 @@ SkeletalMeshComponent:GetCompatibleAnimationPaths()
 SkeletalMeshComponent:GetPlayRate()
 SkeletalMeshComponent:GetLooping()
 SkeletalMeshComponent:IsPlaying()
+
+World.SpawnStaticMeshActor(meshPath, location, rotation, scale)
 World.IsActorInViewFrustum(actor)
+World.IsComponentInViewFrustum(component)
 World.GetGameTime()
 World.GetRealTimeSeconds()
 ```
 
-`AnomalyManager`의 랜덤 시드는 `os.time()`을 쓰지 않는다. 이 엔진 Lua는 `os` 라이브러리를 열지 않기 때문에, 엔진에서 안전하게 노출한 `World.GetRealTimeSeconds()`만 사용한다. 해당 바인딩이 없는 런타임에서는 고정 시드로 대체하지 않는다.
+랜덤 seed는 Lua `os.time()`이 아니라 엔진 바인딩 `World.GetRealTimeSeconds()`를 사용한다.
 
-## 신규 규칙 추가 방법
+## 테스트 체크리스트
 
-1. `KraftonEngine/Content/Script/Anomalies/` 아래에 새 Lua 파일을 추가한다.
-2. `Name`, `Spawn`, `Despawn`, 필요 시 `Tick`, `IsCleared`를 구현한다.
-3. `AnomalyManager.lua`에서 `require("Anomalies/파일명")`으로 불러온다.
-4. `AnomalyManager.Rules`에 규칙 테이블을 추가한다. 디버그 전용 규칙은 `AnomalyManager.AllRules`에는 등록하되 `AnomalyManager.Rules` 랜덤 풀에서는 제외한다.
-5. 규칙이 변경한 액터/컴포넌트 상태는 반드시 `context.State`에 원본을 저장하고 `Despawn`에서 복구한다.
-
-주의:
-
-- 이 엔진의 커스텀 Lua require는 `Anomalies.PhotoInvisible` 같은 점 경로를 폴더 경로로 변환하지 않는다.
-- 하위 폴더 모듈은 `require("Anomalies/PhotoInvisible")`처럼 `/`를 사용한다.
-- `Spawn`에서 실패할 수 있는 규칙은 `false, "reason"`을 반환한다.
-- 디버그 키로 강제 적용할 수 있게 하려면 규칙의 `Name`과 `DebugManager.Scenarios`의 `RuleName`을 일치시킨다.
-
-## 현재 디버그 씬 체크리스트
-
-- 후보 액터에 `AnomalyCandidate` 태그가 붙어 있는지 확인한다.
-- `1`을 눌렀을 때 활성 대상에 `PhotoInvisible` 태그가 붙는지 확인한다.
-- `2`를 눌렀을 때 대상 본체는 보이고 그림자만 사라지는지 확인한다.
-- `3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
-- `7`을 눌렀을 때 PhotoInvisible 태그가 적용되고, 촬영 순간에만 대상이 플레이어를 바라보는지 확인한다.
-- `8`을 눌렀을 때 BlackPhoto 태그가 적용되고, 촬영 순간에만 대상이 플레이어를 바라보는지 확인한다.
-- 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어되는지 확인한다.
-- 활성 대상을 쏘면 게임 시간이 멈추고 `CymbalMonkey` 애니메이션도 정지하는지 확인한다.
-- 한 스테이지에서 권총 발사는 정답 이상현상, `Fake` 태그 대상, 일반 투사체 발사를 합쳐 3회까지만 가능하다.
-- 워프 후 새 스테이지가 세팅되면 권총 발사 가능 횟수가 다시 3회로 초기화된다.
-- `DoorEntry` 문을 열면 `remainingTime`이 초기값으로 복구되고, 시간이 다시 흐르며 `CymbalMonkey` 애니메이션이 재개되는지 확인한다.
-- 씬을 재시작하거나 게임이 리셋될 때 이전 이상현상 상태가 복구되는지 확인한다.
-
-## OffscreenFacePlayer 추가 규칙
-
-`OffscreenFacePlayer`는 플레이어가 대상을 한 번 관측한 뒤, 대상이 플레이어 카메라 프러스텀 밖에 있을 때만 대상 액터의 body yaw를 플레이어 방향으로 돌리는 규칙이다.
-
-- 디버그 단축키: `4`
-- 최초 관측 기준: 프러스텀 판정과 `World.LineTraceObjects`를 함께 사용한다.
-- 발동 후 회전 기준: 라인트레이스는 사용하지 않고 프러스텀 판정만 사용한다.
-- 스켈레탈 메시 대상: `World.IsComponentInViewFrustum(mesh)`로 실제 메시 컴포넌트 AABB를 검사한다.
-- 일반 대상: 스켈레탈 메시가 없으면 `World.IsActorInViewFrustum(actor)`로 대체한다.
-- 회전 방식: `Pitch=0`, `Roll=0`, `Yaw=플레이어 방향`으로 설정한다.
-- 정지 조건: 대상이 프러스텀 안으로 들어오면 회전을 갱신하지 않는다.
-- 복구 방식: 다음 루프, 리셋, 게임 종료 등으로 `Despawn`이 호출되면 `Spawn` 시점의 원래 회전으로 되돌린다.
-
-디버그 키 매핑은 다음과 같다.
-
-```txt
-1 -> PhotoInvisible
-2 -> NoShadow
-3 -> OffscreenAnimation
-4 -> OffscreenFacePlayer
-5 -> BlackPhoto
-6 -> NearSilentCymbalMonkey
-7 -> PhotoLookAtInvisible
-8 -> PhotoLookAtBlackPhoto
-```
-
-`World.IsComponentInViewFrustum(component)`는 현재 월드의 활성 POV로 프러스텀을 만들고, 전달된 `UPrimitiveComponent`의 월드 AABB와 교차하는지 검사한다. 이 바인딩은 액터 루트 AABB와 실제 보이는 스켈레탈 메시 AABB가 달라지는 경우를 피하기 위해 사용한다.
-
-### OffscreenFacePlayer 최초 관측 조건
-
-`OffscreenFacePlayer`는 생성 직후 바로 회전하지 않는다. 플레이어가 대상을 한 번 관측해야 이상현상이 발동한다.
-
-- 최초 관측 조건: 대상이 프러스텀 안에 있고, 플레이어 카메라에서 대상까지 `World.LineTraceObjects`가 막히지 않아야 한다.
-- 최초 관측 전: 대상은 원래 회전을 유지한다.
-- 최초 관측 후: 대상이 프러스텀 밖에 있을 때만 플레이어 방향으로 yaw를 갱신한다.
-- 최초 관측 후 프러스텀 판정에는 라인트레이스를 사용하지 않는다.
-- 라인트레이스 대상점은 대상 원점이 아니라 대상의 X/Y에 카메라 높이 Z를 맞춘 위치를 사용한다.
-
-### PhotoLookAt 결합 규칙
-
-`PhotoLookAtInvisible`와 `PhotoLookAtBlackPhoto`는 촬영 요청 직전에 대상 yaw를 플레이어 방향으로 돌리면서 사진 계열 이상현상을 함께 적용하는 규칙이다.
-
-- `PhotoLookAtInvisible`: `PhotoInvisible` 태그를 함께 붙여 사진 렌더에서 대상이 빠지게 한다.
-- `PhotoLookAtBlackPhoto`: `PhotoBlackoutTarget` 태그를 함께 붙여 대상이 촬영 순간 프러스텀과 라인트레이스 조건을 만족하면 사진 내부 캡처 이미지를 검게 만든다.
-- 두 규칙은 `Tick`에서 화면 밖 회전을 하지 않고, `GameManager:NotifyPhotoCaptureRequested()`가 호출되는 촬영 순간에만 회전한다.
-- 두 규칙은 일반 랜덤 규칙 풀에 포함한다.
-- `OffscreenFacePlayer` 단독 규칙은 디버그 전용으로만 유지한다.
-- `Despawn`에서는 원래 없던 사진 태그만 제거하고, `OffscreenFacePlayer`가 저장한 원래 회전도 복구한다.
-
-## BlackPhoto 추가 규칙
-
-`BlackPhoto`는 활성 이상현상 대상이 촬영 순간 카메라에 관측될 때, 해당 사진 한 장의 내부 캡처 이미지를 전체 검은색으로 만드는 규칙이다.
-
-- 디버그 단축키: `5`
-- 태그: 활성 대상에 `PhotoBlackoutTarget` 태그를 붙이고, 원래 없던 태그만 `Despawn`에서 제거한다.
-- 촬영 판정은 룰 이름이 아니라 활성 대상의 `PhotoBlackoutTarget` 태그를 기준으로 한다.
-- 관측 조건: 대상이 프러스텀 안에 있고, 카메라에서 대상까지 `World.LineTraceObjects`가 막히지 않아야 한다.
-- 프러스텀 기준: 스켈레탈 메시가 있으면 `World.IsComponentInViewFrustum(mesh)`를 사용하고, 없으면 `World.IsActorInViewFrustum(actor)`를 사용한다.
-- 라인트레이스 대상점: 대상의 X/Y에 카메라 높이 Z를 맞춘 위치를 사용한다.
-- 블랙아웃 범위: 폴라로이드 프레임은 유지하고, 사진 내부 캡처 텍스처만 검은색으로 clear한다.
-- 적용 범위: 블랙아웃 여부는 촬영 입력 순간마다 다시 계산하며, 조건을 만족한 그 한 장에만 적용된다.
-
-## NearSilentCymbalMonkey 추가 규칙
-
-`NearSilentCymbalMonkey`는 플레이어가 활성 이상현상 대상 근처에 접근했을 때 `CymbalsMonkey` 태그를 가진 액터의 `AudioComponent` 볼륨을 0으로 낮추는 규칙이다.
-
-- 디버그 키: `6`
-- 원숭이 검색 기준: `World.FindActorsByTag("CymbalsMonkey")`
-- 거리 기준: 플레이어 카메라 위치와 활성 이상현상 대상 위치 사이의 거리가 `2.5m` 이하일 때 발동한다.
-- 음소거 방식: 별도 오디오 매니저 게이트를 만들지 않고, `CymbalsMonkey` 태그 액터의 대표 `AudioComponent:SetVolume(0)`을 호출한다.
-- 복구 방식: 플레이어가 범위 밖으로 나가거나 다음 루프, 리셋, 게임 종료로 `Despawn`이 호출되면 저장해 둔 원래 볼륨으로 복구한다.
-- 적용 대상: 정답 대상은 기존처럼 랜덤 `AnomalyCandidate`이며, 원숭이 자체를 정답 대상으로 바꾸지 않는다.
+- `1`을 누르면 `PhotoInvisible`이 적용되고 사진에서 대상만 빠지는지 확인한다.
+- `2`를 누르면 촬영 시점에 대상이 플레이어를 바라본 뒤 사진에서 빠지는지 확인한다.
+- `3`을 누르면 촬영 시점에 대상이 플레이어를 바라본 뒤 조건 만족 시 사진이 검게 나오는지 확인한다.
+- `4`를 누르면 `BlackPhoto` 조건을 만족한 사진만 검게 나오는지 확인한다.
+- `5`를 누르면 월드에서는 원본만 보이고, 촬영 결과에는 원본 대신 별도 Ghost actor가 보이는지 확인한다.
+- `6`을 누르면 촬영 결과에서만 skeletal mesh bone rotation이 무작위로 비틀리고 월드 포즈는 즉시 복구되는지 확인한다.
+- 정답 대상을 맞추면 시간과 `CymbalMonkey` 애니메이션이 멈추고, 다음 루프에서 기존 Anomaly가 원복되는지 확인한다.
+- `Q` 또는 패드 `L2`를 누르고 있는 동안에만 활성 Anomaly 대상 outline이 보이는지 확인한다.

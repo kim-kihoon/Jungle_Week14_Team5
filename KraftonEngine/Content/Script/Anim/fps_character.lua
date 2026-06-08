@@ -224,11 +224,25 @@ local function clear_ending_stagger_visuals(self)
     end
 end
 
+local function apply_ending_stagger_neutral(self)
+    if Anim.apply_head_bob ~= nil then
+        Anim.apply_head_bob(0.0, 0.0, 0.0)
+    end
+    if Anim.apply_owner_mesh_shake_offset ~= nil then
+        Anim.apply_owner_mesh_shake_offset(0.0, 0.0, 0.0, 0.0, 0.0)
+    end
+    if self ~= nil then
+        self.HeadBobRoll = 0.0
+        self.HeadBobPitch = 0.0
+        self.HeadBobOffsetZ = 0.0
+    end
+end
+
 local function update_ending_stagger_visuals(self, dt)
     if EndingManager == nil
         or EndingManager.IsStaggerShakeActive == nil
         or not EndingManager:IsStaggerShakeActive() then
-        clear_ending_stagger_visuals(self)
+        apply_ending_stagger_neutral(self)
         return
     end
 
@@ -764,7 +778,13 @@ end
 function update(self, dt)
     self.Speed = Anim.get_owner_speed()
 
-    if is_ending_cutscene() then
+    local bEndingCutscene = is_ending_cutscene()
+    if self.bWasEndingCutscene == true and not bEndingCutscene then
+        clear_ending_stagger_visuals(self)
+    end
+    self.bWasEndingCutscene = bEndingCutscene
+
+    if bEndingCutscene then
         if self.ActionPhase == ACTION_PISTOL_FIRE then
             self.ActionTime = self.ActionTime + dt
             if self.ActionTime >= self.PistolFireDuration then

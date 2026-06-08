@@ -12,7 +12,7 @@ EndingManager.ENDING_SUN_NAME = "EndingSun"
 EndingManager.ENDING_SUN_TAG = "EndingLighting"
 EndingManager.ENDING_MAP_NAME = "EndingHospital"
 
-EndingManager.FALLBACK_SPAWN = Vec3(600.0, 0.0, 38.0)
+EndingManager.FALLBACK_SPAWN = Vec3(600.0, 0.0, 0.0)
 EndingManager.ENDING_SPAWN_YAW = -180.0
 EndingManager.ENDING_SPAWN_PITCH = 15.0
 EndingManager.WAKE_UP_SHOT_TRACE_DISTANCE = 1000.0
@@ -55,6 +55,7 @@ EndingManager.STAGGER_ROLL_DEGREES = 2.0
 EndingManager.STAGGER_PITCH_DEGREES = 0.25
 EndingManager.STAGGER_LOC_Z = 0.01
 EndingManager.STAGGER_LOC_XY = 0.006
+EndingManager.STAGGER_FADE_IN_SECONDS = 1.0
 
 EndingManager.ENDING_SIREN_KEY = "DistantSiren"
 EndingManager.ENDING_SIREN_VOLUME = 0.7
@@ -500,13 +501,20 @@ function EndingManager:UpdateStaggerShake(dt)
     local locAmp = (self.STAGGER_LOC_Z or 0.01) * ampBlend
     local locXYAmp = (self.STAGGER_LOC_XY or 0.006) * ampBlend
 
+    local fadeIn = 1.0
+    local fadeSeconds = tonumber(self.STAGGER_FADE_IN_SECONDS) or 0.0
+    if fadeSeconds > 0.0 then
+        fadeIn = math.min(1.0, (self.StaggerElapsed or 0.0) / fadeSeconds)
+        fadeIn = fadeIn * fadeIn * (3.0 - 2.0 * fadeIn)
+    end
+
     local phase = self.StaggerPhase
     local offset = self.StaggerCurrentOffset
-    offset.Roll = math.sin(phase * math.pi * 2.0) * rollAmp
-    offset.Pitch = math.sin(phase * math.pi * 2.0 * 0.85 + 0.6) * pitchAmp
-    offset.LocX = math.sin(phase * math.pi * 2.0 * 1.15) * locXYAmp
-    offset.LocY = math.sin(phase * math.pi * 2.0 * 0.7 + 1.1) * locXYAmp
-    offset.LocZ = math.sin(phase * math.pi * 2.0 * 0.55 + 0.3) * locAmp
+    offset.Roll = math.sin(phase * math.pi * 2.0) * rollAmp * fadeIn
+    offset.Pitch = math.sin(phase * math.pi * 2.0 * 0.85 + 0.6) * pitchAmp * fadeIn
+    offset.LocX = math.sin(phase * math.pi * 2.0 * 1.15) * locXYAmp * fadeIn
+    offset.LocY = math.sin(phase * math.pi * 2.0 * 0.7 + 1.1) * locXYAmp * fadeIn
+    offset.LocZ = math.sin(phase * math.pi * 2.0 * 0.55 + 0.3) * locAmp * fadeIn
 end
 
 function EndingManager:SetHorrorLightingEnabled(bEnabled)
