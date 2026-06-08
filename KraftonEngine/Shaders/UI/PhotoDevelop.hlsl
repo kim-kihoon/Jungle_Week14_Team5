@@ -30,6 +30,6 @@ float4 PS(PS_Input_PhotoDevelop input) : SV_TARGET
 {
     float4 photoColor = PhotoColorTex.Sample(LinearClampSampler, input.texcoord) * input.color;
     float alpha = saturate(DevelopAlpha);
-    float3 rgb = lerp(float3(1.0f, 1.0f, 1.0f), photoColor.rgb, alpha);
+    float3 rgb = lerp(float3(0.05f, 0.05f, 0.05f), photoColor.rgb, alpha);
     return float4(ApplyWireframe(rgb), bIsWireframe ? 1.0f : input.color.a);
 }
