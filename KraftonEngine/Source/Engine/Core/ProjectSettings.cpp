@@ -305,6 +305,7 @@ void FProjectSettings::EnsureDefaultInputMappings()
 	AddActionMapping(Input, "Interact", "Gamepad_FaceRight");
 	AddActionMapping(Input, "Aim", "RightMouseButton");
 	AddActionMapping(Input, "Aim", "Gamepad_LeftShoulder");
+	AddActionMapping(Input, "DebugAnomalyOutline", "Gamepad_LeftTrigger");
 	AddActionMapping(Input, "Fire", "LeftMouseButton");
 	AddActionMapping(Input, "Fire", "Gamepad_RightShoulder");
 	AddActionMapping(Input, "VehicleHandbrake", "Space");

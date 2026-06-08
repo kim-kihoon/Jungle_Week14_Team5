@@ -133,6 +133,8 @@ private:
 	void CloseDocument(UUserWidget* Widget);
 	void CompactInvalidWidgets();
 	void ProcessInput(const FFrameContext& Frame);
+	void ProcessNavigationInput();
+	UUserWidget* GetTopNavigationWidget() const;
 	void RemoveFromViewportImmediate(UUserWidget* Widget);
 	void FlushDeferredViewportRemovals();
 	void SetViewportLayerVisibility(EUIRenderLayout TargetLayout);
@@ -159,4 +161,7 @@ private:
 	float UILayoutScale = 1.0f;
 	float UILayoutOffsetX = 0.0f;
 	float UILayoutOffsetY = 0.0f;
+	double NextNavigationRepeatTime = 0.0;
+	int32 HeldNavigationX = 0;
+	int32 HeldNavigationY = 0;
 };
