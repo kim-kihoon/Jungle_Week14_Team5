@@ -23,6 +23,7 @@ namespace
 	constexpr float PhotoEjectSeconds = 1.0f;
 	constexpr float PhotoSpawnDelaySeconds = 0.25f;
 	constexpr float PhotoFlashSeconds = 0.2f;
+	constexpr float PhotoDevelopSeconds = 1.0f;
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
 	constexpr const char* HeldCameraMeshPath = "Content/Data/camera/camera_StaticMesh.uasset";
 	constexpr const char* HeldCameraMeshFileName = "camera_StaticMesh.uasset";
@@ -443,9 +444,24 @@ float FPhotoOverlay::GetDevelopTime()
 	return DevelopTime;
 }
 
+float FPhotoOverlay::GetDevelopSeconds()
+{
+	return PhotoDevelopSeconds;
+}
+
 float FPhotoOverlay::GetEjectSeconds()
 {
 	return PhotoEjectSeconds;
+}
+
+bool FPhotoOverlay::IsCaptureInProgress()
+{
+	if (bCaptureRequested || bPhotoSpawnPending)
+	{
+		return true;
+	}
+
+	return PhotoActor.Get() && PhotoComponent.Get() && DevelopTime < PhotoDevelopSeconds;
 }
 
 float FPhotoOverlay::GetCaptureAspectRatio()

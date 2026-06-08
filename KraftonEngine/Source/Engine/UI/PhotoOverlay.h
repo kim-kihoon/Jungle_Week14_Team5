@@ -22,7 +22,9 @@ public:
 	static float GetDisplayTime();
 	static float GetFlashTime();
 	static float GetDevelopTime();
+	static float GetDevelopSeconds();
 	static float GetEjectSeconds();
+	static bool IsCaptureInProgress();
 	static float GetCaptureAspectRatio();
 	static float GetFrameAspectRatio();
 

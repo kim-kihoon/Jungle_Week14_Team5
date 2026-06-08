@@ -344,6 +344,7 @@ return Rule
 ### 사진 캡처
 
 `ULuaAnimInstance::request_photo_capture`는 사진 촬영 시 `PhotoInvisible` 태그를 기준으로 대상을 숨긴다.
+`ULuaAnimInstance::is_photo_capture_available`은 이전 사진의 캡처 요청, 사진 배출, 인화가 끝났을 때만 true를 반환한다.
 
 기존 `Fake` 태그는 이상현상 판정에 사용하지 않는다. 활성 이상현상 대상은 `ActiveAnomalyTarget` 태그를 사용한다.
 

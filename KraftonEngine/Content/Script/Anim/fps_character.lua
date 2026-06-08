@@ -490,6 +490,13 @@ local function consume_pistol_bullet()
     return GameManager:ConsumePlayerBullet()
 end
 
+local function can_request_photo_capture()
+    if Anim == nil or Anim.is_photo_capture_available == nil then
+        return true
+    end
+    return Anim.is_photo_capture_available()
+end
+
 local function show_pistol()
     sync_tool_state(TOOL_PISTOL)
     Anim.set_crosshair_visible(true)
@@ -694,7 +701,7 @@ function update(self, dt)
                 end
             end
         elseif self.CurrentTool == TOOL_CAMERA then
-            if is_action_pressed("Fire") or Anim.is_left_mouse_pressed() then
+            if (is_action_pressed("Fire") or Anim.is_left_mouse_pressed()) and can_request_photo_capture() then
                 Anim.request_photo_capture(should_blackout_photo_capture())
             end
         end
