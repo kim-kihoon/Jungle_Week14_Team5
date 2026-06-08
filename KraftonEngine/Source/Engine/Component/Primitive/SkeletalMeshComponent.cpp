@@ -576,6 +576,15 @@ USkeletalMeshComponent::~USkeletalMeshComponent()
     ClearAnimInstance();
 }
 
+void USkeletalMeshComponent::BeginPlay()
+{
+    Super::BeginPlay();
+
+    // 게임 시작 시점에는 씬 로드와 모든 프로퍼티 복원이 끝나 있으므로,
+    // 저장된 AnimInstance/Lua 그래프를 런타임용으로 다시 준비한다.
+    InitializeAnimation();
+}
+
 FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
 {
     return new FSkeletalMeshSceneProxy(this);
