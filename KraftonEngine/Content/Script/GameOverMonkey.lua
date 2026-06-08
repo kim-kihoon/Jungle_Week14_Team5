@@ -16,6 +16,22 @@ local SQUEEZE_MAX_SCALE = 1.5
 local CAMERA_SHAKE_MAX_SCALE = 0.0
 local CAMERA_SHAKE_PULSE_SECONDS = 0.05
 local unpack_args = table.unpack or unpack
+local POST_PROCESS_SCALAR_PARAMETERS = {
+    "VignetteIntensity",
+    "VignetteRadius",
+    "VignetteSoftness",
+    "ChromaticStrength",
+    "Time",
+    "GrainStrength",
+    "GrainScale",
+    "GrainDarkPower",
+    "NoiseMin",
+    "NoiseMax",
+}
+local POST_PROCESS_VECTOR_PARAMETERS = {
+    "VignetteColor",
+    "NoiseColor",
+}
 
 local STATE_NONE = "None"
 local STATE_LOOK_AT = "LookAt"
@@ -40,6 +56,7 @@ GameOverMonkey.SqueezeElapsed = 0.0
 GameOverMonkey.OriginalScale = nil
 GameOverMonkey.OriginalLocalLocation = nil
 GameOverMonkey.StartLocalLocation = nil
+GameOverMonkey.SavedPostProcessParameters = nil
 
 local function log_failure(message)
     print("[GameOverMonkey] " .. tostring(message))
@@ -308,20 +325,26 @@ local function set_post_process_vector(camera, name, value)
     return ok and result ~= false
 end
 
+local function get_post_process_material(camera)
+    if camera == nil or camera.GetPostProcessMaterial == nil then
+        return nil
+    end
+
+    local ok, material = pcall(function()
+        return camera:GetPostProcessMaterial()
+    end)
+    if ok then
+        return material
+    end
+    return nil
+end
+
 local function ensure_horror_post_process(camera)
     if camera == nil or camera.SetPostProcessMaterial == nil then
         return false
     end
 
-    local hasMaterial = false
-    if camera.GetPostProcessMaterial ~= nil then
-        local ok, material = pcall(function()
-            return camera:GetPostProcessMaterial()
-        end)
-        hasMaterial = ok and material ~= nil
-    end
-
-    if hasMaterial then
+    if get_post_process_material(camera) ~= nil then
         return true
     end
 
@@ -560,6 +583,76 @@ function GameOverMonkey:ResetPresentationState()
     self.CameraShakeElapsed = 0.0
     self.SqueezeElapsed = 0.0
     self.StartLocalLocation = nil
+    self.SavedPostProcessParameters = nil
+end
+
+function GameOverMonkey:SavePostProcessParameters()
+    local camera = self.ActiveCamera or get_active_camera(self.PlayerActor)
+    if camera == nil or not ensure_horror_post_process(camera) then
+        return false
+    end
+
+    local material = get_post_process_material(camera)
+    if material == nil then
+        return false
+    end
+
+    local saved = {
+        Scalars = {},
+        Vectors = {},
+    }
+
+    if material.GetScalarParameterValue ~= nil then
+        for _, name in ipairs(POST_PROCESS_SCALAR_PARAMETERS) do
+            local ok, value = pcall(function()
+                return material:GetScalarParameterValue(name)
+            end)
+            if ok then
+                saved.Scalars[name] = value
+            end
+        end
+    end
+
+    if material.GetVector4ParameterValue ~= nil then
+        for _, name in ipairs(POST_PROCESS_VECTOR_PARAMETERS) do
+            local ok, value = pcall(function()
+                return material:GetVector4ParameterValue(name)
+            end)
+            if ok and value ~= nil then
+                saved.Vectors[name] = value
+            end
+        end
+    end
+
+    self.ActiveCamera = camera
+    self.SavedPostProcessParameters = saved
+    return true
+end
+
+function GameOverMonkey:RestorePostProcessParameters()
+    local saved = self.SavedPostProcessParameters
+    if saved == nil then
+        return false
+    end
+
+    local camera = self.ActiveCamera or get_active_camera(self.PlayerActor)
+    if camera == nil or not ensure_horror_post_process(camera) then
+        return false
+    end
+
+    if saved.Scalars ~= nil then
+        for name, value in pairs(saved.Scalars) do
+            set_post_process_scalar(camera, name, value)
+        end
+    end
+
+    if saved.Vectors ~= nil then
+        for name, value in pairs(saved.Vectors) do
+            set_post_process_vector(camera, name, value)
+        end
+    end
+
+    return true
 end
 
 function GameOverMonkey:ApplyPostProcess(vignetteAlpha, noiseAlpha)
@@ -597,25 +690,7 @@ function GameOverMonkey:ApplyPostProcess(vignetteAlpha, noiseAlpha)
 end
 
 function GameOverMonkey:ClearPostProcess()
-    local camera = self.ActiveCamera or get_active_camera(self.PlayerActor)
-    if camera == nil then
-        return false
-    end
-
-    ensure_horror_post_process(camera)
-    set_post_process_vector(camera, "VignetteColor", make_vec4(0.0, 0.0, 0.0, 0.0))
-    set_post_process_scalar(camera, "VignetteIntensity", 0.0)
-    set_post_process_scalar(camera, "VignetteRadius", 0.5)
-    set_post_process_scalar(camera, "VignetteSoftness", 0.5)
-    set_post_process_scalar(camera, "ChromaticStrength", 0.0)
-    set_post_process_scalar(camera, "GrainStrength", 0.0)
-    set_post_process_scalar(camera, "GrainScale", 1.0)
-    set_post_process_scalar(camera, "GrainDarkPower", 0.0)
-    set_post_process_scalar(camera, "NoiseMin", 0.0)
-    set_post_process_scalar(camera, "NoiseMax", 1.0)
-    set_post_process_vector(camera, "NoiseColor", make_vec4(1.0, 1.0, 1.0, 0.0))
-    set_post_process_scalar(camera, "Time", 0.0)
-    return true
+    return self:RestorePostProcessParameters()
 end
 
 function GameOverMonkey:StartLookAtCymbalsMonkey()
@@ -764,6 +839,7 @@ function GameOverMonkey:StartPresentation(onFinished)
     self.OriginalScale = self:GetMeshScale()
     self.OriginalLocalLocation = self:GetMeshLocalLocation()
     self.ActiveCamera = get_active_camera(self.PlayerActor)
+    self:SavePostProcessParameters()
     self.PlayerPawn = get_player_pawn(self.PlayerActor)
     self.SavedControlRotation = copy_vec3(get_control_rotation(self.PlayerPawn))
     self:StartLookAtCymbalsMonkey()

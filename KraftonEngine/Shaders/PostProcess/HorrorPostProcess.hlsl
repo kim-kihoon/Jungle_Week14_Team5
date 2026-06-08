@@ -39,6 +39,21 @@ float Hash21(float2 p)
     return frac((p3.x + p3.y) * p3.z);
 }
 
+float SanitizeChannel(float value)
+{
+    return value == value ? saturate(value) : 1.0f;
+}
+
+float3 SanitizeSceneColor(float3 color)
+{
+    return float3(
+        SanitizeChannel(color.r),
+        SanitizeChannel(color.g),
+        SanitizeChannel(color.b)
+    );
+}
+
+
 float3 SampleChromatic(float2 uv, float2 texelSize)
 {
     float2 centered = uv - 0.5f;
@@ -52,7 +67,7 @@ float3 SampleChromatic(float2 uv, float2 texelSize)
     float r = SceneColorTexture.SampleLevel(LinearClampSampler, uvR, 0).r;
     float g = SceneColorTexture.SampleLevel(LinearClampSampler, uv, 0).g;
     float b = SceneColorTexture.SampleLevel(LinearClampSampler, uvB, 0).b;
-    return float3(r, g, b);
+    return SanitizeSceneColor(float3(r, g, b));
 }
 
 float4 PS(PS_Input_UV input) : SV_TARGET
@@ -65,9 +80,10 @@ float4 PS(PS_Input_UV input) : SV_TARGET
     float2 uv = input.uv;
 
     float4 centerColor = SceneColorTexture.SampleLevel(LinearClampSampler, uv, 0);
+    float3 originalColor = SanitizeSceneColor(centerColor.rgb);
     float3 color = ChromaticStrength > 0.0f
         ? SampleChromatic(uv, texelSize)
-        : centerColor.rgb;
+        : originalColor.rgb;
 
     float2 centered = uv - 0.5f;
     float vignetteDistance = length(centered) * 1.41421356f;
@@ -86,5 +102,5 @@ float4 PS(PS_Input_UV input) : SV_TARGET
     float grain = (remappedNoise - 0.5f) * 2.0f * GrainStrength * darkFactor;
     color += grain * NoiseColor.rgb * NoiseColor.a;
 
-    return float4(saturate(color), centerColor.a);
+    return float4(SanitizeSceneColor(color), centerColor.a);
 }

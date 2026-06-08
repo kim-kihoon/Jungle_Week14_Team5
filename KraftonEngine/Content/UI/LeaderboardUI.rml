@@ -51,14 +51,19 @@
 			font-size: 30px;
 			color: #FFFFFF;
 		}
-		.text-button {
+		.title-button {
 			position: absolute;
+			display: block;
+			font-family: OCRAStd;
 			font-size: 40px;
+			font-weight: normal;
+			text-align: left;
 			color: #FFFFFF;
 			background-color: rgba(0, 0, 0, 0);
 		}
-		.text-button:hover {
+		.title-button:hover {
 			color: rgb(71, 255, 105);
+			background-color: rgba(255, 255, 255, 0.12);
 		}
 	</style>
 </head>
@@ -87,7 +92,7 @@
 		<div id="leaderboard_row_18" class="leaderboard-row" style="top: 820px;"></div>
 		<div id="leaderboard_row_19" class="leaderboard-row" style="top: 850px;"></div>
 		<div id="leaderboard_row_20" class="leaderboard-row" style="top: 880px;"></div>
-		<div id="leaderboard_back_button" class="text-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="950.000000" data-width="240.000000" data-height="56.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Back" data-text-color="#FFFFFFFF" data-font-size="40.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ClosePopup" style="position: absolute; left: 120.00px; top: 950.00px; width: 240.00px; height: 56.00px; font-size: 40.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Back</div>
+		<div id="leaderboard_back_button" class="title-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="950.000000" data-width="240.000000" data-height="56.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Back" data-text-color="#FFFFFFFF" data-font-size="40.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ClosePopup" style="position: absolute; left: 120.00px; top: 950.00px; width: 240.00px; height: 56.00px; font-size: 40.00px; font-weight: normal; text-align: left;">Back</div>
 	</div>
 </body>
 </rml>

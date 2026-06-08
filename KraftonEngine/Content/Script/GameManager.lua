@@ -54,6 +54,10 @@ GameManager.AnomalyPlacementTemplateSets = {
 GameManager.ActiveAnomalyPlacementRecord = nil
 GameManager.LastAnomalyPlacementError = nil
 GameManager.OutlinedAnomalyTarget = nil
+GameManager.AnomalyHitEffectTag = "AnomalyHitEffect"
+GameManager.AnomalyHitEffectActor = nil
+GameManager.AnomalyHitEffectComponent = nil
+GameManager.bAnomalyHitEffectDebugLogged = false
 
 GameManager._listeners = {
     StateChanged = {},
@@ -82,6 +86,118 @@ end
 
 local function is_function(value)
     return type(value) == "function"
+end
+
+local function is_valid_actor(actor)
+    if actor == nil then
+        return false
+    end
+    if actor.IsValid == nil then
+        return true
+    end
+
+    local ok, valid = pcall(function()
+        return actor:IsValid()
+    end)
+    return ok and valid == true
+end
+
+local function get_particle_system_component(actor)
+    if not is_valid_actor(actor) or actor.GetParticleSystemComponent == nil then
+        return nil
+    end
+
+    local ok, component = pcall(function()
+        return actor:GetParticleSystemComponent()
+    end)
+    if not ok then
+        return nil
+    end
+    return component
+end
+
+local function get_object_name(object)
+    if object == nil or object.GetName == nil then
+        return tostring(object)
+    end
+
+    local ok, name = pcall(function()
+        return object:GetName()
+    end)
+    if ok then
+        return tostring(name)
+    end
+    return tostring(object)
+end
+
+local function get_object_class_name(object)
+    if object == nil or object.GetClassName == nil then
+        return "Unknown"
+    end
+
+    local ok, className = pcall(function()
+        return object:GetClassName()
+    end)
+    if ok then
+        return tostring(className)
+    end
+    return "Unknown"
+end
+
+local function find_particle_actor_by_tag(tag, debugCandidates)
+    if World == nil or World.FindActorsByTag == nil then
+        return nil, nil
+    end
+
+    local ok, actors = pcall(function()
+        return World.FindActorsByTag(tag)
+    end)
+    if not ok or actors == nil then
+        return nil, nil
+    end
+
+    local fallbackActor = nil
+    local fallbackComponent = nil
+    for _, actor in pairs(actors) do
+        local component = get_particle_system_component(actor)
+        if debugCandidates then
+            print(
+                "[GameManager] AnomalyHitEffect candidate name=" .. get_object_name(actor) ..
+                    " class=" .. get_object_class_name(actor) ..
+                    " particleComponent=" .. get_object_name(component)
+            )
+        end
+        if component ~= nil then
+            if actor.GetClassName ~= nil then
+                local classOk, className = pcall(function()
+                    return actor:GetClassName()
+                end)
+                if classOk and className == "AParticleSystemActor" then
+                    return actor, component
+                end
+            end
+
+            fallbackActor = fallbackActor or actor
+            fallbackComponent = fallbackComponent or component
+        end
+    end
+
+    return fallbackActor, fallbackComponent
+end
+
+local function get_hit_location(actor, hit)
+    if hit ~= nil and hit.Location ~= nil then
+        return hit.Location
+    end
+    if actor ~= nil and actor.GetLocation ~= nil then
+        local ok, location = pcall(function()
+            return actor:GetLocation()
+        end)
+        if ok then
+            return location
+        end
+    end
+    return nil
 end
 
 local function normalize_pressure(pressure)
@@ -187,6 +303,71 @@ function GameManager:_FireEvent(eventName, ...)
             table.remove(listeners, i)
         end
     end
+end
+
+function GameManager:_CacheAnomalyHitEffect()
+    if is_valid_actor(self.AnomalyHitEffectActor) and self.AnomalyHitEffectComponent ~= nil then
+        return true
+    end
+
+    local bDebugCandidates = not self.bAnomalyHitEffectDebugLogged
+    self.AnomalyHitEffectActor, self.AnomalyHitEffectComponent = find_particle_actor_by_tag(self.AnomalyHitEffectTag, bDebugCandidates)
+    self.bAnomalyHitEffectDebugLogged = true
+    if self.AnomalyHitEffectComponent == nil then
+        self.AnomalyHitEffectActor = nil
+        print("[GameManager] AnomalyHitEffect cache failed: tagged particle actor not found")
+        return false
+    end
+
+    print(
+        "[GameManager] AnomalyHitEffect cached actor=" .. get_object_name(self.AnomalyHitEffectActor) ..
+            " class=" .. get_object_class_name(self.AnomalyHitEffectActor) ..
+            " component=" .. get_object_name(self.AnomalyHitEffectComponent)
+    )
+
+    if self.AnomalyHitEffectComponent.Deactivate ~= nil then
+        pcall(function()
+            self.AnomalyHitEffectComponent:Deactivate()
+        end)
+    end
+    return true
+end
+
+function GameManager:_PlayAnomalyHitEffect(actor, hit)
+    local location = get_hit_location(actor, hit)
+    if location == nil then
+        return false
+    end
+    if not self:_CacheAnomalyHitEffect() then
+        return false
+    end
+
+    if self.AnomalyHitEffectActor ~= nil and self.AnomalyHitEffectActor.SetLocation ~= nil then
+        pcall(function()
+            self.AnomalyHitEffectActor:SetLocation(location)
+        end)
+    end
+
+    local component = self.AnomalyHitEffectComponent
+    if component == nil then
+        return false
+    end
+    if component.Deactivate ~= nil then
+        pcall(function()
+            component:Deactivate()
+        end)
+    end
+    if component.ResetParticles ~= nil then
+        pcall(function()
+            component:ResetParticles()
+        end)
+    end
+    if component.Activate ~= nil then
+        pcall(function()
+            component:Activate()
+        end)
+    end
+    return true
 end
 
 function GameManager:_SetState(nextState, reason)
@@ -528,6 +709,7 @@ end
 
 function GameManager:Reset()
     self:ClearActiveAnomalyOutline()
+    self:_CacheAnomalyHitEffect()
     AnomalyManager:Reset()
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
@@ -555,6 +737,7 @@ function GameManager:StartGame()
     self.isPlayerDead = false
     self.failedShotCount = 0
     self:_ResetFailureTimeDrain()
+    self:_CacheAnomalyHitEffect()
     LoopManager:StartStopped()
     self.bLoopStopped = LoopManager:IsLoopStopped()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
@@ -896,6 +1079,7 @@ end
 function GameManager:ReportAnomalyShot(actor, hit)
     local bHitAnomaly = AnomalyManager:ReportShot(actor, hit)
     if bHitAnomaly then
+        self:_PlayAnomalyHitEffect(actor, hit)
         local StageManager = require("StageManager")
         if StageManager:IsFinalStage() then
             return require("EndingManager"):Enter(nil, hit)

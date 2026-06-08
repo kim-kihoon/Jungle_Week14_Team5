@@ -4158,6 +4158,11 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         &UMaterial::GetScalarParameterValue,
         "GetVector3ParameterValue",
         &UMaterial::GetVector3ParameterValue,
+        "GetVector4ParameterValue",
+        [](sol::this_state State, UMaterial& Material, const FString& ParamName)
+        {
+            return LuaVector4ToTable(State, Material.GetVector4ParameterValue(ParamName));
+        },
         "IsMaterialInstance",
         &UMaterial::IsMaterialInstance,
         "IsDynamicMaterialInstance",
@@ -5909,6 +5914,26 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
                 if (PrimitiveComponent && PrimitiveComponent->GetFName().ToString() == ComponentName)
                 {
                     return PrimitiveComponent;
+                }
+            }
+            return nullptr;
+        },
+
+        "GetBoxComponent",
+        [](AActor& Actor) -> UBoxComponent*
+        {
+            return Actor.GetComponentByClass<UBoxComponent>();
+        },
+
+        "GetBoxComponentByName",
+        [](AActor& Actor, const FString& ComponentName) -> UBoxComponent*
+        {
+            for (UActorComponent* Component : Actor.GetComponents())
+            {
+                UBoxComponent* BoxComponent = Cast<UBoxComponent>(Component);
+                if (BoxComponent && BoxComponent->GetFName().ToString() == ComponentName)
+                {
+                    return BoxComponent;
                 }
             }
             return nullptr;

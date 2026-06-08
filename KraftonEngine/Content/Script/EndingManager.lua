@@ -11,6 +11,7 @@ EndingManager.ENDING_SUN_TAG = "EndingLighting"
 EndingManager.ENDING_MAP_NAME = "EndingHospital"
 
 EndingManager.FALLBACK_SPAWN = Vec3(600.0, 0.0, 38.0)
+EndingManager.WAKE_UP_SHOT_TRACE_DISTANCE = 1000.0
 
 EndingManager.HORROR_LIGHT_CLASSES = {
     "AAmbientLightActor",
@@ -183,6 +184,73 @@ function EndingManager:Reset()
     self:SetHorrorLightingEnabled(true)
 end
 
+local function play_wake_up_pistol_audio()
+    if Audio == nil or Audio.Play == nil then
+        return
+    end
+
+    pcall(function()
+        Audio.Play("PistolFire", 1.0)
+    end)
+end
+
+local function get_wake_up_shot_hit(player)
+    if player == nil or player.GetCamera == nil or World == nil or World.LineTraceObjects == nil then
+        return nil
+    end
+
+    local camera = player:GetCamera()
+    if camera == nil or camera.GetLocation == nil then
+        return nil
+    end
+
+    local okStart, start = pcall(function()
+        return camera:GetLocation()
+    end)
+    if not okStart or start == nil then
+        return nil
+    end
+
+    local direction = camera.Forward
+    if direction == nil then
+        return nil
+    end
+
+    local target = start + direction * EndingManager.WAKE_UP_SHOT_TRACE_DISTANCE
+    local okHit, traceHit = pcall(function()
+        return World.LineTraceObjects(start, target, player)
+    end)
+    if okHit and traceHit ~= nil and traceHit.Hit then
+        return traceHit
+    end
+
+    return nil
+end
+
+function EndingManager:PlayWakeUpShot(player)
+    if player == nil then
+        player = get_player_pawn()
+    end
+    if player == nil then
+        return false
+    end
+
+    if HospitalPlayer ~= nil and HospitalPlayer.play_pistol_fire_effect ~= nil then
+        pcall(function()
+            HospitalPlayer.play_pistol_fire_effect(player)
+        end)
+    end
+
+    play_wake_up_pistol_audio()
+
+    local endingHit = get_wake_up_shot_hit(player)
+    if endingHit ~= nil and GameManager._PlayAnomalyHitEffect ~= nil then
+        GameManager:_PlayAnomalyHitEffect(player, endingHit)
+    end
+
+    return true
+end
+
 function EndingManager:Enter(player, hit)
     if self.bActive then
         return false
@@ -214,6 +282,8 @@ function EndingManager:Enter(player, hit)
     if GameManager._SetState ~= nil then
         GameManager:_SetState(GameManager.State.Ending, "FinalAnomalyShot")
     end
+
+    self:PlayWakeUpShot(player)
 
     print(string.format(
         "[EndingManager] Entered ending at (%.2f, %.2f, %.2f) stage=%d",

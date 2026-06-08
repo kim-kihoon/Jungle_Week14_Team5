@@ -9223,7 +9223,7 @@
               "LightFalloffExponent" : 1.000000,
               "ObjectName" : "USpotLightComponent_137",
               "OuterConeAngle" : 30.000000,
-              "RelativeTransform.Location" : [0.000000, 0.000000, 0.197440],
+              "RelativeTransform.Location" : [0.000000, 0.000000, 0.000000],
               "RelativeTransform.Scale" : [1.000000, 1.000000, 1.000000],
               "ShadowBias" : -0.000100,
               "ShadowNormalBias" : -0.002000,
