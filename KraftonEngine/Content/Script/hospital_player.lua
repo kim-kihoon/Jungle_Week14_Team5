@@ -6,6 +6,8 @@ local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
 local ToolManager = require("ToolManager")
 local GameOverMonkey = require("GameOverMonkey")
+local StageManager = require("StageManager")
+local EndingManager = require("EndingManager")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
@@ -566,6 +568,7 @@ function BeginPlay()
     bLastLoopStopped = IsLoopStopped()
     bTitleMode = true
     GameOverMonkey:Initialize(obj)
+    EndingManager:Initialize()
     BindGameOverStateChanged()
     DoorManager:Reset()
     DoorManager:ResetSessionState()
@@ -620,6 +623,13 @@ function Tick(dt)
         return
     end
 
+    if EndingManager:IsActive() then
+        AddPlayerMovement()
+        UIManager:UpdateAmmoPrompt(GameManager)
+        SyncCrosshairVisibility()
+        return
+    end
+
     DoorManager:InitDoors()
 
     local location = obj:GetLocation()
@@ -634,7 +644,7 @@ function Tick(dt)
     end
     bLastLoopStopped = bLoopStopped
 
-    if bInZone and bCanWarp then
+    if bInZone and bCanWarp and StageManager:CanZoneWarp() then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
         GameManager:OnWarp("PlayerWarp")
         bLastLoopStopped = IsLoopStopped()
@@ -682,6 +692,7 @@ function RestartGame()
     RestoreInitialPlayerTransform()
     bCanWarp = true
     bTitleMode = false
+    EndingManager:Reset()
     DoorManager:Reset()
     DoorManager:ClearToyProjectiles()
     SoundManager:EnterPlayingState()

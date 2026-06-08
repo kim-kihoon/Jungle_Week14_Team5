@@ -10,7 +10,8 @@ GameManager.State = {
     Playing = "Playing",
     Paused = "Paused",
     GameOver = "GameOver",
-    Clear = "Clear"
+    Clear = "Clear",
+    Ending = "Ending"
 }
 
 GameManager.Pressure = {
@@ -543,6 +544,7 @@ function GameManager:Reset()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     self.manualPressureStage = nil
     self:_SetPressureStage(self.Pressure.EntryStrike, "Reset", false)
+    require("EndingManager"):Reset()
     self:_SetState(self.State.Ready, "Reset")
 end
 
@@ -633,6 +635,10 @@ function GameManager:RestartGame()
 end
 
 function GameManager:Tick(dt)
+    if self.state == self.State.Ending then
+        return
+    end
+
     if self.state ~= self.State.Playing then
         return
     end
@@ -823,6 +829,10 @@ function GameManager:IsPlaying()
     return self.state == self.State.Playing
 end
 
+function GameManager:IsEnding()
+    return self.state == self.State.Ending
+end
+
 function GameManager:GetState()
     return self.state
 end
@@ -832,6 +842,13 @@ function GameManager:GetWarpCount()
 end
 
 function GameManager:OnWarp(reason)
+    if reason == "PlayerWarp" then
+        local StageManager = require("StageManager")
+        if not StageManager:CanZoneWarp() then
+            return false
+        end
+    end
+
     local bWarped = LoopManager:OnWarp(self, reason, function(setupReason)
         return self:_SetupAnomaly(setupReason)
     end)
@@ -879,6 +896,10 @@ end
 function GameManager:ReportAnomalyShot(actor, hit)
     local bHitAnomaly = AnomalyManager:ReportShot(actor, hit)
     if bHitAnomaly then
+        local StageManager = require("StageManager")
+        if StageManager:IsFinalStage() then
+            return require("EndingManager"):Enter(nil, hit)
+        end
         self:StopLoop("AnomalyShot")
     end
     return bHitAnomaly

@@ -501,10 +501,13 @@ local function report_pistol_shot_failure()
 end
 
 local function can_fire_pistol()
-    if GameManager ~= nil
-        and GameManager.IsLoopStopped ~= nil
-        and GameManager:IsLoopStopped() then
-        return false
+    if GameManager ~= nil then
+        if GameManager.IsEnding ~= nil and GameManager:IsEnding() then
+            return false
+        end
+        if GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped() then
+            return false
+        end
     end
 
     return true
