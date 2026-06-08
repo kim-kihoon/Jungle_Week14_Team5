@@ -682,6 +682,7 @@ function Tick(dt)
     end
 
     UIManager:UpdateControlPrompt()
+    UIManager:UpdateAmmoPrompt(GameManager)
     UIManager:UpdateTimerPrompt(GameManager)
 
     local targetedDoor = DoorManager:FindTargetedDoor(obj)
