@@ -34,6 +34,7 @@ local PlayRate = 1.0
 local EntryTimeRate = 0.5
 local ENTRY_TIME_RATE_MIN = 0.1
 local ENTRY_TIME_RATE_MAX = 0.9
+local MONKEY_ANIMATION_START_REMAINING_SECONDS = 60
 
 local Mesh = nil
 local CurrentPressure = PRESSURE_ENTRY_STRIKE
@@ -49,6 +50,7 @@ local LoopRestedHandle = nil
 local CymbalCycleStartedHandle = nil
 local CymbalCycleResetHandle = nil
 local bPressureCycleArmed = false
+local bWaitingForAnimationStart = false
 local bObservedSinceTeleport = false
 local bMonkeyAtInitPosition = true
 
@@ -104,13 +106,52 @@ local function cache_mesh()
 end
 
 local function get_remaining_ratio()
+    local remainingTime = tonumber(GameManager:GetRemainingTime())
+    if remainingTime == nil then
+        return 1.0
+    end
+
+    -- Map only the active animation window (last N seconds) onto the 0..1 pressure curve
+    -- so a delayed start does not skip the slow opening tempo.
+    local animationWindow = MONKEY_ANIMATION_START_REMAINING_SECONDS
+    if animationWindow ~= nil and animationWindow > 0 then
+        if remainingTime > animationWindow then
+            return 1.0
+        end
+        return clamp(remainingTime / animationWindow, 0.0, 1.0)
+    end
+
     local timeLimit = tonumber(GameManager.timeLimit)
     if timeLimit == nil or timeLimit <= 0 then
         return 1.0
     end
 
-    local remainingTime = tonumber(GameManager:GetRemainingTime()) or timeLimit
     return clamp(remainingTime / timeLimit, 0.0, 1.0)
+end
+
+local function get_animation_pressure_stage()
+    local remainingRatio = get_remaining_ratio()
+
+    if remainingRatio <= FINAL_WARNING_REMAINING_RATIO then
+        return PRESSURE_FINAL_WARNING
+    end
+    if remainingRatio <= WARNING_REMAINING_RATIO then
+        return PRESSURE_WARNING
+    end
+    return PRESSURE_ENTRY_STRIKE
+end
+
+local function get_effective_pressure()
+    local animationPressure = get_animation_pressure_stage()
+    if GameManager.GetPressureStage == nil then
+        return animationPressure
+    end
+
+    local gameManagerPressure = normalize_pressure(GameManager:GetPressureStage()) or PRESSURE_ENTRY_STRIKE
+    if gameManagerPressure > animationPressure then
+        return gameManagerPressure
+    end
+    return animationPressure
 end
 
 local function calculate_entry_interval()
@@ -688,7 +729,8 @@ local function handle_pressure_changed(pressure)
         return
     end
 
-    if GameManager:IsPlaying() then
+    -- While the cymbal cycle is armed, Tick drives tempo/stage from the animation window.
+    if pressure == PRESSURE_FINAL_WARNING and GameManager:IsPlaying() then
         enter_pressure(pressure)
         return
     end
@@ -718,6 +760,7 @@ end
 
 local function reset_pressure_cycle()
     bPressureCycleArmed = false
+    bWaitingForAnimationStart = false
     stop_animation()
     reset_monkey_teleport_position()
     CurrentPressure = get_game_manager_pressure()
@@ -737,8 +780,34 @@ local function start_pressure_cycle()
     end
 
     bPressureCycleArmed = true
-    CurrentPressure = get_game_manager_pressure()
+    bWaitingForAnimationStart = false
+    CurrentPressure = get_effective_pressure()
     return enter_pressure(CurrentPressure)
+end
+
+local function on_cymbal_cycle_started()
+    bWaitingForAnimationStart = true
+end
+
+local function try_begin_pressure_after_timer_delay()
+    if not bWaitingForAnimationStart or bPressureCycleArmed then
+        return
+    end
+    if GameManager.IsCymbalMonkeyCycleStarted == nil or not GameManager:IsCymbalMonkeyCycleStarted() then
+        bWaitingForAnimationStart = false
+        return
+    end
+    if is_loop_stopped() then
+        bWaitingForAnimationStart = false
+        return
+    end
+
+    local remaining = tonumber(GameManager:GetRemainingTime()) or 0
+    if remaining > MONKEY_ANIMATION_START_REMAINING_SECONDS then
+        return
+    end
+
+    start_pressure_cycle()
 end
 
 local function handle_loop_rested()
@@ -776,7 +845,7 @@ local function register_loop_listeners()
     end
     if GameManager.OnCymbalMonkeyCycleStarted ~= nil then
         CymbalCycleStartedHandle = GameManager:OnCymbalMonkeyCycleStarted(function()
-            start_pressure_cycle()
+            on_cymbal_cycle_started()
         end)
     end
     if GameManager.OnCymbalMonkeyCycleReset ~= nil then
@@ -933,6 +1002,7 @@ function EndPlay()
     stop_animation()
     Mesh = nil
     bPressureCycleArmed = false
+    bWaitingForAnimationStart = false
     bObservedSinceTeleport = false
     bMonkeyAtInitPosition = true
     CurrentPressure = PRESSURE_ENTRY_STRIKE
@@ -955,12 +1025,13 @@ function Tick(dt)
     end
 
     update_monkey_teleport()
+    try_begin_pressure_after_timer_delay()
 
     if not bPressureCycleArmed then
         return
     end
 
-    local nextPressure = get_game_manager_pressure()
+    local nextPressure = get_effective_pressure()
     if nextPressure ~= CurrentPressure then
         enter_pressure(nextPressure)
         return
