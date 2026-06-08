@@ -615,6 +615,12 @@ namespace
 		return LowerName.find("glass") != FString::npos;
 	}
 
+	bool IsAlphaDecalSourcePath(const FString& SourcePath)
+	{
+		const FString LowerStem = ToLower(FPaths::ToUtf8(fs::path(FPaths::ToWide(SourcePath)).stem().wstring()));
+		return LowerStem.find("decal") != FString::npos || LowerStem.find("blood") != FString::npos;
+	}
+
 	float ReadDoubleProperty(FbxSurfaceMaterial* Material, const char* PropertyName, float DefaultValue)
 	{
 		if (!Material || !PropertyName)
@@ -1145,19 +1151,37 @@ FString FFbxMaterialImporter::CreateOrUpdateMaterialAsset(const FFbxImportedMate
 	const FString NormalTex  = MaterialInfo.NormalTexturePath.empty()  ? FString() : FPaths::MakeProjectRelative(MaterialInfo.NormalTexturePath);
 	const float EmissiveIntensity = MaterialInfo.Name == "Material.009_Emissive" ? 1.0f : 4.0f;
 
+	bool bTransparent = MaterialInfo.bTransparent;
+	bool bMasked = false;
+	bool bTwoSided = MaterialInfo.bTwoSided;
+	bool bEmissive = MaterialInfo.bEmissive;
+	float ImportedEmissiveIntensity = EmissiveIntensity;
+	float AlphaClip = 0.0f;
+	if (!DiffuseTex.empty() && IsAlphaDecalSourcePath(SourcePath))
+	{
+		bMasked = true;
+		bTransparent = false;
+		bTwoSided = true;
+		bEmissive = true;
+		ImportedEmissiveIntensity = 1.0f;
+		AlphaClip = 0.5f;
+	}
+
 	// JSON 없이 머티리얼을 직접 빌드해 .uasset(바이너리)으로 저장.
 	FMaterialManager::Get().CreateImportedMaterialAsset(
 		UassetPath,
 		SectionColor,
 		DiffuseTex,
 		NormalTex,
-		MaterialInfo.bEmissive,
-		EmissiveIntensity,
-		MaterialInfo.bTransparent,
+		bEmissive,
+		ImportedEmissiveIntensity,
+		bTransparent,
+		bMasked,
 		MaterialInfo.Opacity,
-		MaterialInfo.bTwoSided,
+		bTwoSided,
 		MaterialInfo.SpecularIntensity,
 		MaterialInfo.Shininess,
-		MaterialInfo.Metallic);
+		MaterialInfo.Metallic,
+		AlphaClip);
 	return UassetPath;
 }

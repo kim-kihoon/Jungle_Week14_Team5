@@ -22,6 +22,8 @@ SoundManager.TitleMusicPath = "Music/A1 - It's just a burning memory.mp3"
 SoundManager.TitleMusicVolume = 0.1
 SoundManager.bTitleMusicLoaded = false
 SoundManager.bTitleMusicPlaying = false
+SoundManager.bPreserveBgmOnReset = false
+SoundManager.bContinueEndingCreditsBgm = false
 SoundManager.PendingDoorCloseSounds = {}
 SoundManager.TitleMutedAudioComponents = {}
 SoundManager.bTitleWorldAudioMuted = false
@@ -352,11 +354,8 @@ function SoundManager:Tick(dt)
 end
 
 function SoundManager:LoadTitleMusic()
-    if self.bTitleMusicLoaded then
-        return true
-    end
-
     if Audio == nil or Audio.Load == nil then
+        self.bTitleMusicLoaded = false
         return false
     end
 
@@ -367,16 +366,40 @@ function SoundManager:LoadTitleMusic()
     return self.bTitleMusicLoaded
 end
 
-function SoundManager:PlayTitleMusic()
-    if self.bTitleMusicPlaying then
+function SoundManager:IsTitleMusicPlaying()
+    return self.bTitleMusicPlaying == true
+end
+
+function SoundManager:SetPreserveBgmOnReset(bPreserve)
+    self.bPreserveBgmOnReset = bPreserve == true
+end
+
+function SoundManager:SetContinueEndingCreditsBgm(bContinue)
+    self.bContinueEndingCreditsBgm = bContinue == true
+end
+
+function SoundManager:PlayTitleMusicIfNeeded()
+    if self.bContinueEndingCreditsBgm then
         return true
     end
+    if self:IsTitleMusicPlaying() then
+        return true
+    end
+    return self:PlayTitleMusic()
+end
 
+function SoundManager:PlayTitleMusic()
     if Audio == nil or Audio.PlayBGM == nil then
+        self.bTitleMusicPlaying = false
         return false
     end
 
+    if self:IsTitleMusicPlaying() then
+        return true
+    end
+
     if not self:LoadTitleMusic() then
+        self.bTitleMusicPlaying = false
         return false
     end
 
@@ -395,10 +418,12 @@ function SoundManager:StopTitleMusic()
     end
 
     self.bTitleMusicPlaying = false
+    self.bContinueEndingCreditsBgm = false
 end
 
 function SoundManager:ResetTitleSounds()
     self:StopTitleMusic()
+    self.bTitleMusicLoaded = false
     self:RestoreTitleWorldAudio()
 end
 
@@ -408,7 +433,11 @@ end
 
 function SoundManager:Reset()
     self:ResetGameplaySounds()
-    self:ResetTitleSounds()
+    if self.bPreserveBgmOnReset == true then
+        self.bPreserveBgmOnReset = false
+    else
+        self:ResetTitleSounds()
+    end
     self.CurrentState = self.State.Title
 end
 
@@ -424,7 +453,7 @@ function SoundManager:EnterTitleState()
     self.CurrentState = self.State.Title
     self:ResetGameplaySounds()
     self:MuteTitleWorldAudio()
-    return self:PlayTitleMusic()
+    return true
 end
 
 function SoundManager:ExitTitleState()

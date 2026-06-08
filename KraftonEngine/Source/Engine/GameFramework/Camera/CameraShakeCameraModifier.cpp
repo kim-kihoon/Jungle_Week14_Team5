@@ -78,17 +78,26 @@ bool UCameraModifier_CameraShake::ModifyCamera(float DeltaTime, FMinimalViewInfo
 			[](UCameraShakeBase* S) { return !IsValid(S) || S->IsFinished(); }),
 		ActiveShakes.end());
 
+	LastAppliedShakeOffset = FCameraShakeUpdateResult();
+
 	// Alpha 가 0 이면 효과 죽음 (Disable 진행 후) — 가산 skip.
 	if (Alpha <= 0.0f)
 	{
 		return false;
 	}
 
-	InOutPOV.Location       += Sum.Location * Alpha;
-	InOutPOV.Rotation.Pitch += Sum.Rotation.Pitch * Alpha;
-	InOutPOV.Rotation.Yaw   += Sum.Rotation.Yaw   * Alpha;
-	InOutPOV.Rotation.Roll  += Sum.Rotation.Roll  * Alpha;
-	InOutPOV.FOV            += Sum.FOV * Alpha;
+	const float AppliedAlpha = Alpha;
+	LastAppliedShakeOffset.Location = Sum.Location * AppliedAlpha;
+	LastAppliedShakeOffset.Rotation.Pitch = Sum.Rotation.Pitch * AppliedAlpha;
+	LastAppliedShakeOffset.Rotation.Yaw = Sum.Rotation.Yaw * AppliedAlpha;
+	LastAppliedShakeOffset.Rotation.Roll = Sum.Rotation.Roll * AppliedAlpha;
+	LastAppliedShakeOffset.FOV = Sum.FOV * AppliedAlpha;
+
+	InOutPOV.Location       += LastAppliedShakeOffset.Location;
+	InOutPOV.Rotation.Pitch += LastAppliedShakeOffset.Rotation.Pitch;
+	InOutPOV.Rotation.Yaw   += LastAppliedShakeOffset.Rotation.Yaw;
+	InOutPOV.Rotation.Roll  += LastAppliedShakeOffset.Rotation.Roll;
+	InOutPOV.FOV            += LastAppliedShakeOffset.FOV;
 	return false;
 }
 

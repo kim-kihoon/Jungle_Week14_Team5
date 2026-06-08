@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Animation/AnimInstance.h"
+#include "Math/Rotator.h"
+#include "Math/Vector.h"
 #include "Object/Ptr/WeakObjectPtr.h"
 #include "Object/GarbageCollection.h"
 
@@ -85,6 +87,13 @@ private:
 	TArray<sol::protected_function> LuaTransitionConditions;
 
 	TWeakObjectPtr<UCameraComponent> CachedViewCamera;
+
+	FVector OwnerMeshBaseRelativeLocation = FVector::ZeroVector;
+	FRotator OwnerMeshBaseRelativeRotation = FRotator::ZeroRotator;
+	bool bOwnerMeshBaseCached = false;
+
+	void CacheOwnerMeshBaseTransform();
+	void InvalidateOwnerMeshBaseTransform();
 
 	struct FLuaCallScope
 	{

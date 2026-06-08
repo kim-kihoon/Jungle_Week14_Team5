@@ -214,7 +214,7 @@ UI 문서의 생성, 표시, 텍스트 갱신, 제거를 담당한다.
 - 헤드밥 사용 여부
 - 조작 프롬프트 표시 여부
 
-설정 값은 `SettingManager:ApplyAll(player)`로 엔진 렌더 옵션, 오디오 볼륨, 플레이어 입력 값에 반영한다. `UIManager`는 설정 팝업 표시와 텍스트 갱신만 담당하고, `hospital_player.lua`는 버튼 클릭 라우팅과 플레이어 적용을 연결한다.
+설정 값은 `SettingManager:ApplyAll(player)`로 엔진 렌더 옵션, 오디오 볼륨, 플레이어 입력 값에 반영한다. `UIManager`와 `TitleManager`는 설정 팝업 표시와 텍스트 갱신만 담당하고, `hospital_player.lua`는 Hospital 플레이어 적용을 연결한다.
 
 ## 시작과 종료 순서
 

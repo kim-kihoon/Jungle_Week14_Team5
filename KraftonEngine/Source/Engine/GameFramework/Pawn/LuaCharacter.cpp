@@ -103,7 +103,7 @@ void ALuaCharacter::ConfigureFirstPersonViewRig()
 	SpringArm->bEnableCameraRotationLag = false;
 	SpringArm->bDoCollisionTest = false;
 	SpringArm->bUsePawnControlRotation = true;
-	SpringArm->bInheritPitch = true;
+	SpringArm->bInheritPitch = true;  
 	SpringArm->bInheritYaw = true;
 	SpringArm->bInheritRoll = false;
 	SpringArm->ResetLagState();

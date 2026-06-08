@@ -111,6 +111,9 @@ public:
 	UFUNCTION(Callable, Category="Camera|Shake")
 	virtual void StopAllInstancesOfCameraShake(UClass* ShakeClass, bool bImmediately = true);
 
+	UFUNCTION(Pure, Category="Camera|Shake")
+	FCameraShakeUpdateResult GetLastCameraShakeOffset() const;
+
 	// ─── Camera Modifier ─────────────────────────────────────────
 	// UE: APlayerCameraManager::AddNewCameraModifier — 우선순위 정렬 삽입.
 	// shake/aim assist/hit reaction 등 카메라 효과 단위 추상화. 추가 후엔 UpdateCamera

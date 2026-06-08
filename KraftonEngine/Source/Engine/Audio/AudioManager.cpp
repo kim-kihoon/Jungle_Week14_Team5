@@ -595,6 +595,8 @@ void FAudioManager::LoadDefaultAudios()
 	LoadAudio("HeavyDoorOpen", "SFX/heavy-door-open.mp3", false, true);
 	LoadAudio("DoorClose", "SFX/door-close.mp3", false, true);
 	LoadAudio("PartyBlower", "SFX/party-blower.mp3", false);
+	LoadAudio("DistantSiren", "SFX/distant-siren.mp3", false);
+	LoadAudio("HospitalTitleMusic", "Music/A1 - It's just a burning memory.mp3", true);
 	LoadAudio("ParquetFloor01", "SFX/Parquet_Floor_Mono_01.WAV", false, true);
 	LoadAudio("ParquetFloor02", "SFX/Parquet_Floor_Mono_02.WAV", false, true);
 	LoadAudio("ParquetFloor03", "SFX/Parquet_Floor_Mono_03.WAV", false, true);

@@ -1,5 +1,7 @@
 local TitleManager = {}
 local LeaderboardManager = require("LeaderboardManager")
+local SoundManager = require("SoundManager")
+local SettingManager = require("SettingManager")
 
 TitleManager.MainDocumentPath = "Content/UI/TitleUI.rml"
 TitleManager.SettingDocumentPath = "Content/UI/SettingUI.rml"
@@ -110,7 +112,14 @@ function TitleManager:ShowPopup(document_path)
 end
 
 function TitleManager:ShowSetting()
-    return self:ShowPopup(self.SettingDocumentPath)
+    local shown = self:ShowPopup(self.SettingDocumentPath)
+    SettingManager:Apply()
+    self:RefreshSetting()
+    return shown
+end
+
+function TitleManager:RefreshSetting()
+    SettingManager:RefreshWidget(self.PopupWidget)
 end
 
 function TitleManager:ShowCredit()
@@ -146,6 +155,7 @@ function TitleManager:ShowRanking()
 end
 
 function TitleManager:StartGame()
+    SoundManager:StopTitleMusic()
     self:Dispose()
     if Engine ~= nil and Engine.TransitionToScene ~= nil then
         Engine.TransitionToScene(self.StartSceneName)
@@ -167,11 +177,18 @@ function TitleManager:Dispose()
 end
 
 function BeginPlay()
+    SoundManager:EnterTitleState()
     TitleManager:Show()
+    if SoundManager.PlayTitleMusicIfNeeded ~= nil then
+        SoundManager:PlayTitleMusicIfNeeded()
+    else
+        SoundManager:PlayTitleMusic()
+    end
 end
 
 function EndPlay()
     TitleManager:Dispose()
+    SoundManager:StopTitleMusic()
 end
 
 function StartGame()
@@ -180,6 +197,36 @@ end
 
 function ShowSetting()
     TitleManager:ShowSetting()
+end
+
+function CycleSettingGamma()
+    SettingManager:CycleGamma()
+    TitleManager:RefreshSetting()
+end
+
+function CycleSettingMasterVolume()
+    SettingManager:CycleMasterVolume()
+    TitleManager:RefreshSetting()
+end
+
+function CycleSettingMouseSensitivity()
+    SettingManager:CycleMouseSensitivity(nil)
+    TitleManager:RefreshSetting()
+end
+
+function ToggleSettingInvertY()
+    SettingManager:ToggleInvertY(nil)
+    TitleManager:RefreshSetting()
+end
+
+function ToggleSettingHeadBob()
+    SettingManager:ToggleHeadBob()
+    TitleManager:RefreshSetting()
+end
+
+function ToggleSettingControlPrompt()
+    SettingManager:ToggleControlPrompt()
+    TitleManager:RefreshSetting()
 end
 
 function ShowRanking()

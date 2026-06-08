@@ -42,6 +42,7 @@ cbuffer PerShader1 : register(b2)
     float SpecularIntensity;
     float Shininess;
     float Metallic;
+    float AlphaClip; // 0=off. blood 데칼 등 알파 컷아웃 전용(>0 일 때만 별도 경로).
 };
 
 
@@ -165,6 +166,18 @@ UberVS_Output VS_SkeletalMesh(VS_Input_PNCTTBB input)
 float4 PS(UberVS_Output input) : SV_TARGET
 {
     float4 texColor = DiffuseTexture.Sample(LinearWrapSampler, input.texcoord);
+
+    // AlphaClip>0 인 머티리얼만 데칼 전용 경로. 맵 기본 머티리얼(AlphaClip=0)은 아래 기존 로직 그대로.
+    if (AlphaClip > 0.001f)
+    {
+        if (texColor.a < AlphaClip)
+            discard;
+        if (texColor.r > 0.85f && texColor.g > 0.85f && texColor.b > 0.85f)
+            discard;
+        float4 decalColor = texColor * input.color;
+        return float4(ApplyWireframe(decalColor.rgb * EmissiveIntensity), 1.0f);
+    }
+
     if (texColor.a < 0.001f)
         texColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
 
