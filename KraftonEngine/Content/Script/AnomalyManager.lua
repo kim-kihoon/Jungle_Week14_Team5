@@ -18,7 +18,6 @@ AnomalyManager.Tags = {
 
 AnomalyManager.Rules = {
     PhotoInvisible,
-    OffscreenAnimation,
     PhotoLookAtInvisible,
     PhotoLookAtBlackPhoto,
     BlackPhoto

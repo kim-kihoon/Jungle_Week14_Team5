@@ -14,11 +14,11 @@
 
 랜덤 루프에서 사용하는 `AnomalyManager.Rules`와 디버그 강제 적용에서 사용하는 `AnomalyManager.AllRules`는 분리되어 있다.
 
-- 랜덤 풀 포함: `PhotoInvisible`, `OffscreenAnimation`, `PhotoLookAtInvisible`, `PhotoLookAtBlackPhoto`, `BlackPhoto`
-- 랜덤 풀 제외: `NoShadow`, `NearSilentCymbalMonkey`
-- 디버그 전용 유지: `2 -> NoShadow`, `6 -> NearSilentCymbalMonkey`
+- 랜덤 풀 포함: `PhotoInvisible`, `PhotoLookAtInvisible`, `PhotoLookAtBlackPhoto`, `BlackPhoto`
+- 랜덤 풀 제외: `NoShadow`, `OffscreenAnimation`, `NearSilentCymbalMonkey`
+- 디버그 전용 유지: `2 -> NoShadow`, `3 -> OffscreenAnimation`, `6 -> NearSilentCymbalMonkey`
 
-`NoShadow`와 `NearSilentCymbalMonkey`는 랜덤으로는 등장하지 않지만, 디버그 키로는 기존처럼 강제 적용할 수 있다.
+`NoShadow`, `OffscreenAnimation`, `NearSilentCymbalMonkey`는 랜덤으로는 등장하지 않지만, 디버그 키로는 기존처럼 강제 적용할 수 있다.
 
 Anomaly 랜덤 선택은 `AnomalyManager` 내부 전용 RNG를 사용한다. `GameManager`, `JumpScareManager`, `DoorManager` 등이 사용하는 Lua 전역 `math.random` 상태와 섞이지 않게 유지한다.
 
