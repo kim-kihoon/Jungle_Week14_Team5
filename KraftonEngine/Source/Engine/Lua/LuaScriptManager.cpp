@@ -2643,9 +2643,9 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
     sol::table AudioManager = Lua.create_named_table("AudioManager");
     AudioManager.set_function(
         "Load",
-        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop)
+        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop, sol::optional<bool> b3D)
         {
-            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false));
+            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false), b3D.value_or(false));
         }
     );
     AudioManager.set_function(
@@ -3040,9 +3040,9 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
 
     Lua.set_function(
         "LoadAudio",
-        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop)
+        [](const FString& SoundName, const FString& Path, sol::optional<bool> bLoop, sol::optional<bool> b3D)
         {
-            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false));
+            return FAudioManager::Get().LoadAudio(SoundName, Path, bLoop.value_or(false), b3D.value_or(false));
         }
     );
 }

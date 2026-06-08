@@ -16,6 +16,8 @@ local TriggerBoxComponent = nil
 local MoveState = nil
 local bPollingOverlapTriggered = false
 local DebugOnce = {}
+local LoadedJumpScareSoundPath = nil
+local LoadedJumpScareSoundKey = nil
 
 local function debug_log(message)
     print("[JumpScareTrigger] " .. tostring(message))
@@ -268,6 +270,84 @@ local function read_script_property(name)
     return value
 end
 
+local function normalize_string(value)
+    if type(value) ~= "string" then
+        return nil
+    end
+
+    local normalized = value:match("^%s*(.-)%s*$")
+    if normalized == nil or normalized == "" or normalized == "None" then
+        return nil
+    end
+    return normalized
+end
+
+local function read_number_property(name, defaultValue)
+    local value = tonumber(read_script_property(name))
+    if value == nil then
+        return defaultValue
+    end
+    return value
+end
+
+local function get_jump_scare_sound_key(soundPath)
+    return "JumpScare:" .. soundPath .. ":3D"
+end
+
+local function ensure_jump_scare_sound_loaded(soundPath)
+    if LoadedJumpScareSoundPath == soundPath and LoadedJumpScareSoundKey ~= nil then
+        return LoadedJumpScareSoundKey
+    end
+    if Audio == nil or Audio.Load == nil then
+        return nil
+    end
+
+    local soundKey = get_jump_scare_sound_key(soundPath)
+    local ok, result = pcall(function()
+        return Audio.Load(soundKey, soundPath, false, true)
+    end)
+    if not ok or result == false then
+        return nil
+    end
+
+    LoadedJumpScareSoundPath = soundPath
+    LoadedJumpScareSoundKey = soundKey
+    return LoadedJumpScareSoundKey
+end
+
+local function play_jump_scare_sound(mesh)
+    local soundPath = normalize_string(read_script_property("JumpScareSoundPath"))
+    if soundPath == nil then
+        return false
+    end
+
+    local soundKey = ensure_jump_scare_sound_loaded(soundPath)
+    if soundKey == nil or Audio == nil then
+        return false
+    end
+
+    local volume = read_number_property("JumpScareSoundVolume", 1.0)
+    local pitch = read_number_property("JumpScareSoundPitch", 1.0)
+    local minDistance = read_number_property("JumpScareSoundMinDistance", 1.0)
+    local maxDistance = read_number_property("JumpScareSoundMaxDistance", 12.0)
+    local soundLocation = get_component_location(mesh) or get_actor_location(get_target_actor())
+
+    if soundLocation ~= nil and Audio.PlayAt ~= nil then
+        local ok = pcall(function()
+            Audio.PlayAt(soundKey, volume, soundLocation, minDistance, maxDistance, pitch)
+        end)
+        return ok == true
+    end
+
+    if Audio.Play ~= nil then
+        local ok = pcall(function()
+            Audio.Play(soundKey, volume)
+        end)
+        return ok == true
+    end
+    return false
+end
+
 local function play_mesh_animation(mesh)
     if not bPlayAnimationOnTrigger then
         debug_log("animation skipped: disabled")
@@ -362,6 +442,7 @@ local function run_jump_scare()
         set_mesh_visible(mesh, true)
     end
     play_mesh_animation(mesh)
+    play_jump_scare_sound(mesh)
     start_mesh_movement(mesh)
 end
 
