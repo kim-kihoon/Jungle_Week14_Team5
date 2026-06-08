@@ -37,6 +37,8 @@ UIManager.TitleWidget = nil
 UIManager.TitlePopupWidget = nil
 UIManager.LeaderboardMaxRows = 20
 UIManager.GameOverWidget = nil
+UIManager.CutsceneBlockerWidget = nil
+UIManager.CutsceneBlockerDocumentPath = UIManager.DoorPromptDocumentPath
 
 local unpack_args = table.unpack or unpack
 
@@ -169,7 +171,56 @@ function UIManager:FormatActionPrompt(name, fallback)
     return "[" .. self:GetActionMappingDisplayName(name, fallback) .. "]"
 end
 
+function UIManager:HideGameplayHud()
+    if self.DoorPromptWidget ~= nil then
+        self:SetDoorPromptVisible(false)
+        self:RemoveWidget(self.DoorPromptWidget)
+    end
+    if self.ControlPromptWidget ~= nil then
+        self:SetControlPromptVisible(false)
+        self:RemoveWidget(self.ControlPromptWidget)
+    end
+    if self.TimerPromptWidget ~= nil then
+        self:SetTimerPromptVisible(false)
+        self:RemoveWidget(self.TimerPromptWidget)
+    end
+    self:DisposeGameOver()
+
+    self.DoorPromptWidget = nil
+    self.bDoorPromptVisible = false
+    self.ControlPromptWidget = nil
+    self.bControlPromptVisible = false
+    self.LastControlPromptText = nil
+    self.LastAmmoDisplayText = nil
+    self.TimerPromptWidget = nil
+    self.bTimerPromptVisible = false
+end
+
+function UIManager:EnterCutsceneMode()
+    self:HideGameplayHud()
+
+    if self.CutsceneBlockerWidget == nil then
+        self.CutsceneBlockerWidget = self:CreateWidget(self.CutsceneBlockerDocumentPath)
+    end
+    if self.CutsceneBlockerWidget == nil then
+        return false
+    end
+
+    set_widget_display(self.CutsceneBlockerWidget, self.DoorPromptElementId, false)
+    return self:AddWidgetToViewport(self.CutsceneBlockerWidget, 150, {
+        BlocksGameInput = true,
+        BlocksGameKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
+function UIManager:ExitCutsceneMode()
+    self:RemoveWidget(self.CutsceneBlockerWidget)
+    self.CutsceneBlockerWidget = nil
+end
+
 function UIManager:ResetHospital()
+    self:ExitCutsceneMode()
     self:RemoveWidget(self.DoorPromptWidget)
     self:RemoveWidget(self.ControlPromptWidget)
     self:RemoveWidget(self.TimerPromptWidget)

@@ -54,6 +54,11 @@ local function SyncCrosshairVisibility()
         return
     end
 
+    if EndingManager:IsActive() then
+        Crosshair.set_visible(false)
+        return
+    end
+
     if ToolManager:IsPistol() then
         Crosshair.set_visible(true)
     else
@@ -688,8 +693,6 @@ function Tick(dt)
     end
 
     if EndingManager:IsActive() then
-        AddPlayerMovement()
-        UIManager:UpdateAmmoPrompt(GameManager)
         SyncCrosshairVisibility()
         return
     end

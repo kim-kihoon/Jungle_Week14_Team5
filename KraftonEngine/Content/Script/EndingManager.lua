@@ -1,5 +1,6 @@
 local GameManager = require("GameManager")
 local StageManager = require("StageManager")
+local UIManager = require("UIManager")
 
 local EndingManager = {}
 
@@ -11,6 +12,7 @@ EndingManager.ENDING_SUN_TAG = "EndingLighting"
 EndingManager.ENDING_MAP_NAME = "EndingHospital"
 
 EndingManager.FALLBACK_SPAWN = Vec3(600.0, 0.0, 38.0)
+EndingManager.ENDING_SPAWN_YAW = -180.0
 EndingManager.WAKE_UP_SHOT_TRACE_DISTANCE = 1000.0
 
 EndingManager.HORROR_LIGHT_CLASSES = {
@@ -65,6 +67,67 @@ local function get_player_pawn()
         return nil
     end
     return controller:GetPossessedPawn()
+end
+
+local function get_pawn_from_player(player)
+    if player == nil then
+        return get_player_pawn()
+    end
+
+    if player.AsPawn ~= nil then
+        local ok, pawn = pcall(function()
+            return player:AsPawn()
+        end)
+        if ok and pawn ~= nil then
+            return pawn
+        end
+    end
+
+    if player.SetControlRotation ~= nil then
+        return player
+    end
+
+    return get_player_pawn()
+end
+
+local function apply_ending_spawn_facing(player)
+    local pawn = get_pawn_from_player(player)
+    local currentRotation = Vec3(0.0, 0.0, 0.0)
+
+    if pawn ~= nil and pawn.GetControlRotation ~= nil then
+        local ok, rotation = pcall(function()
+            return pawn:GetControlRotation()
+        end)
+        if ok and rotation ~= nil then
+            currentRotation = Vec3(rotation.X or 0.0, rotation.Y or 0.0, rotation.Z or 0.0)
+        end
+    elseif player ~= nil then
+        local ok, rotation = pcall(function()
+            return player.Rotation
+        end)
+        if ok and rotation ~= nil then
+            currentRotation = Vec3(rotation.X or 0.0, rotation.Y or 0.0, rotation.Z or 0.0)
+        end
+    end
+
+    -- FVector(Roll, Pitch, Yaw): yaw(Z)만 -X 방향으로 고정하고 pitch/roll은 유지한다.
+    local targetRotation = Vec3(
+        currentRotation.X,
+        currentRotation.Y,
+        EndingManager.ENDING_SPAWN_YAW
+    )
+
+    if pawn ~= nil and pawn.SetControlRotation ~= nil then
+        pcall(function()
+            pawn:SetControlRotation(targetRotation)
+        end)
+    end
+
+    if player ~= nil and player.SetRotation ~= nil then
+        pcall(function()
+            player:SetRotation(targetRotation)
+        end)
+    end
 end
 
 local function find_actors_by_class(className)
@@ -180,6 +243,7 @@ end
 
 function EndingManager:Reset()
     self.bActive = false
+    UIManager:ExitCutsceneMode()
     self:SetEndingLightingEnabled(false)
     self:SetHorrorLightingEnabled(true)
 end
@@ -275,6 +339,8 @@ function EndingManager:Enter(player, hit)
     pcall(function()
         player:SetLocation(spawnLocation)
     end)
+    apply_ending_spawn_facing(player)
+    UIManager:EnterCutsceneMode()
 
     self:SetHorrorLightingEnabled(false)
     self:SetEndingLightingEnabled(true)

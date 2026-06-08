@@ -501,11 +501,18 @@ local function report_pistol_shot_failure()
     return GameManager:ReportPlayerShotFailure("PistolShotMiss")
 end
 
+local function is_ending_cutscene()
+    return GameManager ~= nil
+        and GameManager.IsEnding ~= nil
+        and GameManager:IsEnding()
+end
+
 local function can_fire_pistol()
+    if is_ending_cutscene() then
+        return false
+    end
+
     if GameManager ~= nil then
-        if GameManager.IsEnding ~= nil and GameManager:IsEnding() then
-            return false
-        end
         if GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped() then
             return false
         end
@@ -711,6 +718,19 @@ end
 
 function update(self, dt)
     self.Speed = Anim.get_owner_speed()
+
+    if is_ending_cutscene() then
+        if self.ActionPhase == ACTION_PISTOL_FIRE then
+            self.ActionTime = self.ActionTime + dt
+            if self.ActionTime >= self.PistolFireDuration then
+                self.ActionTime = 0.0
+                self.ActionPhase = ACTION_NONE
+            end
+        else
+            reset_head_bob(self)
+        end
+        return
+    end
 
     if self.ActionPhase == ACTION_PISTOL_FIRE then
         self.ActionTime = self.ActionTime + dt
