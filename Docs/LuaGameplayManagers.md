@@ -17,8 +17,13 @@ Hospital 계열 Lua 스크립트는 씬 액터에 붙은 진입점 스크립트�
 hospital_player.lua
   - Hospital.Scene의 플레이어 진입점
   - title mode, 카메라 전환, 워프 트리거, 입력 연결
+  - Start 버튼에서 TitleMonkey 타이틀 연출을 호출
   - title mode 해제 시 현재 loop stopped 상태를 기준값으로 동기화
   - DoorManager, SoundManager, UIManager, ToolManager 호출
+
+TitleMonkey.lua
+  - TitleMonkey 액터에 붙는 타이틀 전용 연출 스크립트
+  - Start 버튼 입력 시 `CymbalMonkey_Joints_Warning` 애니메이션 재생
 
 fps_character.lua
   - FPS 팔/무기/카메라 애니메이션 상태
@@ -64,6 +69,7 @@ ToolManager.lua
 - 플레이어 워프 가능 여부
 - 마지막 루프 정지 상태
 - 타이틀 카메라/플레이어 카메라 전환
+- Start 버튼 입력 시 TitleMonkey 연출 호출
 - Title 태그 액터 비활성화
 - `Input.GetAxis`, `Input.GetActionDown` 결과를 플레이어 이동과 문 상호작용에 연결
 
@@ -195,18 +201,25 @@ hospital_player.lua BeginPlay
 
 ```txt
 hospital_player.lua StartGame
-  1. title mode 해제
-  2. 현재 `GameManager:IsLoopStopped()` 값을 `bLastLoopStopped`에 동기화
-  3. SoundManager:EnterPlayingState()
-  4. HospitalPlayer.title_mode 해제
-  5. UIManager:DisposeTitle()
-  6. 플레이어 카메라 점유
-  7. Title 태그 액터 비활성화
+  1. title 전환 중 상태 설정
+  2. TitleMonkey:PlayStartAnimation()
+  3. CameraManager.FadeOut() 시작
+  4. hospital_player.lua Tick에서 전환 코루틴을 직접 갱신하며 fade-out 시간 대기
+  5. 검은 화면 상태에서 현재 `GameManager:IsLoopStopped()` 값을 `bLastLoopStopped`에 동기화
+  6. SoundManager:EnterPlayingState()
+  7. HospitalPlayer.title_mode 해제
+  8. UIManager:DisposeTitle()
+  9. 플레이어 카메라 점유
+ 10. Title 태그 액터 비활성화
+ 11. CameraManager.FadeIn() 시작
+ 12. hospital_player.lua Tick에서 fade-in 시간 대기 후 전환 상태 해제
 ```
 
 `EndPlay()`에서는 `DoorManager:Reset()`, `ToolManager:Reset()`, `UIManager:ResetHospital()`을 호출한다. `DoorManager:Reset()`이 `SoundManager:Reset()`을 호출하므로 지연 사운드와 시작 음소거 복원이 함께 정리된다.
 
-`GameManager:StartGame()`은 게임을 루프 정지 상태로 시작한다. 타이틀 모드 중에는 `hospital_player.lua`의 gameplay Tick이 실행되지 않으므로, Start 버튼으로 타이틀을 해제할 때 현재 loop stopped 값을 기준값으로 저장해야 한다. 이 동기화를 하지 않으면 첫 gameplay Tick에서 시작 상태를 새 `LoopStopped` edge로 오인해 출구 문이 바로 열릴 수 있다.
+`GameManager:StartGame()`은 게임을 루프 정지 상태로 시작한다. 타이틀 모드 중에는 `hospital_player.lua`의 gameplay Tick이 실행되지 않으므로, Start 버튼 전환 코루틴에서 실제 title mode를 해제하는 순간 현재 loop stopped 값을 기준값으로 저장해야 한다. 이 동기화를 하지 않으면 첫 gameplay Tick에서 시작 상태를 새 `LoopStopped` edge로 오인해 출구 문이 바로 열릴 수 있다.
+
+`CoroutineManager.lua`의 `StartCoroutine()`은 `UpdateCoroutines(dt)`를 호출하는 액터가 씬에 있을 때만 진행된다. Hospital.Scene에는 별도 `GlobalManager.lua` 액터가 없으므로, 타이틀 시작 전환처럼 씬 진입점에서 반드시 끝나야 하는 코루틴은 `hospital_player.lua` 자신의 `Tick()`에서 직접 갱신한다.
 
 ## 입력 규칙
 

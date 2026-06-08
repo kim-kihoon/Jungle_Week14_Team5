@@ -22,6 +22,15 @@ local KEY_S = 0x53
 local KEY_D = 0x44
 local TITLE_CAMERA_TAG = "TitleCamera"
 local TITLE_ACTOR_TAG = "Title"
+local TITLE_MONKEY_ACTOR_NAME = "TitleMonkey"
+local TITLE_MONKEY_START_FUNCTION = "PlayStartAnimation"
+local TITLE_FADE_OUT_SECONDS = 0.75
+local TITLE_BLACK_HOLD_SECONDS = 0.1
+local TITLE_FADE_IN_SECONDS = 0.75
+
+local bTitleTransitioning = false
+local TitleTransitionCoroutine = nil
+local TitleTransitionWaitRemaining = 0.0
 
 local function IsInTriggerZone(location)
     return location.Y > TRIGGER_Y_MIN and location.X < TRIGGER_X_MAX
@@ -182,6 +191,28 @@ local function SetActiveCameraImmediate(camera)
     return false
 end
 
+local function PlayCameraFadeOut(duration)
+    if CameraManager == nil or CameraManager.FadeOut == nil then
+        return false
+    end
+
+    local ok = pcall(function()
+        CameraManager.FadeOut(duration)
+    end)
+    return ok == true
+end
+
+local function PlayCameraFadeIn(duration)
+    if CameraManager == nil or CameraManager.FadeIn == nil then
+        return false
+    end
+
+    local ok = pcall(function()
+        CameraManager.FadeIn(duration)
+    end)
+    return ok == true
+end
+
 local function CaptureTitleCamera()
     local titleCameraActor = FindFirstActorByTag(TITLE_CAMERA_TAG) or FindActorByName("Camera")
     return SetActiveCameraImmediate(GetActorCamera(titleCameraActor))
@@ -258,7 +289,92 @@ local function DeactivateTitleActors()
     end
 end
 
+local function PlayTitleMonkeyStartAnimation()
+    local titleMonkey = FindActorByName(TITLE_MONKEY_ACTOR_NAME)
+    if titleMonkey == nil or titleMonkey.GetLuaScriptComponent == nil then
+        return false
+    end
+
+    local luaScript = titleMonkey:GetLuaScriptComponent()
+    if luaScript == nil or luaScript.CallFunction == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return luaScript:CallFunction(TITLE_MONKEY_START_FUNCTION)
+    end)
+    return ok and result ~= false
+end
+
+local function StopTitleTransitionCoroutine()
+    TitleTransitionCoroutine = nil
+    TitleTransitionWaitRemaining = 0.0
+    bTitleTransitioning = false
+end
+
+local function ApplyGameplayStart()
+    bTitleMode = false
+    bLastLoopStopped = IsLoopStopped()
+    SoundManager:EnterPlayingState()
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = false
+    end
+    UIManager:DisposeTitle()
+    CapturePlayerCamera()
+    DeactivateTitleActors()
+end
+
+local function WaitTitleTransition(seconds)
+    coroutine.yield(tonumber(seconds) or 0.0)
+end
+
+local function ResumeTitleTransition(dt)
+    if TitleTransitionCoroutine == nil then
+        return
+    end
+
+    if coroutine.status(TitleTransitionCoroutine) == "dead" then
+        StopTitleTransitionCoroutine()
+        return
+    end
+
+    TitleTransitionWaitRemaining = TitleTransitionWaitRemaining - (tonumber(dt) or 0.0)
+    if TitleTransitionWaitRemaining > 0.0 then
+        return
+    end
+
+    local ok, waitSeconds = coroutine.resume(TitleTransitionCoroutine)
+    if not ok then
+        StopTitleTransitionCoroutine()
+        return
+    end
+
+    if coroutine.status(TitleTransitionCoroutine) == "dead" then
+        StopTitleTransitionCoroutine()
+        return
+    end
+
+    TitleTransitionWaitRemaining = math.max(0.0, tonumber(waitSeconds) or 0.0)
+end
+
+local function StartTitleTransitionCoroutine()
+    TitleTransitionWaitRemaining = 0.0
+    TitleTransitionCoroutine = coroutine.create(function()
+        PlayCameraFadeOut(TITLE_FADE_OUT_SECONDS)
+        WaitTitleTransition(TITLE_FADE_OUT_SECONDS)
+        WaitTitleTransition(TITLE_BLACK_HOLD_SECONDS)
+
+        ApplyGameplayStart()
+
+        PlayCameraFadeIn(TITLE_FADE_IN_SECONDS)
+        WaitTitleTransition(TITLE_FADE_IN_SECONDS)
+    end)
+
+    ResumeTitleTransition(0.0)
+end
+
 function BeginPlay()
+    StopTitleTransitionCoroutine()
     bCanWarp = true
     bLastLoopStopped = IsLoopStopped()
     bTitleMode = true
@@ -274,6 +390,7 @@ function BeginPlay()
 end
 
 function EndPlay()
+    StopTitleTransitionCoroutine()
     bCanWarp = true
     bLastLoopStopped = false
     DoorManager:Reset()
@@ -287,6 +404,14 @@ end
 
 function Tick(dt)
     if obj == nil then
+        return
+    end
+
+    if bTitleTransitioning then
+        ResumeTitleTransition(dt)
+        if bTitleMode then
+            CaptureTitleCamera()
+        end
         return
     end
 
@@ -338,30 +463,25 @@ function OnOverlap(OtherActor)
 end
 
 function StartGame()
-    if not bTitleMode then
+    if not bTitleMode or bTitleTransitioning then
         return
     end
 
-    bTitleMode = false
-    bLastLoopStopped = IsLoopStopped()
-    SoundManager:EnterPlayingState()
-    if HospitalPlayer ~= nil then
-        HospitalPlayer.title_mode = false
-    end
-    UIManager:DisposeTitle()
-    CapturePlayerCamera()
-    DeactivateTitleActors()
+    bTitleTransitioning = true
+    UIManager:CloseTitlePopup()
+    PlayTitleMonkeyStartAnimation()
+    StartTitleTransitionCoroutine()
 end
 
 function ShowSetting()
-    if not bTitleMode then
+    if not bTitleMode or bTitleTransitioning then
         return false
     end
     UIManager:ShowTitleSetting()
 end
 
 function ShowCredit()
-    if not bTitleMode then
+    if not bTitleMode or bTitleTransitioning then
         return false
     end
     UIManager:ShowTitleCredit()

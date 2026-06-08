@@ -53,7 +53,19 @@
     }, {
       "ClassName" : "AStaticMeshActor",
       "Name" : "TitleMonkey",
-      "NonSceneComponents" : [],
+      "NonSceneComponents" : [{
+          "ClassName" : "ULuaScriptComponent",
+          "ObjectId" : 540,
+          "Properties" : {
+            "ObjectName" : "ULuaScriptComponent_TitleMonkey",
+            "ScriptFile" : "TitleMonkey.lua",
+            "bAutoActivate" : true,
+            "bEditorOnly" : false,
+            "bHiddenInComponentTree" : false,
+            "bIsActive" : true,
+            "bTickEnable" : true
+          }
+        }],
       "ObjectId" : 506,
       "Properties" : {
         "ObjectName" : "TitleMonkey",
