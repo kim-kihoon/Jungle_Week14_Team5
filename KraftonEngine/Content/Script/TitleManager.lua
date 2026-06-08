@@ -1,11 +1,51 @@
 local TitleManager = {}
+local LeaderboardManager = require("LeaderboardManager")
 
 TitleManager.MainDocumentPath = "Content/UI/TitleUI.rml"
 TitleManager.SettingDocumentPath = "Content/UI/SettingUI.rml"
 TitleManager.CreditDocumentPath = "Content/UI/CreditUI.rml"
+TitleManager.LeaderboardDocumentPath = "Content/UI/LeaderboardUI.rml"
 TitleManager.StartSceneName = "Hospital.Scene"
 TitleManager.MainWidget = nil
 TitleManager.PopupWidget = nil
+TitleManager.LeaderboardMaxRows = 20
+
+local function set_widget_display(widget, element_id, visible)
+    if widget ~= nil and widget.SetProperty ~= nil then
+        widget:SetProperty(element_id, "display", visible and "block" or "none")
+    end
+end
+
+local function set_widget_text(widget, element_id, text)
+    if widget ~= nil and widget.SetText ~= nil then
+        widget:SetText(element_id, text)
+    end
+end
+
+local function format_leaderboard_seconds(total_seconds)
+    total_seconds = math.max(0, math.floor(tonumber(total_seconds) or 0))
+    local minutes = math.floor(total_seconds / 60)
+    local seconds = total_seconds % 60
+    return string.format("%d:%02d", minutes, seconds)
+end
+
+local function pad_right(text, width)
+    text = tostring(text or "")
+    width = math.floor(tonumber(width) or 0)
+    if #text >= width then
+        return text
+    end
+    return text .. string.rep(" ", width - #text)
+end
+
+local function format_leaderboard_row(entry, fallback_rank)
+    local rank = math.floor(tonumber(entry.Rank) or fallback_rank or 0)
+    local time_text = format_leaderboard_seconds(entry.TotalTimeSeconds)
+    local player_name = tostring(entry.PlayerName or "Player")
+    return pad_right(string.format("#%02d", rank), 7)
+        .. pad_right(time_text, 11)
+        .. player_name
+end
 
 local function add_widget_to_viewport(widget, z_order)
     if widget == nil then
@@ -75,6 +115,34 @@ function TitleManager:ShowCredit()
     return self:ShowPopup(self.CreditDocumentPath)
 end
 
+function TitleManager:PopulateLeaderboard(widget)
+    if widget == nil then
+        return
+    end
+
+    local entries = LeaderboardManager:GetEntries()
+    local entry_count = #entries
+    set_widget_display(widget, "leaderboard_empty", entry_count <= 0)
+
+    for index = 1, self.LeaderboardMaxRows do
+        local row_id = "leaderboard_row_" .. tostring(index)
+        local entry = entries[index]
+        if entry ~= nil then
+            set_widget_text(widget, row_id, format_leaderboard_row(entry, index))
+            set_widget_display(widget, row_id, true)
+        else
+            set_widget_text(widget, row_id, "")
+            set_widget_display(widget, row_id, false)
+        end
+    end
+end
+
+function TitleManager:ShowRanking()
+    local shown = self:ShowPopup(self.LeaderboardDocumentPath)
+    self:PopulateLeaderboard(self.PopupWidget)
+    return shown
+end
+
 function TitleManager:StartGame()
     self:Dispose()
     if Engine ~= nil and Engine.TransitionToScene ~= nil then
@@ -110,6 +178,10 @@ end
 
 function ShowSetting()
     TitleManager:ShowSetting()
+end
+
+function ShowRanking()
+    TitleManager:ShowRanking()
 end
 
 function ShowCredit()
