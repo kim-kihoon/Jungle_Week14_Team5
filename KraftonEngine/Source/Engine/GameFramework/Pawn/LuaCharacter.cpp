@@ -15,6 +15,10 @@
 
 namespace
 {
+	const FName MuzzleSocketName("Muzzle");
+	constexpr float PistolMuzzleFlashAttenuationRadius = 8.0f;
+	constexpr float PistolMuzzleFlashIntensity = 8.0f;
+
 	bool IsNearlyZero(float Value)
 	{
 		return std::abs(Value) <= 1.0e-4f;
@@ -28,6 +32,42 @@ namespace
 	bool IsHeldCameraMesh(UStaticMeshComponent* Component)
 	{
 		return Component && Component->GetStaticMeshPath() == FString("Content/Data/camera/camera_StaticMesh.uasset");
+	}
+
+	void ConfigurePistolMuzzleFlashPointLight(ALuaCharacter* Character, UPointLightComponent* Light)
+	{
+		if (!Character || !Light)
+		{
+			return;
+		}
+
+		if (USkeletalMeshComponent* MeshComponent = Character->GetMesh())
+		{
+			if (MeshComponent->HasSocket(MuzzleSocketName))
+			{
+				Light->AttachToComponent(MeshComponent, MuzzleSocketName);
+			}
+			else
+			{
+				Light->AttachToComponent(MeshComponent);
+			}
+		}
+		else if (UCameraComponent* CameraComponent = Character->GetCamera())
+		{
+			Light->AttachToComponent(CameraComponent);
+		}
+		else if (USpringArmComponent* SpringArmComponent = Character->GetSpringArm())
+		{
+			Light->AttachToComponent(SpringArmComponent);
+		}
+
+		Light->SetRelativeLocation(FVector::ZeroVector);
+		Light->SetRelativeRotation(FVector::ZeroVector);
+		Light->SetIntensity(PistolMuzzleFlashIntensity);
+		Light->SetLightColor(FVector4(1.0f, 0.90f, 0.72f, 1.0f));
+		Light->SetAttenuationRadius(PistolMuzzleFlashAttenuationRadius);
+		Light->SetCastShadows(false);
+		Light->SetVisible(true);
 	}
 }
 
@@ -210,6 +250,10 @@ void ALuaCharacter::Tick(float DeltaTime)
 void ALuaCharacter::PlayPistolFireEffect()
 {
 	EnsurePistolMuzzleFlashLight();
+	if (PistolMuzzleFlashLight)
+	{
+		ConfigurePistolMuzzleFlashPointLight(this, PistolMuzzleFlashLight);
+	}
 	if (PistolMuzzleFlashParticle)
 	{
 		PistolMuzzleFlashParticle->SetCastShadow(false);
@@ -223,14 +267,18 @@ void ALuaCharacter::EnsurePistolMuzzleFlashLight()
 {
 	if (!PistolMuzzleFlashLight)
 	{
+		PistolMuzzleFlashLight = AddComponent<UPointLightComponent>();
+	}
+
+	if (!PistolMuzzleFlashLight)
+	{
 		return;
 	}
 
 	if (!bPistolMuzzleFlashLightInitialized)
 	{
+		ConfigurePistolMuzzleFlashPointLight(this, PistolMuzzleFlashLight);
 		PistolMuzzleFlashConfiguredIntensity = PistolMuzzleFlashLight->GetIntensity();
-		PistolMuzzleFlashLight->SetCastShadows(false);
-		PistolMuzzleFlashLight->SetVisible(true);
 		bPistolMuzzleFlashLightInitialized = true;
 	}
 
