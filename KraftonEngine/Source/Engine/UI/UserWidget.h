@@ -28,6 +28,7 @@ public:
 	FWidgetClickEventListener(FString InElementId, FString InTargetTag, FString InFunctionName);
 
 	void ProcessEvent(Rml::Event& Event) override;
+	void Execute();
 
 	const FString& GetElementId() const { return ElementId; }
 
@@ -72,6 +73,10 @@ public:
 	void BindEvent(const FString& ElementId, const FString& EventName, sol::protected_function Callback);
 	void RegisterEventListeners();
 	void ClearEventListeners();
+	bool NavigateSelection(int32 DirectionX, int32 DirectionY);
+	bool ActivateNavigationSelection();
+	bool ActivateCloseNavigationTarget();
+	void ClearNavigationSelection();
 	UFUNCTION(Callable, Category="UI")
 	void SetText(const FString& ElementId, const FString& Text);
 	UFUNCTION(Callable, Category="UI")
@@ -131,6 +136,12 @@ public:
 
 private:
 	void RegisterDeclarativeEventListeners(Rml::Element* Root);
+	void RefreshNavigationButtons();
+	void CollectNavigationButtons(Rml::Element* Root);
+	void ApplyNavigationSelection();
+	void RestoreNavigationButtonStyle(const FString& ElementId);
+	bool ActivateNavigationElement(const FString& ElementId);
+	int32 FindCloseNavigationButtonIndex() const;
 
 private:
 	struct FWidgetEventBinding
@@ -140,6 +151,16 @@ private:
 		sol::protected_function Callback;
 	};
 
+	struct FNavigationButton
+	{
+		FString ElementId;
+		float CenterX = 0.0f;
+		float CenterY = 0.0f;
+		float Width = 0.0f;
+		float Height = 0.0f;
+		bool bCloseTarget = false;
+	};
+
 	TWeakObjectPtr<APlayerController> OwningPlayer;
 	Rml::ElementDocument* Document = nullptr;
 	FString DocumentPath;
@@ -147,7 +168,9 @@ private:
 	TArray<FWidgetClickEventListener*> ClickListeners;
 	TArray<FWidgetEventBinding> PendingEventBindings;
 	TArray<FWidgetEventListener*> EventListeners;
+	TArray<FNavigationButton> NavigationButtons;
 	int32 ZOrder = 0;
+	int32 NavigationSelectionIndex = -1;
 	bool bInViewport = false;
 	bool bDocumentLoaded = false;
 	bool bWantsMouse = false;
