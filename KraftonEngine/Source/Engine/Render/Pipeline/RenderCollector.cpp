@@ -14,6 +14,7 @@
 
 #include <Collision/Octree/Octree.h>
 #include <Collision/Octree/SpatialPartition.h>
+#include <algorithm>
 
 // ============================================================
 // UpdateProxyLOD — LOD 갱신 공통 헬퍼 (Collector + Builder 공유)
@@ -59,6 +60,16 @@ void FRenderCollector::Collect(UWorld* World, const FFrameContext& Frame, FColle
 		}
 
 		World->GetPartition().QueryFrustumAllProxies(Frame.FrustumVolume, Output.FrustumVisibleProxies);
+
+		for (FPrimitiveSceneProxy* Proxy : Scene.GetSelectedProxies())
+		{
+			if (Proxy &&
+				Proxy->HasValidOwner() &&
+				std::find(Output.FrustumVisibleProxies.begin(), Output.FrustumVisibleProxies.end(), Proxy) == Output.FrustumVisibleProxies.end())
+			{
+				Output.FrustumVisibleProxies.push_back(Proxy);
+			}
+		}
 	}
 
 	FilterVisibleProxies(Frame, Scene, Output);
@@ -184,7 +195,11 @@ void FRenderCollector::FilterVisibleProxies(const FFrameContext& Frame, FScene& 
 			OcclusionMut->GatherAABB(Proxy);
 		}
 
-		if (Occlusion && !bParticleProxy && !Proxy->HasProxyFlag(EPrimitiveProxyFlags::NeverCull) && Occlusion->IsOccluded(Proxy))
+		if (Occlusion &&
+			!bParticleProxy &&
+			!Proxy->HasProxyFlag(EPrimitiveProxyFlags::NeverCull) &&
+			!Proxy->IsSelected() &&
+			Occlusion->IsOccluded(Proxy))
 		{
 			continue;
 		}

@@ -668,6 +668,13 @@ function ShowSetting()
     UIManager:ShowTitleSetting()
 end
 
+function ShowRanking()
+    if not bTitleMode or bTitleTransitioning then
+        return false
+    end
+    UIManager:ShowTitleLeaderboard()
+end
+
 function ShowCredit()
     if not bTitleMode or bTitleTransitioning then
         return false

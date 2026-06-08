@@ -369,7 +369,7 @@ FString InputSystem::GetInputKeyDisplayName(const FInputKeyHandle& Key) const
 FInputActionState InputSystem::EvaluateActionHandle(const FInputKeyHandle& Key) const
 {
 	FInputActionState State{};
-	if (!Key.IsButton())
+	if (!Key.IsButton() && Key.Kind != EInputKeyKind::GamepadAxis)
 	{
 		return State;
 	}
@@ -391,6 +391,21 @@ FInputActionState InputSystem::EvaluateActionHandle(const FInputKeyHandle& Key) 
 			State.bDown = Gamepad.Buttons[ButtonIndex];
 			State.bPressed = Gamepad.Buttons[ButtonIndex] && !Gamepad.PrevButtons[ButtonIndex];
 			State.bReleased = !Gamepad.Buttons[ButtonIndex] && Gamepad.PrevButtons[ButtonIndex];
+		}
+	}
+
+	if (Key.Kind == EInputKeyKind::GamepadAxis)
+	{
+		constexpr float TriggerActionThreshold = 0.5f;
+		const FInputDeviceSnapshot& Gamepad = DeviceManager.GetGamepadDevice().GetSnapshot();
+		const int32 AxisIndex = Key.KeyCode;
+		if (AxisIndex >= 0 && AxisIndex < static_cast<int32>(EGamepadAxis::Count))
+		{
+			const bool bDown = Gamepad.Axes[AxisIndex] >= TriggerActionThreshold;
+			const bool bPrevDown = Gamepad.PrevAxes[AxisIndex] >= TriggerActionThreshold;
+			State.bDown = bDown;
+			State.bPressed = bDown && !bPrevDown;
+			State.bReleased = !bDown && bPrevDown;
 		}
 	}
 
@@ -472,6 +487,7 @@ void InputSystem::EnsureDefaultInputMappings()
 	AddActionMapping("Interact", "Gamepad_FaceRight");
 	AddActionMapping("Aim", "RightMouseButton");
 	AddActionMapping("Aim", "Gamepad_LeftShoulder");
+	AddActionMapping("DebugAnomalyOutline", "Gamepad_LeftTrigger");
 	AddActionMapping("Fire", "LeftMouseButton");
 	AddActionMapping("Fire", "Gamepad_RightShoulder");
 	AddActionMapping("VehicleHandbrake", "Space");

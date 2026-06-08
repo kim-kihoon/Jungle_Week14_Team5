@@ -23,6 +23,7 @@ local function copy_entry(entry)
         RecordId = entry.RecordId,
         TotalTimeSeconds = entry.TotalTimeSeconds,
         ElapsedTimeSeconds = entry.ElapsedTimeSeconds,
+        PlayerName = entry.PlayerName,
         Score = entry.Score,
         ClearReason = entry.ClearReason,
         CreatedAtSeconds = entry.CreatedAtSeconds
@@ -43,6 +44,7 @@ function LeaderboardManager:AddClearRecord(record)
         RecordId = self.NextRecordId,
         TotalTimeSeconds = to_number_or_zero(record.TotalTimeSeconds),
         ElapsedTimeSeconds = to_number_or_zero(record.ElapsedTimeSeconds),
+        PlayerName = tostring(record.PlayerName or "Player"),
         Score = to_number_or_zero(record.Score),
         ClearReason = tostring(record.ClearReason or "ClearGame"),
         CreatedAtSeconds = to_number_or_zero(record.CreatedAtSeconds)

@@ -69,7 +69,12 @@ function OffscreenAnimation:Spawn(context)
         return false, "compatible non-current animation not found"
     end
 
-    context.State.OffscreenAnimationPath = candidates[math.random(1, #candidates)]
+    local selectedIndex = 1
+    if context.RandomIndex ~= nil then
+        selectedIndex = context.RandomIndex(#candidates) or 1
+    end
+
+    context.State.OffscreenAnimationPath = candidates[selectedIndex]
     context.State.bPlayingOffscreen = false
     return true
 end
