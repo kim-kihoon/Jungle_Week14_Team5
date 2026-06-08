@@ -24,7 +24,8 @@ local KEY_D = 0x44
 local TITLE_CAMERA_TAG = "TitleCamera"
 local TITLE_ACTOR_TAG = "Title"
 local TITLE_MONKEY_ACTOR_NAME = "TitleMonkey"
-local TITLE_MONKEY_START_FUNCTION = "PlayStartAnimation"
+local TITLE_MONKEY_READY_FUNCTION = "Ready"
+local TITLE_MONKEY_STRIKE_FUNCTION = "Strike"
 local TITLE_FADE_OUT_SECONDS = 0.75
 local TITLE_BLACK_HOLD_SECONDS = 0.1
 local TITLE_FADE_IN_SECONDS = 0.75
@@ -408,7 +409,7 @@ local function DeactivateTitleActors()
     end
 end
 
-local function PlayTitleMonkeyStartAnimation()
+local function CallTitleMonkeyFunction(functionName)
     local titleMonkey = FindActorByName(TITLE_MONKEY_ACTOR_NAME)
     if titleMonkey == nil or titleMonkey.GetLuaScriptComponent == nil then
         return false
@@ -420,9 +421,17 @@ local function PlayTitleMonkeyStartAnimation()
     end
 
     local ok, result = pcall(function()
-        return luaScript:CallFunction(TITLE_MONKEY_START_FUNCTION)
+        return luaScript:CallFunction(functionName)
     end)
     return ok and result ~= false
+end
+
+local function PlayTitleMonkeyReadyAnimation()
+    return CallTitleMonkeyFunction(TITLE_MONKEY_READY_FUNCTION)
+end
+
+local function PlayTitleMonkeyStrikeAnimation()
+    return CallTitleMonkeyFunction(TITLE_MONKEY_STRIKE_FUNCTION)
 end
 
 local function StopTitleTransitionCoroutine()
@@ -542,6 +551,12 @@ local function StartTitleTransitionCoroutine()
     ResumeTitleTransition(0.0)
 end
 
+local function EnterTitleScreen()
+    UIManager:ShowTitle()
+    CaptureTitleCamera()
+    PlayTitleMonkeyReadyAnimation()
+end
+
 function BeginPlay()
     StopTitleTransitionCoroutine()
     InitialPlayerLocation = nil
@@ -557,7 +572,10 @@ function BeginPlay()
     SoundManager:EnterTitleState()
     ToolManager:Reset()
     UIManager:ResetHospital()
-    UIManager:ShowTitle()
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = true
+    end
+    EnterTitleScreen()
     CaptureTitleCamera()
 end
 
@@ -654,7 +672,7 @@ function StartGame()
 
     bTitleTransitioning = true
     UIManager:CloseTitlePopup()
-    PlayTitleMonkeyStartAnimation()
+    PlayTitleMonkeyStrikeAnimation()
     StartTitleTransitionCoroutine()
 end
 
@@ -677,6 +695,7 @@ function ShowSetting()
     if not bTitleMode or bTitleTransitioning then
         return false
     end
+    PlayTitleMonkeyStrikeAnimation()
     UIManager:ShowTitleSetting()
 end
 
@@ -684,6 +703,7 @@ function ShowRanking()
     if not bTitleMode or bTitleTransitioning then
         return false
     end
+    PlayTitleMonkeyStrikeAnimation()
     UIManager:ShowTitleLeaderboard()
 end
 
@@ -691,14 +711,22 @@ function ShowCredit()
     if not bTitleMode or bTitleTransitioning then
         return false
     end
+    PlayTitleMonkeyStrikeAnimation()
     UIManager:ShowTitleCredit()
 end
 
 function ClosePopup()
     UIManager:CloseTitlePopup()
+    if bTitleMode and not bTitleTransitioning then
+        EnterTitleScreen()
+    end
 end
 
 function ExitGame()
+    if bTitleMode and not bTitleTransitioning then
+        PlayTitleMonkeyStrikeAnimation()
+    end
+
     if Engine ~= nil and Engine.Exit ~= nil then
         Engine.Exit()
     end
