@@ -78,6 +78,7 @@
 #include "GameFramework/World.h"
 #include "GameFramework/Actor/ParticleSystemActor.h"
 #include "GameFramework/Camera/CameraModifier.h"
+#include "Render/Scene/FScene.h"
 #include "GameFramework/Camera/CameraShakeBase.h"
 #include "GameFramework/Camera/PlayerCameraManager.h"
 #include "GameFramework/Camera/SequenceCameraShake.h"
@@ -5680,6 +5681,37 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
                 if (IsValid(Component)) Result[Index++] = Component;
             }
             return Result;
+        },
+
+        "SetGameplayOutline",
+        [](AActor& Actor, bool bEnabled) -> bool
+        {
+            UWorld* World = Actor.GetWorld();
+            if (!IsValid(World))
+            {
+                return false;
+            }
+
+            bool bApplied = false;
+            FScene& Scene = World->GetScene();
+            for (UActorComponent* Component : Actor.GetComponents())
+            {
+                UPrimitiveComponent* PrimitiveComponent = Cast<UPrimitiveComponent>(Component);
+                if (!IsValid(PrimitiveComponent))
+                {
+                    continue;
+                }
+
+                FPrimitiveSceneProxy* Proxy = PrimitiveComponent->GetSceneProxy();
+                if (Proxy == nullptr)
+                {
+                    continue;
+                }
+
+                Scene.SetProxyOutlineOnly(Proxy, bEnabled);
+                bApplied = true;
+            }
+            return bApplied;
         },
 
         "GetFloatingPawnMovement",

@@ -132,6 +132,7 @@ struct FInputDeviceSnapshot
 	bool Buttons[static_cast<int32>(EGamepadButton::Count)] = {};
 	bool PrevButtons[static_cast<int32>(EGamepadButton::Count)] = {};
 	float Axes[static_cast<int32>(EGamepadAxis::Count)] = {};
+	float PrevAxes[static_cast<int32>(EGamepadAxis::Count)] = {};
 
 	FInputTouchFingerState TouchFingers[4] = {};
 	FVector Gyro = FVector::ZeroVector;

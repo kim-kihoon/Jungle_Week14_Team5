@@ -52,6 +52,7 @@ GameManager.AnomalyPlacementTemplateSets = {
 }
 GameManager.ActiveAnomalyPlacementRecord = nil
 GameManager.LastAnomalyPlacementError = nil
+GameManager.OutlinedAnomalyTarget = nil
 
 GameManager._listeners = {
     StateChanged = {},
@@ -281,6 +282,54 @@ function GameManager:_ClearAnomalyPlacement()
     return true
 end
 
+function GameManager:_SetAnomalyTargetOutline(actor, bEnabled)
+    if actor == nil or actor.SetGameplayOutline == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return actor:SetGameplayOutline(bEnabled == true)
+    end)
+    return ok and result ~= false
+end
+
+function GameManager:ClearActiveAnomalyOutline()
+    local target = self.OutlinedAnomalyTarget
+    self.OutlinedAnomalyTarget = nil
+
+    if target == nil then
+        return false
+    end
+
+    self:_SetAnomalyTargetOutline(target, false)
+    return true
+end
+
+function GameManager:SetActiveAnomalyOutlineVisible(bVisible)
+    if bVisible ~= true then
+        return self:ClearActiveAnomalyOutline()
+    end
+
+    local target = AnomalyManager:GetActiveTarget()
+    if target == nil then
+        self:ClearActiveAnomalyOutline()
+        return false
+    end
+
+    if self.OutlinedAnomalyTarget == target then
+        return true
+    end
+
+    self:ClearActiveAnomalyOutline()
+    if not self:_SetAnomalyTargetOutline(target, true) then
+        print("[GameManager] Active anomaly target outline failed")
+        return false
+    end
+
+    self.OutlinedAnomalyTarget = target
+    return true
+end
+
 function GameManager:_GetAnomalyPlacementTemplateSet()
     local setName = self.AnomalyPlacementTemplateSetName
     local templateSet = self.AnomalyPlacementTemplateSets[setName]
@@ -351,6 +400,7 @@ end
 
 function GameManager:_SetupAnomaly(reason)
     reason = reason or "SetupAnomaly"
+    self:ClearActiveAnomalyOutline()
     self:_ResetPlayerBulletsForStage()
     AnomalyManager:DespawnCurrent(reason)
     self:_ClearAnomalyPlacement()
@@ -459,6 +509,7 @@ function GameManager:RestLoop(reason)
 end
 
 function GameManager:Reset()
+    self:ClearActiveAnomalyOutline()
     AnomalyManager:Reset()
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
@@ -514,6 +565,7 @@ function GameManager:GameOver(reason)
         return false
     end
 
+    self:ClearActiveAnomalyOutline()
     AnomalyManager:Reset()
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
@@ -545,6 +597,7 @@ function GameManager:ClearGame(reason)
         CreatedAtSeconds = createdAtSeconds
     })
 
+    self:ClearActiveAnomalyOutline()
     AnomalyManager:Reset()
     JumpScareManager:DeactivateAll()
     self:_ClearAnomalyPlacement()
@@ -843,6 +896,7 @@ function GameManager:DebugSpawnAnomalyRule(ruleName)
         return false
     end
 
+    self:ClearActiveAnomalyOutline()
     return AnomalyManager:SelectAndSpawnRule(ruleName)
 end
 

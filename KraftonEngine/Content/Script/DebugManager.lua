@@ -1,6 +1,8 @@
 local DebugManager = {}
 
 DebugManager.bEnabled = true
+DebugManager.OutlineKey = "Q"
+DebugManager.OutlineActionName = "DebugAnomalyOutline"
 
 DebugManager.Scenarios = {
     {
@@ -66,11 +68,34 @@ function DebugManager:LoadAnomalyScenario(gameManager, ruleName)
     return false
 end
 
+function DebugManager:SetActiveAnomalyOutlineVisible(gameManager, bVisible)
+    local GameManager = gameManager
+    if GameManager == nil or GameManager.SetActiveAnomalyOutlineVisible == nil then
+        print("[DebugManager] GameManager.SetActiveAnomalyOutlineVisible unavailable")
+        return false
+    end
+
+    return GameManager:SetActiveAnomalyOutlineVisible(bVisible == true)
+end
+
 function DebugManager:Tick(dt, gameManager)
     if not self:IsEnabled() then
         return
     end
-    if Input == nil or Input.GetKeyDown == nil then
+    if Input == nil then
+        return
+    end
+
+    local bOutlineHeld = false
+    if Input.GetKey ~= nil and Input.GetKey(self.OutlineKey) then
+        bOutlineHeld = true
+    end
+    if not bOutlineHeld and Input.GetAction ~= nil and Input.GetAction(self.OutlineActionName) then
+        bOutlineHeld = true
+    end
+    self:SetActiveAnomalyOutlineVisible(gameManager, bOutlineHeld)
+
+    if Input.GetKeyDown == nil then
         return
     end
 

@@ -503,6 +503,7 @@ void FSDLGamepadInputDevice::UpdateButtonsAndAxes()
 	{
 		const SDL_GamepadAxis SDLAxis = ToSDLAxis(static_cast<EGamepadAxis>(AxisIndex));
 		const float PreviousValue = Snapshot.Axes[AxisIndex];
+		Snapshot.PrevAxes[AxisIndex] = PreviousValue;
 		Snapshot.Axes[AxisIndex] = SDLAxis != SDL_GAMEPAD_AXIS_INVALID ? NormalizeAxis(SDL_GetGamepadAxis(CastGamepad(Gamepad), SDLAxis)) : 0.0f;
 		if (std::abs(Snapshot.Axes[AxisIndex]) > GAMEPAD_AXIS_DEADZONE || std::abs(Snapshot.Axes[AxisIndex] - PreviousValue) > 0.02f)
 		{
