@@ -64,6 +64,9 @@ function EndPlay()
 end
 
 function Tick(dt)
+    if UpdateCoroutines ~= nil then
+        UpdateCoroutines(dt)
+    end
     DebugManager:Tick(dt, GameManager)
     GameManager:Tick(dt)
 end

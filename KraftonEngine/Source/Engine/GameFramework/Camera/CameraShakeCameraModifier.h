@@ -37,6 +37,9 @@ public:
 	void StopAllShakes(bool bImmediately);
 	void StopAllInstancesOfShake(UClass* ShakeClass, bool bImmediately);
 
+	const FCameraShakeUpdateResult& GetLastAppliedShakeOffset() const { return LastAppliedShakeOffset; }
+
 private:
 	TArray<UCameraShakeBase*> ActiveShakes;
+	FCameraShakeUpdateResult LastAppliedShakeOffset;
 };

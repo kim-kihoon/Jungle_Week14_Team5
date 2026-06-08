@@ -2601,6 +2601,32 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         }
     );
     CameraManager.set_function(
+        "GetLastCameraShakeOffset",
+        []() -> sol::table
+        {
+            sol::table Result = FLuaScriptManager::GetState().create_table();
+            FCameraShakeUpdateResult Offset;
+            if (GEngine && GEngine->GetWorld())
+            {
+                if (APlayerController* PC = GEngine->GetWorld()->GetFirstPlayerController())
+                {
+                    if (APlayerCameraManager* Manager = PC->GetPlayerCameraManager())
+                    {
+                        Offset = Manager->GetLastCameraShakeOffset();
+                    }
+                }
+            }
+
+            Result["LocX"] = Offset.Location.X;
+            Result["LocY"] = Offset.Location.Y;
+            Result["LocZ"] = Offset.Location.Z;
+            Result["Pitch"] = Offset.Rotation.Pitch;
+            Result["Yaw"] = Offset.Rotation.Yaw;
+            Result["Roll"] = Offset.Rotation.Roll;
+            return Result;
+        }
+    );
+    CameraManager.set_function(
         "SetDepthOfField",
         [](float FocusDistance, float FocusRange, float MaxBlurRadius)
         {
@@ -3742,6 +3768,19 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         [](APlayerCameraManager& M, sol::optional<bool> bImmediately)
         {
             M.StopAllCameraShakes(bImmediately.value_or(true));
+        },
+        "GetLastCameraShakeOffset",
+        [](APlayerCameraManager& M) -> sol::table
+        {
+            sol::table Result = FLuaScriptManager::GetState().create_table();
+            const FCameraShakeUpdateResult Offset = M.GetLastCameraShakeOffset();
+            Result["LocX"] = Offset.Location.X;
+            Result["LocY"] = Offset.Location.Y;
+            Result["LocZ"] = Offset.Location.Z;
+            Result["Pitch"] = Offset.Rotation.Pitch;
+            Result["Yaw"] = Offset.Rotation.Yaw;
+            Result["Roll"] = Offset.Rotation.Roll;
+            return Result;
         },
         "StartCameraFade",
         [](APlayerCameraManager& M, float FromAlpha, float ToAlpha, float Duration, sol::optional<bool> bHold)

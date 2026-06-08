@@ -3,6 +3,7 @@ local PISTOL_WALK_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_
 local PISTOL_FIRE_PATH = "Content/Data/human/source/Armpist_Armature_FPS_Pistol_Fire.uasset"
 local CAMERA_MESH_PATH = "Content/Data/camera/camera_StaticMesh.uasset"
 local GameManager = require("GameManager")
+local EndingManager = require("EndingManager")
 local SoundManager = require("SoundManager")
 local ToolManager = require("ToolManager")
 
@@ -212,6 +213,50 @@ local function reset_head_bob(self)
     self.HeadBobPitch = 0.0
     self.HeadBobOffsetZ = 0.0
     apply_head_bob_to_camera(self)
+end
+
+local function clear_ending_stagger_visuals(self)
+    if Anim.clear_owner_mesh_shake_offset ~= nil then
+        Anim.clear_owner_mesh_shake_offset()
+    end
+    if self ~= nil then
+        reset_head_bob(self)
+    end
+end
+
+local function update_ending_stagger_visuals(self, dt)
+    if EndingManager == nil
+        or EndingManager.IsStaggerShakeActive == nil
+        or not EndingManager:IsStaggerShakeActive() then
+        clear_ending_stagger_visuals(self)
+        return
+    end
+
+    if EndingManager.UpdateStaggerShake ~= nil then
+        EndingManager:UpdateStaggerShake(dt)
+    end
+
+    local offset = nil
+    if EndingManager.GetStaggerShakeOffset ~= nil then
+        offset = EndingManager:GetStaggerShakeOffset()
+    end
+    if offset == nil then
+        return
+    end
+
+    local roll = offset.Roll or 0.0
+    local pitch = offset.Pitch or 0.0
+    local locX = offset.LocX or 0.0
+    local locY = offset.LocY or 0.0
+    local locZ = offset.LocZ or 0.0
+
+    if Anim.apply_head_bob ~= nil then
+        Anim.apply_head_bob(roll, pitch, locZ)
+    end
+
+    if Anim.apply_owner_mesh_shake_offset ~= nil then
+        Anim.apply_owner_mesh_shake_offset(roll, pitch, locX, locY, locZ)
+    end
 end
 
 local function update_head_bob(self, dt)
@@ -726,9 +771,8 @@ function update(self, dt)
                 self.ActionTime = 0.0
                 self.ActionPhase = ACTION_NONE
             end
-        else
-            reset_head_bob(self)
         end
+        update_ending_stagger_visuals(self, dt)
         return
     end
 

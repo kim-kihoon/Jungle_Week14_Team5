@@ -323,6 +323,15 @@ void APlayerCameraManager::StopAllInstancesOfCameraShake(UClass* ShakeClass, boo
 	if (IsValid(ShakeModifier)) ShakeModifier->StopAllInstancesOfShake(ShakeClass, bImmediately);
 }
 
+FCameraShakeUpdateResult APlayerCameraManager::GetLastCameraShakeOffset() const
+{
+	if (IsValid(ShakeModifier))
+	{
+		return ShakeModifier->GetLastAppliedShakeOffset();
+	}
+	return FCameraShakeUpdateResult();
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Camera Modifier
 // ─────────────────────────────────────────────────────────────────

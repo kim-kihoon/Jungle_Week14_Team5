@@ -25,7 +25,35 @@ EndingManager.VICTIM_ANIMATION_PATH =
 EndingManager.VICTIM_ANIMATION_LOOPING = false
 EndingManager.VICTIM_ANIMATION_PLAY_RATE = 1.0
 
+-- 엔딩 진입 후 카메라 연출 타이밍 (초)
+EndingManager.STAGGER_DELAY = 2.0
+EndingManager.STAGGER_SHAKE_DURATION = 10.0
+EndingManager.TURN_START_TIME = EndingManager.STAGGER_DELAY + EndingManager.STAGGER_SHAKE_DURATION
+EndingManager.FACING_TURN_BLEND = 2.0
+
+-- Lua 연속 휘청: 빠름 <-> 느림 교차 (멈춤 없음, Roll 위주)
+EndingManager.STAGGER_SPEED_CYCLE = 5.0
+EndingManager.STAGGER_FAST_MULT = 0.9
+EndingManager.STAGGER_SLOW_MULT = 0.12
+EndingManager.STAGGER_BASE_FREQ = 0.22
+EndingManager.STAGGER_ROLL_DEGREES = 2.0
+EndingManager.STAGGER_PITCH_DEGREES = 0.25
+EndingManager.STAGGER_LOC_Z = 0.01
+EndingManager.STAGGER_LOC_XY = 0.006
+
 EndingManager.VictimActor = nil
+EndingManager.SpawnFacingYaw = EndingManager.ENDING_SPAWN_YAW
+EndingManager.SequenceCoroutine = nil
+EndingManager.bStaggerShakeActive = false
+EndingManager.StaggerElapsed = 0.0
+EndingManager.StaggerPhase = 0.0
+EndingManager.StaggerCurrentOffset = {
+    Roll = 0.0,
+    Pitch = 0.0,
+    LocX = 0.0,
+    LocY = 0.0,
+    LocZ = 0.0,
+}
 
 EndingManager.HORROR_LIGHT_CLASSES = {
     "AAmbientLightActor",
@@ -102,6 +130,168 @@ local function get_pawn_from_player(player)
     return get_player_pawn()
 end
 
+local function normalize_yaw_degrees(yaw)
+    while yaw > 180.0 do
+        yaw = yaw - 360.0
+    end
+    while yaw < -180.0 do
+        yaw = yaw + 360.0
+    end
+    return yaw
+end
+
+local function get_opposite_yaw(yaw)
+    return normalize_yaw_degrees(yaw + 180.0)
+end
+
+local function set_control_yaw(player, yaw, pitch)
+    local pawn = get_pawn_from_player(player)
+    if pawn == nil or pawn.SetControlRotation == nil then
+        return
+    end
+
+    local roll = 0.0
+    if pawn.GetControlRotation ~= nil then
+        local ok, rotation = pcall(function()
+            return pawn:GetControlRotation()
+        end)
+        if ok and rotation ~= nil then
+            roll = rotation.X or 0.0
+        end
+    end
+
+    pcall(function()
+        pawn:SetControlRotation(Vec3(roll, pitch or EndingManager.ENDING_SPAWN_PITCH, yaw))
+    end)
+end
+
+local function stop_camera_shakes()
+    if World == nil or World.GetFirstPlayerController == nil then
+        return
+    end
+
+    local controller = World.GetFirstPlayerController()
+    if controller == nil or controller.GetPlayerCameraManager == nil then
+        return
+    end
+
+    local ok, manager = pcall(function()
+        return controller:GetPlayerCameraManager()
+    end)
+    if ok and manager ~= nil and manager.StopAllCameraShakes ~= nil then
+        pcall(function()
+            manager:StopAllCameraShakes(true)
+        end)
+    end
+end
+
+local function start_stagger_camera_shake()
+    if CameraManager == nil then
+        return
+    end
+
+    if CameraManager.StartCameraShakeAsset ~= nil then
+        pcall(function()
+            CameraManager.StartCameraShakeAsset(
+                EndingManager.STAGGER_SHAKE_ASSET,
+                EndingManager.STAGGER_SHAKE_SCALE
+            )
+        end)
+        return
+    end
+
+    if CameraManager.StartWaveShake ~= nil then
+        pcall(function()
+            CameraManager.StartWaveShake(EndingManager.STAGGER_SHAKE_SCALE)
+        end)
+    end
+end
+
+local function stop_ending_sequence_coroutine()
+    if EndingManager.SequenceCoroutine ~= nil and StopCoroutine ~= nil then
+        StopCoroutine(EndingManager.SequenceCoroutine)
+    end
+    EndingManager.SequenceCoroutine = nil
+end
+
+local function blend_control_yaw(player, fromYaw, toYaw, duration)
+    local steps = math.max(1, math.floor((duration or 0.0) * 60.0))
+    local stepDuration = (duration or 0.0) / steps
+    local pitch = EndingManager.ENDING_SPAWN_PITCH
+
+    for step = 1, steps do
+        if not EndingManager:IsActive() then
+            return
+        end
+
+        local alpha = step / steps
+        local yaw = fromYaw + (toYaw - fromYaw) * alpha
+        set_control_yaw(player, yaw, pitch)
+
+        if Wait ~= nil then
+            Wait(stepDuration)
+        end
+    end
+end
+
+local function reset_stagger_shake_state()
+    EndingManager.StaggerElapsed = 0.0
+    EndingManager.StaggerPhase = 0.0
+    EndingManager.StaggerCurrentOffset.Roll = 0.0
+    EndingManager.StaggerCurrentOffset.Pitch = 0.0
+    EndingManager.StaggerCurrentOffset.LocX = 0.0
+    EndingManager.StaggerCurrentOffset.LocY = 0.0
+    EndingManager.StaggerCurrentOffset.LocZ = 0.0
+end
+
+local function start_ending_sequence_coroutine(player)
+    stop_ending_sequence_coroutine()
+    stop_camera_shakes()
+
+    if StartCoroutine == nil or Wait == nil then
+        print("[EndingManager] Ending sequence skipped: coroutine API unavailable")
+        return
+    end
+
+    EndingManager.SequenceCoroutine = StartCoroutine(function()
+        Wait(EndingManager.STAGGER_DELAY)
+        if not EndingManager:IsActive() then
+            return
+        end
+
+        print(string.format(
+            "[EndingManager] Stagger shake start (delay=%.1fs duration=%.1fs turnAt=%.1fs)",
+            EndingManager.STAGGER_DELAY,
+            EndingManager.STAGGER_SHAKE_DURATION,
+            EndingManager.TURN_START_TIME
+        ))
+        reset_stagger_shake_state()
+        EndingManager.bStaggerShakeActive = true
+        Wait(EndingManager.STAGGER_SHAKE_DURATION)
+        if not EndingManager:IsActive() then
+            return
+        end
+
+        EndingManager.bStaggerShakeActive = false
+        reset_stagger_shake_state()
+        stop_camera_shakes()
+
+        local startYaw = EndingManager.SpawnFacingYaw or EndingManager.ENDING_SPAWN_YAW
+        local targetYaw = get_opposite_yaw(startYaw)
+        print(string.format(
+            "[EndingManager] Turning to opposite yaw %.1f -> %.1f over %.1fs",
+            startYaw,
+            targetYaw,
+            EndingManager.FACING_TURN_BLEND
+        ))
+        blend_control_yaw(player, startYaw, targetYaw, EndingManager.FACING_TURN_BLEND)
+
+        stop_camera_shakes()
+        set_control_yaw(player, targetYaw, EndingManager.ENDING_SPAWN_PITCH)
+        print(string.format("[EndingManager] Ending sequence complete yaw=%.1f", targetYaw))
+    end)
+end
+
 local function apply_ending_spawn_facing(player)
     local pawn = get_pawn_from_player(player)
     local currentRotation = Vec3(0.0, 0.0, 0.0)
@@ -140,6 +330,8 @@ local function apply_ending_spawn_facing(player)
             player:SetRotation(targetRotation)
         end)
     end
+
+    EndingManager.SpawnFacingYaw = EndingManager.ENDING_SPAWN_YAW
 end
 
 local function find_actors_by_class(className)
@@ -210,6 +402,49 @@ end
 
 function EndingManager:IsActive()
     return self.bActive == true
+end
+
+function EndingManager:IsStaggerShakeActive()
+    return self.bStaggerShakeActive == true
+end
+
+function EndingManager:GetStaggerShakeOffset()
+    return self.StaggerCurrentOffset
+end
+
+function EndingManager:UpdateStaggerShake(dt)
+    if not self:IsStaggerShakeActive() then
+        return
+    end
+
+    dt = tonumber(dt) or 0.0
+    if dt <= 0.0 then
+        return
+    end
+
+    self.StaggerElapsed = (self.StaggerElapsed or 0.0) + dt
+
+    local cycle = self.STAGGER_SPEED_CYCLE or 2.2
+    local wave = (math.sin(self.StaggerElapsed * math.pi / cycle) + 1.0) * 0.5
+    local fastMult = self.STAGGER_FAST_MULT or 3.0
+    local slowMult = self.STAGGER_SLOW_MULT or 0.4
+    local speedMult = slowMult + (fastMult - slowMult) * wave
+
+    self.StaggerPhase = (self.StaggerPhase or 0.0) + dt * (self.STAGGER_BASE_FREQ or 1.1) * speedMult
+
+    local ampBlend = 0.55 + 0.45 * wave
+    local rollAmp = (self.STAGGER_ROLL_DEGREES or 2.0) * ampBlend
+    local pitchAmp = (self.STAGGER_PITCH_DEGREES or 0.25) * ampBlend
+    local locAmp = (self.STAGGER_LOC_Z or 0.01) * ampBlend
+    local locXYAmp = (self.STAGGER_LOC_XY or 0.006) * ampBlend
+
+    local phase = self.StaggerPhase
+    local offset = self.StaggerCurrentOffset
+    offset.Roll = math.sin(phase * math.pi * 2.0) * rollAmp
+    offset.Pitch = math.sin(phase * math.pi * 2.0 * 0.85 + 0.6) * pitchAmp
+    offset.LocX = math.sin(phase * math.pi * 2.0 * 1.15) * locXYAmp
+    offset.LocY = math.sin(phase * math.pi * 2.0 * 0.7 + 1.1) * locXYAmp
+    offset.LocZ = math.sin(phase * math.pi * 2.0 * 0.55 + 0.3) * locAmp
 end
 
 function EndingManager:SetHorrorLightingEnabled(bEnabled)
@@ -334,11 +569,16 @@ function EndingManager:SpawnVictim()
 end
 
 function EndingManager:Reset()
+    stop_ending_sequence_coroutine()
+    stop_camera_shakes()
+    self.bStaggerShakeActive = false
+    reset_stagger_shake_state()
     self.bActive = false
     self:DespawnVictim()
     UIManager:ExitCutsceneMode()
     self:SetEndingLightingEnabled(false)
     self:SetHorrorLightingEnabled(true)
+    self.SpawnFacingYaw = self.ENDING_SPAWN_YAW
 end
 
 local function play_wake_up_pistol_audio()
@@ -444,6 +684,7 @@ function EndingManager:Enter(player, hit)
     end
 
     self:PlayWakeUpShot(player)
+    start_ending_sequence_coroutine(player)
 
     print(string.format(
         "[EndingManager] Entered ending at (%.2f, %.2f, %.2f) stage=%d",
