@@ -12,7 +12,47 @@ local MOVE_OFFSET = Vec3(0.0, 0.0, 0.0)
 local MOVE_DURATION = 0.5
 
 local OriginalMeshLocation = nil
+local TriggerBoxComponent = nil
 local MoveState = nil
+local bPollingOverlapTriggered = false
+local DebugOnce = {}
+
+local function debug_log(message)
+    print("[JumpScareTrigger] " .. tostring(message))
+end
+
+local function debug_log_once(key, message)
+    if DebugOnce[key] == true then
+        return
+    end
+
+    DebugOnce[key] = true
+    debug_log(message)
+end
+
+local function format_vec3(value)
+    if value == nil then
+        return "nil"
+    end
+
+    return "(" .. tostring(value.X) .. ", " .. tostring(value.Y) .. ", " .. tostring(value.Z) .. ")"
+end
+
+local function copy_vec3(value)
+    if value == nil then
+        return nil
+    end
+
+    return Vec3(value.X or 0.0, value.Y or 0.0, value.Z or 0.0)
+end
+
+local function lerp_vec3(startLocation, targetLocation, alpha)
+    return Vec3(
+        startLocation.X + (targetLocation.X - startLocation.X) * alpha,
+        startLocation.Y + (targetLocation.Y - startLocation.Y) * alpha,
+        startLocation.Z + (targetLocation.Z - startLocation.Z) * alpha
+    )
+end
 
 local function is_valid_actor(actor)
     if actor == nil then
@@ -76,6 +116,72 @@ local function get_target_mesh()
     return mesh
 end
 
+local function cast_object(object, className)
+    if object == nil or Reflection == nil or Reflection.Cast == nil then
+        return nil
+    end
+
+    local ok, casted = pcall(function()
+        return Reflection.Cast(object, className)
+    end)
+    if not ok then
+        return nil
+    end
+    return casted
+end
+
+local function find_trigger_box_component()
+    if TriggerBoxComponent ~= nil then
+        return TriggerBoxComponent
+    end
+    if obj == nil then
+        return nil
+    end
+
+    if obj.GetBoxComponent ~= nil then
+        local ok, box = pcall(function()
+            return obj:GetBoxComponent()
+        end)
+        if ok and box ~= nil then
+            TriggerBoxComponent = box
+            debug_log_once("box_cached_actor_api", "trigger box cached from actor api")
+            return TriggerBoxComponent
+        end
+    end
+
+    if obj.GetRootComponent ~= nil then
+        local root = obj:GetRootComponent()
+        local rootBox = cast_object(root, "UBoxComponent")
+        if rootBox ~= nil and rootBox.GetScaledBoxExtent ~= nil then
+            TriggerBoxComponent = rootBox
+            debug_log_once("box_cached_root", "trigger box cached from root")
+            return TriggerBoxComponent
+        end
+    end
+
+    if obj.GetComponents == nil then
+        return nil
+    end
+
+    local ok, components = pcall(function()
+        return obj:GetComponents()
+    end)
+    if not ok or components == nil then
+        return nil
+    end
+
+    for _, component in pairs(components) do
+        local box = cast_object(component, "UBoxComponent")
+        if box ~= nil and box.GetScaledBoxExtent ~= nil then
+            TriggerBoxComponent = box
+            debug_log_once("box_cached_component", "trigger box cached from components")
+            return TriggerBoxComponent
+        end
+    end
+
+    return nil
+end
+
 local function set_mesh_visible(mesh, visible)
     if mesh ~= nil and mesh.SetVisibility ~= nil then
         pcall(function()
@@ -98,6 +204,20 @@ local function get_component_location(component)
     return location
 end
 
+local function get_component_relative_location(component)
+    if component == nil then
+        return nil
+    end
+
+    local ok, location = pcall(function()
+        return component.RelativeLocation
+    end)
+    if not ok then
+        return nil
+    end
+    return copy_vec3(location)
+end
+
 local function set_component_location(component, location)
     if component == nil or location == nil or component.SetLocation == nil then
         return false
@@ -107,6 +227,31 @@ local function set_component_location(component, location)
         component:SetLocation(location)
     end)
     return ok == true
+end
+
+local function set_component_relative_location(component, location)
+    if component == nil or location == nil then
+        return false
+    end
+
+    local ok = pcall(function()
+        component.RelativeLocation = location
+    end)
+    return ok == true
+end
+
+local function get_actor_location(actor)
+    if actor == nil or actor.GetLocation == nil then
+        return nil
+    end
+
+    local ok, location = pcall(function()
+        return actor:GetLocation()
+    end)
+    if not ok then
+        return nil
+    end
+    return copy_vec3(location)
 end
 
 local function read_script_property(name)
@@ -125,9 +270,11 @@ end
 
 local function play_mesh_animation(mesh)
     if not bPlayAnimationOnTrigger then
+        debug_log("animation skipped: disabled")
         return false
     end
     if mesh == nil or mesh.PlayAnimationByPath == nil then
+        debug_log("animation skipped: invalid mesh or PlayAnimationByPath unavailable")
         return false
     end
 
@@ -138,12 +285,14 @@ local function play_mesh_animation(mesh)
     end
 
     if type(animationPath) ~= "string" or animationPath == "" or animationPath == "None" then
+        debug_log("animation skipped: empty animation path")
         return false
     end
 
     local ok, result = pcall(function()
         return mesh:PlayAnimationByPath(animationPath, true)
     end)
+    debug_log("animation play path=" .. animationPath .. " ok=" .. tostring(ok) .. " result=" .. tostring(result))
     return ok and result ~= false
 end
 
@@ -173,23 +322,25 @@ end
 local function start_mesh_movement(mesh)
     if not bMoveMeshOnTrigger then
         MoveState = nil
+        debug_log("movement skipped: disabled")
         return false
     end
 
     local duration = get_move_duration()
     if duration <= 0 then
         MoveState = nil
+        debug_log("movement skipped: invalid duration=" .. tostring(duration))
         return false
     end
 
-    local startLocation = OriginalMeshLocation or get_component_location(mesh)
-    local targetLocation = get_target_location(startLocation)
+    local startLocation = get_component_relative_location(mesh)
+    local targetLocation = copy_vec3(get_target_location(startLocation))
     if startLocation == nil or targetLocation == nil then
         MoveState = nil
+        debug_log("movement skipped: invalid start or target location")
         return false
     end
 
-    set_component_location(mesh, startLocation)
     MoveState = {
         Mesh = mesh,
         StartLocation = startLocation,
@@ -197,13 +348,15 @@ local function start_mesh_movement(mesh)
         Elapsed = 0.0,
         Duration = duration
     }
+    debug_log("movement started start=" .. format_vec3(startLocation) .. " target=" .. format_vec3(targetLocation) .. " duration=" .. tostring(duration))
     return true
 end
 
 local function run_jump_scare()
     local mesh = get_target_mesh()
+    debug_log("run jump scare mesh=" .. tostring(mesh))
     if OriginalMeshLocation ~= nil then
-        set_component_location(mesh, OriginalMeshLocation)
+        set_component_relative_location(mesh, OriginalMeshLocation)
     end
     if bShowMeshOnTrigger then
         set_mesh_visible(mesh, true)
@@ -212,16 +365,117 @@ local function run_jump_scare()
     start_mesh_movement(mesh)
 end
 
+local function try_run_from_actor(otherActor, source)
+    if obj == nil or obj.HasTag == nil then
+        debug_log(source .. " ignored: invalid obj")
+        return false
+    end
+
+    if not obj:HasTag(TAG_ACTIVE) then
+        debug_log(source .. " ignored: missing " .. TAG_ACTIVE)
+        return false
+    end
+
+    if bOneShot and obj:HasTag(TAG_TRIGGERED) then
+        debug_log(source .. " ignored: already triggered")
+        return false
+    end
+
+    if not is_player_actor(otherActor) then
+        debug_log(source .. " ignored: other actor is not player")
+        return false
+    end
+
+    if bOneShot and obj.AddTag ~= nil then
+        obj:AddTag(TAG_TRIGGERED)
+        debug_log(source .. " trigger tag added")
+    end
+
+    run_jump_scare()
+    return true
+end
+
+local function is_player_inside_root_box(player)
+    local box = find_trigger_box_component()
+    if box == nil or box.GetLocation == nil or box.GetScaledBoxExtent == nil then
+        debug_log_once("box_invalid", "poll ignored: trigger box component not found")
+        return false
+    end
+
+    local playerLocation = get_actor_location(player)
+    if playerLocation == nil then
+        debug_log_once("box_invalid_player_location", "poll ignored: player location unavailable player=" .. tostring(player))
+        return false
+    end
+
+    local boxLocation = box:GetLocation()
+    local extent = box:GetScaledBoxExtent()
+    if boxLocation == nil or extent == nil then
+        debug_log_once("box_invalid_box_location", "poll ignored: box location or extent unavailable box=" .. tostring(box))
+        return false
+    end
+
+    local inside = math.abs(playerLocation.X - boxLocation.X) <= extent.X and
+        math.abs(playerLocation.Y - boxLocation.Y) <= extent.Y and
+        math.abs(playerLocation.Z - boxLocation.Z) <= extent.Z
+    if not inside then
+        debug_log_once(
+            "box_outside",
+            "poll outside: player=" .. format_vec3(playerLocation) ..
+                " box=" .. format_vec3(boxLocation) ..
+                " extent=" .. format_vec3(extent)
+        )
+    end
+    return inside
+end
+
+local function poll_player_overlap()
+    if bPollingOverlapTriggered then
+        return
+    end
+    if obj == nil or obj.HasTag == nil then
+        debug_log_once("poll_invalid_obj", "poll ignored: invalid obj")
+        return
+    end
+    if not obj:HasTag(TAG_ACTIVE) then
+        debug_log_once("poll_missing_active", "poll ignored: missing " .. TAG_ACTIVE)
+        return
+    end
+    if bOneShot and obj:HasTag(TAG_TRIGGERED) then
+        bPollingOverlapTriggered = true
+        debug_log_once("poll_already_triggered", "poll ignored: already triggered")
+        return
+    end
+
+    local player = get_player_pawn()
+    if player == nil then
+        debug_log_once("poll_no_player", "poll ignored: possessed player pawn not found")
+        return
+    end
+
+    if is_player_inside_root_box(player) then
+        debug_log("poll overlap detected")
+        bPollingOverlapTriggered = try_run_from_actor(player, "PollOverlap")
+    end
+end
+
 function BeginPlay()
+    debug_log("BeginPlay actor=" .. tostring(obj))
     local mesh = get_target_mesh()
     if mesh ~= nil then
-        OriginalMeshLocation = get_component_location(mesh)
+        OriginalMeshLocation = get_component_relative_location(mesh)
         set_mesh_visible(mesh, false)
+        debug_log("initial mesh cached and hidden")
+    else
+        debug_log("BeginPlay failed: target mesh not found")
     end
 end
 
 function ResetJumpScare()
     MoveState = nil
+    bPollingOverlapTriggered = false
+    TriggerBoxComponent = nil
+    DebugOnce = {}
 
     local mesh = get_target_mesh()
     if mesh == nil then
@@ -234,37 +488,26 @@ function ResetJumpScare()
         end)
     end
     if OriginalMeshLocation ~= nil then
-        set_component_location(mesh, OriginalMeshLocation)
+        set_component_relative_location(mesh, OriginalMeshLocation)
     end
     set_mesh_visible(mesh, false)
     return true
 end
 
 function OnOverlap(OtherActor, OverlappedComponent, OtherComp)
-    if obj == nil or obj.HasTag == nil then
-        return
-    end
-
-    if not obj:HasTag(TAG_ACTIVE) then
-        return
-    end
-
-    if bOneShot and obj:HasTag(TAG_TRIGGERED) then
-        return
-    end
-
-    if not is_player_actor(OtherActor) then
-        return
-    end
-
-    if bOneShot and obj.AddTag ~= nil then
-        obj:AddTag(TAG_TRIGGERED)
-    end
-
-    run_jump_scare()
+    debug_log("OnOverlap other=" .. tostring(OtherActor) .. " overlapped=" .. tostring(OverlappedComponent) .. " otherComp=" .. tostring(OtherComp))
+    try_run_from_actor(OtherActor, "OnOverlap")
 end
 
 function Tick(dt)
+    debug_log_once(
+        "tick_enter",
+        "Tick active=" .. tostring(obj ~= nil and obj.HasTag ~= nil and obj:HasTag(TAG_ACTIVE)) ..
+            " triggered=" .. tostring(obj ~= nil and obj.HasTag ~= nil and obj:HasTag(TAG_TRIGGERED)) ..
+            " dt=" .. tostring(dt)
+    )
+    poll_player_overlap()
+
     if MoveState == nil then
         return
     end
@@ -278,7 +521,7 @@ function Tick(dt)
     MoveState.Elapsed = MoveState.Elapsed + (tonumber(dt) or 0)
     local alpha = MoveState.Elapsed / MoveState.Duration
     if alpha >= 1.0 then
-        set_component_location(mesh, MoveState.TargetLocation)
+        set_component_relative_location(mesh, MoveState.TargetLocation)
         if mesh.StopAnimation ~= nil then
             pcall(function()
                 mesh:StopAnimation()
@@ -292,6 +535,6 @@ function Tick(dt)
         alpha = 0.0
     end
 
-    local location = MoveState.StartLocation + (MoveState.TargetLocation - MoveState.StartLocation) * alpha
-    set_component_location(mesh, location)
+    local location = lerp_vec3(MoveState.StartLocation, MoveState.TargetLocation, alpha)
+    set_component_relative_location(mesh, location)
 end

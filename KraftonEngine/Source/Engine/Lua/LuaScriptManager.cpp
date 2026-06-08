@@ -5917,6 +5917,26 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             return nullptr;
         },
 
+        "GetBoxComponent",
+        [](AActor& Actor) -> UBoxComponent*
+        {
+            return Actor.GetComponentByClass<UBoxComponent>();
+        },
+
+        "GetBoxComponentByName",
+        [](AActor& Actor, const FString& ComponentName) -> UBoxComponent*
+        {
+            for (UActorComponent* Component : Actor.GetComponents())
+            {
+                UBoxComponent* BoxComponent = Cast<UBoxComponent>(Component);
+                if (BoxComponent && BoxComponent->GetFName().ToString() == ComponentName)
+                {
+                    return BoxComponent;
+                }
+            }
+            return nullptr;
+        },
+
         "GetComponentByName",
         [](AActor& Actor, const FString& ComponentName) -> USceneComponent*
         {
