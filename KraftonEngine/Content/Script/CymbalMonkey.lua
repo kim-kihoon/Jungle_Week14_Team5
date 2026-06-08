@@ -11,6 +11,11 @@ local STATE_ENTRY = 1
 local STATE_STRIKE = 2
 local STATE_WARNING = 3
 local STATE_FINAL_WARNING = 4
+local CLEAR_ENCOUNTER_NONE = 0
+local CLEAR_ENCOUNTER_WAIT_NEAR = 1
+local CLEAR_ENCOUNTER_STRIKE = 2
+local CLEAR_ENCOUNTER_NOISE = 3
+local CLEAR_ENCOUNTER_HIDDEN = 4
 
 local WARNING_REMAINING_RATIO = 0.1
 local FINAL_WARNING_REMAINING_RATIO = 0.1
@@ -24,6 +29,14 @@ local WARNING_ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_Wa
 local FINAL_WARNING_ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_FinalWarning.uasset"
 
 local FINISH_EPSILON = 0.0001
+local CLEAR_ENCOUNTER_NEAR_RADIUS = 5
+local CLEAR_ENCOUNTER_STRIKE_RATE = 1.0
+local CLEAR_ENCOUNTER_NOISE_SECONDS = 0.5
+local INITIAL_ENTRY_PLAY_RATE = 1.0
+local POST_PROCESS_MATERIAL_PATH = "Content/Material/PostProcess/HorrorPostProcess.uasset"
+local CLEAR_ENCOUNTER_NOISE_AUDIO_KEY = "ClearEncounterNoise"
+local CLEAR_ENCOUNTER_NOISE_AUDIO_PATH = "SFX/Noise.mp3"
+local CLEAR_ENCOUNTER_NOISE_AUDIO_VOLUME = 1.0
 local INIT_POSITION_TAG = "CymbalsMonkeyInitPosition"
 local POSITION_CANDIDATE_TAG = "CymbalsMonkeyPositionCandidate"
 local TELEPORT_TRACE_HEIGHT_OFFSET = 0.2
@@ -53,6 +66,13 @@ local bPressureCycleArmed = false
 local bWaitingForAnimationStart = false
 local bObservedSinceTeleport = false
 local bMonkeyAtInitPosition = true
+local bInitialEntryAnimationPlaying = false
+local ClearEncounterState = CLEAR_ENCOUNTER_NONE
+local ClearEncounterNoiseElapsed = 0.0
+local ClearEncounterCamera = nil
+local ClearEncounterSavedPostProcess = nil
+local bClearEncounterNoiseAudioLoaded = false
+local is_current_animation_finished = nil
 
 local function clamp(value, minimum, maximum)
     value = tonumber(value) or minimum
@@ -88,6 +108,23 @@ local function normalize_pressure(pressure)
     return pressure
 end
 
+local function make_vec4(x, y, z, w)
+    return { X = x, Y = y, Z = z, W = w }
+end
+
+local function lerp_number(from, to, alpha)
+    from = tonumber(from) or 0.0
+    to = tonumber(to) or 0.0
+    return from + (to - from) * alpha
+end
+
+local function get_vector_component(vector, name, fallback)
+    if vector ~= nil and vector[name] ~= nil then
+        return vector[name]
+    end
+    return fallback
+end
+
 local function cache_mesh()
     if Mesh ~= nil then
         return Mesh
@@ -103,6 +140,16 @@ local function cache_mesh()
     end
 
     return Mesh
+end
+
+local function is_valid_object(object)
+    if object == nil then
+        return false
+    end
+    if object.IsValid == nil then
+        return true
+    end
+    return object:IsValid()
 end
 
 local function get_remaining_ratio()
@@ -213,6 +260,7 @@ local function play_animation(path, looping, rate)
 
     mesh:SetPlayRate(rate)
     bAnimationPlaying = true
+    bInitialEntryAnimationPlaying = false
     return true
 end
 
@@ -247,7 +295,33 @@ local function stop_animation()
     end
 
     bAnimationPlaying = false
+    bInitialEntryAnimationPlaying = false
     CurrentState = STATE_NONE
+end
+
+local function play_initial_entry_animation()
+    stop_pressure_one_coroutine()
+
+    if not play_animation(ENTRY_ANIMATION_PATH, false, INITIAL_ENTRY_PLAY_RATE) then
+        return false
+    end
+
+    CurrentState = STATE_ENTRY
+    bInitialEntryAnimationPlaying = true
+    return true
+end
+
+local function tick_initial_entry_animation()
+    if not bInitialEntryAnimationPlaying then
+        return false
+    end
+
+    if is_current_animation_finished() then
+        bInitialEntryAnimationPlaying = false
+        bAnimationPlaying = false
+        CurrentState = STATE_NONE
+    end
+    return true
 end
 
 local function is_loop_stopped()
@@ -255,13 +329,7 @@ local function is_loop_stopped()
 end
 
 local function is_valid_actor(actor)
-    if actor == nil then
-        return false
-    end
-    if actor.IsValid == nil then
-        return true
-    end
-    return actor:IsValid()
+    return is_valid_object(actor)
 end
 
 local function get_actor_location(actor)
@@ -282,6 +350,17 @@ local function get_actor_rotation(actor)
         return actor:GetRotation()
     end
     return actor.Rotation
+end
+
+local function distance_between(a, b)
+    if a == nil or b == nil then
+        return nil
+    end
+
+    local dx = (a.X or 0.0) - (b.X or 0.0)
+    local dy = (a.Y or 0.0) - (b.Y or 0.0)
+    local dz = (a.Z or 0.0) - (b.Z or 0.0)
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
 local function set_actor_location(actor, location)
@@ -374,6 +453,262 @@ local function get_player_camera()
         return player:GetCamera()
     end
     return nil
+end
+
+local function get_player_location_for_clear_encounter()
+    local camera = get_player_camera()
+    if camera ~= nil and camera.GetLocation ~= nil then
+        return camera:GetLocation()
+    end
+
+    return get_actor_location(get_player_pawn())
+end
+
+local function set_monkey_visible(visible)
+    if obj ~= nil and obj.SetVisible ~= nil then
+        obj:SetVisible(visible == true)
+    end
+
+    local mesh = cache_mesh()
+    if mesh ~= nil and mesh.SetVisibility ~= nil then
+        mesh:SetVisibility(visible == true)
+    end
+end
+
+local function set_post_process_scalar(camera, name, value)
+    if camera == nil or camera.SetPostProcessScalarParameter == nil then
+        return false
+    end
+    return camera:SetPostProcessScalarParameter(name, value) ~= false
+end
+
+local function set_post_process_vector(camera, name, value)
+    if camera == nil or camera.SetPostProcessVectorParameter == nil then
+        return false
+    end
+    return camera:SetPostProcessVectorParameter(name, value) ~= false
+end
+
+local function ensure_horror_post_process(camera)
+    if camera == nil or camera.SetPostProcessMaterial == nil then
+        return false
+    end
+    if camera.GetPostProcessMaterial ~= nil and camera:GetPostProcessMaterial() ~= nil then
+        return true
+    end
+    return camera:SetPostProcessMaterial(POST_PROCESS_MATERIAL_PATH) ~= false
+end
+
+local function save_clear_encounter_post_process(camera)
+    if camera == nil or not ensure_horror_post_process(camera) then
+        return nil
+    end
+
+    local material = camera.GetPostProcessMaterial ~= nil and camera:GetPostProcessMaterial() or nil
+    if material == nil then
+        return nil
+    end
+
+    local saved = {
+        Scalars = {},
+        Vectors = {}
+    }
+
+    if material.GetScalarParameterValue ~= nil then
+        saved.Scalars.GrainStrength = material:GetScalarParameterValue("GrainStrength")
+        saved.Scalars.GrainScale = material:GetScalarParameterValue("GrainScale")
+        saved.Scalars.GrainDarkPower = material:GetScalarParameterValue("GrainDarkPower")
+        saved.Scalars.NoiseMin = material:GetScalarParameterValue("NoiseMin")
+        saved.Scalars.NoiseMax = material:GetScalarParameterValue("NoiseMax")
+    end
+
+    if material.GetVector4ParameterValue ~= nil then
+        saved.Vectors.NoiseColor = material:GetVector4ParameterValue("NoiseColor")
+    end
+
+    return saved
+end
+
+local function restore_clear_encounter_post_process()
+    local camera = ClearEncounterCamera
+    local saved = ClearEncounterSavedPostProcess
+    if camera == nil or saved == nil or not ensure_horror_post_process(camera) then
+        return false
+    end
+
+    if saved.Scalars ~= nil then
+        for name, value in pairs(saved.Scalars) do
+            set_post_process_scalar(camera, name, value)
+        end
+    end
+    if saved.Vectors ~= nil then
+        for name, value in pairs(saved.Vectors) do
+            set_post_process_vector(camera, name, value)
+        end
+    end
+
+    return true
+end
+
+local function get_saved_clear_encounter_scalar(name, fallback)
+    local saved = ClearEncounterSavedPostProcess
+    if saved ~= nil and saved.Scalars ~= nil and saved.Scalars[name] ~= nil then
+        return saved.Scalars[name]
+    end
+    return fallback
+end
+
+local function get_saved_clear_encounter_vector(name, fallback)
+    local saved = ClearEncounterSavedPostProcess
+    if saved ~= nil and saved.Vectors ~= nil and saved.Vectors[name] ~= nil then
+        return saved.Vectors[name]
+    end
+    return fallback
+end
+
+local function apply_clear_encounter_noise(noiseAlpha)
+    local camera = ClearEncounterCamera or get_player_camera()
+    if camera == nil or not ensure_horror_post_process(camera) then
+        return false
+    end
+
+    ClearEncounterCamera = camera
+    noiseAlpha = clamp(noiseAlpha, 0.0, 1.0)
+    set_post_process_scalar(camera, "GrainStrength", lerp_number(get_saved_clear_encounter_scalar("GrainStrength", 0.0), 3.0, noiseAlpha))
+    set_post_process_scalar(camera, "GrainScale", lerp_number(get_saved_clear_encounter_scalar("GrainScale", 1.0), 1.0, noiseAlpha))
+    set_post_process_scalar(camera, "GrainDarkPower", lerp_number(get_saved_clear_encounter_scalar("GrainDarkPower", 0.0), 0.0, noiseAlpha))
+    set_post_process_scalar(camera, "NoiseMin", lerp_number(get_saved_clear_encounter_scalar("NoiseMin", 0.0), 0.0, noiseAlpha))
+    set_post_process_scalar(camera, "NoiseMax", lerp_number(get_saved_clear_encounter_scalar("NoiseMax", 1.0), 1.0, noiseAlpha))
+
+    local initialNoiseColor = get_saved_clear_encounter_vector("NoiseColor", make_vec4(1.0, 1.0, 1.0, 0.0))
+    set_post_process_vector(camera, "NoiseColor", make_vec4(
+        lerp_number(get_vector_component(initialNoiseColor, "X", 1.0), 1.0, noiseAlpha),
+        lerp_number(get_vector_component(initialNoiseColor, "Y", 1.0), 1.0, noiseAlpha),
+        lerp_number(get_vector_component(initialNoiseColor, "Z", 1.0), 1.0, noiseAlpha),
+        lerp_number(get_vector_component(initialNoiseColor, "W", 0.0), 1.0, noiseAlpha)
+    ))
+    return true
+end
+
+local function ensure_clear_encounter_noise_audio()
+    if bClearEncounterNoiseAudioLoaded then
+        return true
+    end
+    if Audio == nil or Audio.Load == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return Audio.Load(CLEAR_ENCOUNTER_NOISE_AUDIO_KEY, CLEAR_ENCOUNTER_NOISE_AUDIO_PATH, false)
+    end)
+    bClearEncounterNoiseAudioLoaded = ok and result ~= false
+    return bClearEncounterNoiseAudioLoaded
+end
+
+local function play_clear_encounter_noise_audio()
+    if not ensure_clear_encounter_noise_audio() then
+        return false
+    end
+    if Audio == nil then
+        return false
+    end
+
+    if Audio.PlayFadeOut ~= nil then
+        local ok = pcall(function()
+            Audio.PlayFadeOut(
+                CLEAR_ENCOUNTER_NOISE_AUDIO_KEY,
+                CLEAR_ENCOUNTER_NOISE_AUDIO_VOLUME,
+                CLEAR_ENCOUNTER_NOISE_SECONDS
+            )
+        end)
+        return ok == true
+    end
+
+    return false
+end
+
+local function clear_encounter_cleanup(restoreVisibility)
+    restore_clear_encounter_post_process()
+    ClearEncounterState = CLEAR_ENCOUNTER_NONE
+    ClearEncounterNoiseElapsed = 0.0
+    ClearEncounterCamera = nil
+    ClearEncounterSavedPostProcess = nil
+    if restoreVisibility then
+        set_monkey_visible(true)
+    end
+end
+
+local function is_player_near_monkey()
+    local playerLocation = get_player_location_for_clear_encounter()
+    local monkeyLocation = get_actor_location(obj)
+    local distance = distance_between(playerLocation, monkeyLocation)
+    return distance ~= nil and distance <= CLEAR_ENCOUNTER_NEAR_RADIUS
+end
+
+local function start_clear_encounter_strike()
+    stop_animation()
+    if not play_animation(STRIKE_ANIMATION_PATH, false, CLEAR_ENCOUNTER_STRIKE_RATE) then
+        ClearEncounterState = CLEAR_ENCOUNTER_HIDDEN
+        set_monkey_visible(false)
+        return false
+    end
+
+    CurrentState = STATE_STRIKE
+    ClearEncounterState = CLEAR_ENCOUNTER_STRIKE
+    return true
+end
+
+local function start_clear_encounter_noise()
+    stop_animation()
+    ClearEncounterState = CLEAR_ENCOUNTER_NOISE
+    ClearEncounterNoiseElapsed = 0.0
+    ClearEncounterCamera = get_player_camera()
+    ClearEncounterSavedPostProcess = save_clear_encounter_post_process(ClearEncounterCamera)
+    set_monkey_visible(false)
+    apply_clear_encounter_noise(1.0)
+    play_clear_encounter_noise_audio()
+end
+
+local function arm_clear_encounter(reason)
+    stop_animation()
+    if reason == "AnomalyShot" then
+        ClearEncounterState = CLEAR_ENCOUNTER_WAIT_NEAR
+        ClearEncounterNoiseElapsed = 0.0
+        ClearEncounterCamera = nil
+        ClearEncounterSavedPostProcess = nil
+    else
+        clear_encounter_cleanup(true)
+    end
+end
+
+local function tick_clear_encounter(dt)
+    if ClearEncounterState == CLEAR_ENCOUNTER_NONE then
+        return false
+    end
+    if ClearEncounterState == CLEAR_ENCOUNTER_HIDDEN then
+        return true
+    end
+    if ClearEncounterState == CLEAR_ENCOUNTER_WAIT_NEAR then
+        if is_player_near_monkey() then
+            start_clear_encounter_strike()
+        end
+        return true
+    end
+    if ClearEncounterState == CLEAR_ENCOUNTER_STRIKE then
+        if is_current_animation_finished() then
+            start_clear_encounter_noise()
+        end
+        return true
+    end
+
+    ClearEncounterNoiseElapsed = ClearEncounterNoiseElapsed + (tonumber(dt) or 0.0)
+    local alpha = 1.0 - clamp(ClearEncounterNoiseElapsed / CLEAR_ENCOUNTER_NOISE_SECONDS, 0.0, 1.0)
+    apply_clear_encounter_noise(alpha)
+    if ClearEncounterNoiseElapsed >= CLEAR_ENCOUNTER_NOISE_SECONDS then
+        restore_clear_encounter_post_process()
+        ClearEncounterState = CLEAR_ENCOUNTER_HIDDEN
+    end
+    return true
 end
 
 local function is_location_in_player_view_frustum(location)
@@ -588,7 +923,7 @@ local function set_state(state, force)
     return true
 end
 
-local function is_current_animation_finished()
+is_current_animation_finished = function()
     local mesh = cache_mesh()
     if mesh == nil then
         return false
@@ -762,6 +1097,7 @@ local function reset_pressure_cycle()
     bPressureCycleArmed = false
     bWaitingForAnimationStart = false
     stop_animation()
+    clear_encounter_cleanup(true)
     reset_monkey_teleport_position()
     CurrentPressure = get_game_manager_pressure()
     CurrentState = STATE_NONE
@@ -834,8 +1170,8 @@ local function register_loop_listeners()
     end
 
     if GameManager.OnLoopStopped ~= nil then
-        LoopStoppedHandle = GameManager:OnLoopStopped(function()
-            stop_animation()
+        LoopStoppedHandle = GameManager:OnLoopStopped(function(reason)
+            arm_clear_encounter(reason)
         end)
     end
     if GameManager.OnLoopRested ~= nil then
@@ -968,6 +1304,7 @@ function InitializeFromGameManager()
     bMissingMeshLogged = false
     cache_mesh()
     reset_pressure_cycle()
+    play_initial_entry_animation()
     print("[CymbalMonkey] InitializeFromGameManager waiting for exit-door open trigger")
     return true
 end
@@ -994,17 +1331,24 @@ function BeginPlay()
     register_pressure_listener()
     register_loop_listeners()
     reset_pressure_cycle()
+    play_initial_entry_animation()
 end
 
 function EndPlay()
     unregister_pressure_listener()
     unregister_loop_listeners()
+    clear_encounter_cleanup(true)
     stop_animation()
     Mesh = nil
     bPressureCycleArmed = false
     bWaitingForAnimationStart = false
     bObservedSinceTeleport = false
     bMonkeyAtInitPosition = true
+    bInitialEntryAnimationPlaying = false
+    ClearEncounterState = CLEAR_ENCOUNTER_NONE
+    ClearEncounterNoiseElapsed = 0.0
+    ClearEncounterCamera = nil
+    ClearEncounterSavedPostProcess = nil
     CurrentPressure = PRESSURE_ENTRY_STRIKE
     CurrentState = STATE_NONE
     CurrentEntryInterval = ENTRY_INTERVAL_MAX
@@ -1013,11 +1357,21 @@ end
 
 function Tick(dt)
     if not GameManager:IsPlaying() then
+        clear_encounter_cleanup(true)
+        if tick_initial_entry_animation() then
+            return
+        end
         stop_animation()
         return
     end
 
     if is_loop_stopped() then
+        if tick_initial_entry_animation() then
+            return
+        end
+        if tick_clear_encounter(dt) then
+            return
+        end
         if CurrentState ~= STATE_NONE or bAnimationPlaying or EntryCoroutine ~= nil then
             stop_animation()
         end

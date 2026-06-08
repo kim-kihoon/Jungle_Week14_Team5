@@ -2656,6 +2656,13 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         }
     );
     AudioManager.set_function(
+        "PlayFadeOut",
+        [](const FString& SoundName, float Volume, float FadeOutSeconds, sol::optional<float> Pitch)
+        {
+            FAudioManager::Get().PlayAudioFadeOut(SoundName, Volume, FadeOutSeconds, Pitch.value_or(1.0f));
+        }
+    );
+    AudioManager.set_function(
         "PlayAt",
         [](const FString& SoundName, float Volume, const FVector& Position, sol::optional<float> MinDistance,
            sol::optional<float> MaxDistance, sol::optional<float> Pitch)
