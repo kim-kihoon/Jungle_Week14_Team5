@@ -106,13 +106,52 @@ local function cache_mesh()
 end
 
 local function get_remaining_ratio()
+    local remainingTime = tonumber(GameManager:GetRemainingTime())
+    if remainingTime == nil then
+        return 1.0
+    end
+
+    -- Map only the active animation window (last N seconds) onto the 0..1 pressure curve
+    -- so a delayed start does not skip the slow opening tempo.
+    local animationWindow = MONKEY_ANIMATION_START_REMAINING_SECONDS
+    if animationWindow ~= nil and animationWindow > 0 then
+        if remainingTime > animationWindow then
+            return 1.0
+        end
+        return clamp(remainingTime / animationWindow, 0.0, 1.0)
+    end
+
     local timeLimit = tonumber(GameManager.timeLimit)
     if timeLimit == nil or timeLimit <= 0 then
         return 1.0
     end
 
-    local remainingTime = tonumber(GameManager:GetRemainingTime()) or timeLimit
     return clamp(remainingTime / timeLimit, 0.0, 1.0)
+end
+
+local function get_animation_pressure_stage()
+    local remainingRatio = get_remaining_ratio()
+
+    if remainingRatio <= FINAL_WARNING_REMAINING_RATIO then
+        return PRESSURE_FINAL_WARNING
+    end
+    if remainingRatio <= WARNING_REMAINING_RATIO then
+        return PRESSURE_WARNING
+    end
+    return PRESSURE_ENTRY_STRIKE
+end
+
+local function get_effective_pressure()
+    local animationPressure = get_animation_pressure_stage()
+    if GameManager.GetPressureStage == nil then
+        return animationPressure
+    end
+
+    local gameManagerPressure = normalize_pressure(GameManager:GetPressureStage()) or PRESSURE_ENTRY_STRIKE
+    if gameManagerPressure > animationPressure then
+        return gameManagerPressure
+    end
+    return animationPressure
 end
 
 local function calculate_entry_interval()
@@ -690,7 +729,8 @@ local function handle_pressure_changed(pressure)
         return
     end
 
-    if GameManager:IsPlaying() then
+    -- While the cymbal cycle is armed, Tick drives tempo/stage from the animation window.
+    if pressure == PRESSURE_FINAL_WARNING and GameManager:IsPlaying() then
         enter_pressure(pressure)
         return
     end
@@ -741,7 +781,7 @@ local function start_pressure_cycle()
 
     bPressureCycleArmed = true
     bWaitingForAnimationStart = false
-    CurrentPressure = get_game_manager_pressure()
+    CurrentPressure = get_effective_pressure()
     return enter_pressure(CurrentPressure)
 end
 
@@ -991,7 +1031,7 @@ function Tick(dt)
         return
     end
 
-    local nextPressure = get_game_manager_pressure()
+    local nextPressure = get_effective_pressure()
     if nextPressure ~= CurrentPressure then
         enter_pressure(nextPressure)
         return
