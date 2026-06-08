@@ -1,4 +1,5 @@
 local GameManager = require("GameManager")
+local LoopManager = require("LoopManager")
 local StageManager = require("StageManager")
 local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
@@ -1329,10 +1330,17 @@ function EndingManager:Enter(player, hit)
     self.bActive = true
 
     GameManager:ClearActiveAnomalyOutline()
-    require("AnomalyManager"):DespawnCurrent("EndingEnter")
+    require("AnomalyManager"):Reset()
     GameManager:_ClearAnomalyPlacement()
+    GameManager.LastAnomalyPlacementError = nil
     require("JumpScareManager"):DeactivateAll()
     require("DoorManager"):ClearToyProjectiles()
+    GameManager:_ResetFailureTimeDrain()
+
+    LoopManager:Reset()
+    GameManager.bLoopStopped = LoopManager:IsLoopStopped()
+    GameManager.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
+    GameManager:_SetPressureStage(GameManager.Pressure.EntryStrike, "EndingEnter", false)
 
     local spawnLocation = self:GetSpawnLocation()
     pcall(function()

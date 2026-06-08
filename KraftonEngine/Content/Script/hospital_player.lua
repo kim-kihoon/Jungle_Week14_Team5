@@ -563,14 +563,42 @@ local function UnbindGameOverStateChanged()
     GameOverStateChangedHandle = nil
 end
 
-local function ApplyGameplayStart()
+local function BeginHospitalGameplaySession(options)
+    options = options or {}
+
+    bCanWarp = true
     bTitleMode = false
-    bLastLoopStopped = IsLoopStopped()
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = false
+    end
+
+    EndingManager:Reset()
+    DoorManager:Reset()
+    if options.ResetSessionState == true then
+        DoorManager:ResetSessionState()
+    end
+    DoorManager:ClearToyProjectiles()
     SoundManager:EnterPlayingState()
-    UIManager:DisposeTitle()
+    ToolManager:Reset()
+    UIManager:ResetHospital()
     CapturePlayerCamera()
-    CaptureInitialPlayerTransform()
+
+    if options.RestoreTransform == true then
+        RestoreInitialPlayerTransform()
+    else
+        CaptureInitialPlayerTransform()
+    end
+
     DeactivateTitleActors()
+    GameManager:RestartGame()
+    bLastLoopStopped = IsLoopStopped()
+end
+
+local function ApplyGameplayStart()
+    BeginHospitalGameplaySession({
+        RestoreTransform = false,
+        ResetSessionState = true,
+    })
 end
 
 local function WaitTitleTransition(seconds)
@@ -792,21 +820,10 @@ end
 function RestartGame()
     StopTitleTransitionCoroutine()
     ClearGameOverPresentation()
-    RestoreInitialPlayerTransform()
-    bCanWarp = true
-    bTitleMode = false
-    if HospitalPlayer ~= nil then
-        HospitalPlayer.title_mode = false
-    end
-    EndingManager:Reset()
-    DoorManager:Reset()
-    DoorManager:ClearToyProjectiles()
-    SoundManager:EnterPlayingState()
-    ToolManager:Reset()
-    UIManager:ResetHospital()
-    CapturePlayerCamera()
-    GameManager:RestartGame()
-    bLastLoopStopped = IsLoopStopped()
+    BeginHospitalGameplaySession({
+        RestoreTransform = true,
+        ResetSessionState = false,
+    })
 end
 
 function ExitToTitle()

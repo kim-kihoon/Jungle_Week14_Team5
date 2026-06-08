@@ -719,8 +719,7 @@ function GameManager:Reset()
     self.totalGameTime = 0
     self.remainingTime = self.timeLimit or 0
     self.isPlayerDead = false
-    self.failedShotCount = 0
-    self:_ResetFailureTimeDrain()
+    self:_ResetPlayerBulletsForStage()
     LoopManager:Reset()
     self.bLoopStopped = LoopManager:IsLoopStopped()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
