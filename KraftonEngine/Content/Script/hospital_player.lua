@@ -591,6 +591,7 @@ function BeginPlay()
     GameOverMonkey:Initialize(obj)
     BindGameOverStateChanged()
     DoorManager:Reset()
+    DoorManager:ResetSessionState()
     SoundManager:EnterTitleState()
     ToolManager:Reset()
     UIManager:ResetHospital()
@@ -609,6 +610,7 @@ function EndPlay()
     bCanWarp = true
     bLastLoopStopped = false
     DoorManager:Reset()
+    DoorManager:ResetSessionState()
     ToolManager:Reset()
     UIManager:ResetHospital()
     bTitleMode = true

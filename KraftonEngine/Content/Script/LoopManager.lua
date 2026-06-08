@@ -3,11 +3,32 @@ local LoopManager = {}
 LoopManager.bLoopStopped = false
 LoopManager.bCymbalMonkeyCycleStarted = false
 LoopManager.bCymbalDoorTriggerUsed = false
+LoopManager.warpCount = 0
+LoopManager.bFirstTimerChaosConsumed = false
 
 function LoopManager:Reset()
     self.bLoopStopped = false
     self.bCymbalMonkeyCycleStarted = false
     self.bCymbalDoorTriggerUsed = false
+    self.warpCount = 0
+    self.bFirstTimerChaosConsumed = false
+end
+
+function LoopManager:HasConsumedFirstTimerChaos()
+    return self.bFirstTimerChaosConsumed == true
+end
+
+function LoopManager:MarkFirstTimerChaosConsumed()
+    self.bFirstTimerChaosConsumed = true
+end
+
+function LoopManager:GetWarpCount()
+    return tonumber(self.warpCount) or 0
+end
+
+function LoopManager:IncrementWarpCount()
+    self.warpCount = self:GetWarpCount() + 1
+    return self.warpCount
 end
 
 function LoopManager:StartStopped()
@@ -90,7 +111,12 @@ function LoopManager:OnWarp(gameManager, reason, setupCallback)
     if type(setupCallback) ~= "function" then
         return false
     end
-    return setupCallback(reason) == true
+
+    local bWarped = setupCallback(reason) == true
+    if bWarped then
+        self:IncrementWarpCount()
+    end
+    return bWarped
 end
 
 function LoopManager:OnLoopStart(gameManager, reason, onStarted)

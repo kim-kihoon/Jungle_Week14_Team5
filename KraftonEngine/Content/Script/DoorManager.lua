@@ -16,6 +16,12 @@ local AUTO_CLOSE_DOOR_TRIGGER_X_MAX = -0.603
 local AUTO_CLOSE_DOOR_TRIGGER_Y_MIN = 27.119
 local AUTO_CLOSE_Y_DOOR_TRIGGER_Y_MIN = -2.0
 local MAX_OPEN_SINGLE_DOORS_ON_WARP = 5
+local CHAOS_DOOR_REMAINING_MAX = 90.0
+local CHAOS_DOOR_REMAINING_MIN = 30.0
+local CHAOS_DOOR_MIN_COUNT = 1
+local CHAOS_DOOR_MAX_COUNT = 3
+local CHAOS_DOOR_MIN_TIME_GAP = 2.0
+local CHAOS_DOOR_WARP_ROLL_CHANCE = 0.5
 local TOY_PROJECTILE_TAG = "ToyProjectile"
 local ENTRY_DOOR_TAG = "DoorEntry"
 
@@ -61,6 +67,8 @@ local EXIT_DOOR_NAMES = {
     AStaticMeshActor_17 = true,
 }
 
+local EXIT_GUIDE_DECAL_ACTOR_NAME = "ADecalActor_1"
+
 local AUTO_CLOSE_Y_DOOR_NAMES = {
     AStaticMeshActor_12 = true,
     AStaticMeshActor_13 = true,
@@ -75,6 +83,9 @@ DoorManager.Doors = {}
 DoorManager.DoorStateByName = {}
 DoorManager.bDoorsInitialized = false
 DoorManager.bExitDoorsUnlockedForCurrentLoop = false
+DoorManager.PendingChaosDoorEvents = {}
+DoorManager.bChaosDoorScheduleActive = false
+DoorManager.bExitGuideDecalRemoved = false
 
 local function is_entry_door(door)
     if door == nil or door.Actor == nil or door.Actor.HasTag == nil then
@@ -345,6 +356,42 @@ local function shuffle_doors(doors)
     end
 end
 
+local function is_chaos_time_too_close(triggerRemaining, usedTriggerTimes)
+    for _, usedRemaining in ipairs(usedTriggerTimes) do
+        if math.abs(triggerRemaining - usedRemaining) < CHAOS_DOOR_MIN_TIME_GAP then
+            return true
+        end
+    end
+    return false
+end
+
+local function pick_chaos_trigger_remaining(usedTriggerTimes, slotIndex, slotCount)
+    for _ = 1, 32 do
+        local triggerRemaining = CHAOS_DOOR_REMAINING_MIN
+            + math.random() * (CHAOS_DOOR_REMAINING_MAX - CHAOS_DOOR_REMAINING_MIN)
+        if not is_chaos_time_too_close(triggerRemaining, usedTriggerTimes) then
+            return triggerRemaining
+        end
+    end
+
+    if slotCount <= 0 then
+        slotCount = 1
+    end
+    local alpha = slotIndex / (slotCount + 1)
+    return CHAOS_DOOR_REMAINING_MIN
+        + alpha * (CHAOS_DOOR_REMAINING_MAX - CHAOS_DOOR_REMAINING_MIN)
+end
+
+local function collect_single_door_candidates(self)
+    local candidates = {}
+    for _, door in ipairs(self.Doors) do
+        if is_single_door(door) and door.bPermanentlyLocked ~= true then
+            table.insert(candidates, door)
+        end
+    end
+    return candidates
+end
+
 local function is_in_auto_close_door_zone(location)
     return location.X < AUTO_CLOSE_DOOR_TRIGGER_X_MAX and location.Y > AUTO_CLOSE_DOOR_TRIGGER_Y_MIN
 end
@@ -358,7 +405,151 @@ function DoorManager:Reset()
     self.DoorStateByName = {}
     self.bDoorsInitialized = false
     self.bExitDoorsUnlockedForCurrentLoop = false
+    self:ClearChaosDoorSchedule()
     SoundManager:Reset()
+end
+
+function DoorManager:ResetSessionState()
+    self.bExitGuideDecalRemoved = false
+end
+
+local function destroy_world_actor(actor)
+    if actor == nil then
+        return false
+    end
+
+    local okValid, valid = pcall(function()
+        return actor.IsValid == nil or actor:IsValid()
+    end)
+    if not okValid or not valid then
+        return false
+    end
+
+    if actor.Destroy ~= nil then
+        local okDestroy = pcall(function()
+            actor:Destroy()
+        end)
+        return okDestroy == true
+    end
+
+    if World ~= nil and World.DestroyActor ~= nil then
+        local okDestroy = pcall(function()
+            World.DestroyActor(actor)
+        end)
+        return okDestroy == true
+    end
+
+    return false
+end
+
+function DoorManager:PermanentlyRemoveExitGuideDecal()
+    if self.bExitGuideDecalRemoved then
+        return false
+    end
+
+    if World == nil or World.FindActorByName == nil then
+        return false
+    end
+
+    local ok, actor = pcall(function()
+        return World.FindActorByName(EXIT_GUIDE_DECAL_ACTOR_NAME)
+    end)
+    if ok and actor ~= nil then
+        destroy_world_actor(actor)
+    end
+
+    self.bExitGuideDecalRemoved = true
+    return true
+end
+
+function DoorManager:ClearChaosDoorSchedule()
+    self.PendingChaosDoorEvents = {}
+    self.bChaosDoorScheduleActive = false
+end
+
+function DoorManager:TryScheduleChaosSingleDoorToggles(scheduleMode)
+    local bShouldSchedule = false
+    if scheduleMode == "first_timer" then
+        bShouldSchedule = true
+    elseif scheduleMode == "warp" then
+        bShouldSchedule = math.random() < CHAOS_DOOR_WARP_ROLL_CHANCE
+    end
+
+    if not bShouldSchedule then
+        return false
+    end
+
+    self:ClearChaosDoorSchedule()
+    self:InitDoors()
+
+    local candidates = collect_single_door_candidates(self)
+    if #candidates == 0 then
+        return false
+    end
+
+    shuffle_doors(candidates)
+    local doorCount = math.random(
+        CHAOS_DOOR_MIN_COUNT,
+        math.min(CHAOS_DOOR_MAX_COUNT, #candidates)
+    )
+
+    local usedTriggerTimes = {}
+    for index = 1, doorCount do
+        local triggerRemaining = pick_chaos_trigger_remaining(usedTriggerTimes, index, doorCount)
+        table.insert(usedTriggerTimes, triggerRemaining)
+        table.insert(self.PendingChaosDoorEvents, {
+            Door = candidates[index],
+            TriggerRemaining = triggerRemaining,
+            bFired = false,
+        })
+    end
+
+    self.bChaosDoorScheduleActive = #self.PendingChaosDoorEvents > 0
+    return self.bChaosDoorScheduleActive
+end
+
+function DoorManager:ToggleDoorForChaos(door)
+    if door == nil or door.Actor == nil or door.bPermanentlyLocked then
+        return false
+    end
+
+    self:SetDoorOpenState(door, not door.IsOpen, true, true)
+    return true
+end
+
+function DoorManager:UpdateChaosSingleDoorToggles(remainingTime)
+    if not self.bChaosDoorScheduleActive then
+        return
+    end
+
+    remainingTime = tonumber(remainingTime)
+    if remainingTime == nil then
+        return
+    end
+
+    if remainingTime < CHAOS_DOOR_REMAINING_MIN then
+        self:ClearChaosDoorSchedule()
+        return
+    end
+
+    if remainingTime > CHAOS_DOOR_REMAINING_MAX then
+        return
+    end
+
+    local bAllFired = true
+    for _, event in ipairs(self.PendingChaosDoorEvents) do
+        if not event.bFired then
+            bAllFired = false
+            if remainingTime <= event.TriggerRemaining then
+                event.bFired = true
+                self:ToggleDoorForChaos(event.Door)
+            end
+        end
+    end
+
+    if bAllFired then
+        self.bChaosDoorScheduleActive = false
+    end
 end
 
 function DoorManager:FindDoorByName(name)
@@ -421,7 +612,7 @@ function DoorManager:HandleDoorOpened(door, bWasOpen)
     self:TryStartCymbalMonkeyCycleOnDoorOpen(door, bWasOpen)
 end
 
-function DoorManager:SetDoorOpenState(door, bOpen, bPlaySound)
+function DoorManager:SetDoorOpenState(door, bOpen, bPlaySound, bSuppressGameplayHandlers)
     if door == nil or door.Actor == nil or door.IsOpen == bOpen then
         return
     end
@@ -437,7 +628,7 @@ function DoorManager:SetDoorOpenState(door, bOpen, bPlaySound)
     set_door_yaw(door, door.StartYaw)
     sync_door_physics(door.Actor)
 
-    if bOpen then
+    if bOpen and bSuppressGameplayHandlers ~= true then
         self:HandleDoorOpened(door, bWasOpen)
     end
 
@@ -520,6 +711,7 @@ function DoorManager:UpdateAutoCloseDoors(location)
         end
     end
     self.bExitDoorsUnlockedForCurrentLoop = false
+    self:PermanentlyRemoveExitGuideDecal()
 end
 
 function DoorManager:LockExitDoorsForCurrentLoop()
