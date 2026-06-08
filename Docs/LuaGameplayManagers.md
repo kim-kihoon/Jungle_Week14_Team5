@@ -34,7 +34,8 @@ hospital_player.lua
 
 TitleMonkey.lua
   - TitleMonkey 액터에 붙는 타이틀 전용 연출 스크립트
-  - Start 버튼 입력 시 `CymbalMonkey_Joints_Warning` 애니메이션 재생
+  - 타이틀 화면 진입점에서 `Ready`로 `CymbalMonkey_Joints_ArmOnlyCymbalEntry` 애니메이션을 0.1 속도로 재생
+  - 타이틀 버튼 입력 시 `Strike`로 `CymbalMonkey_Joints_ArmOnlyCymbalStrike` 애니메이션 재생
 
 GameOverMonkey.lua
   - 플레이어가 가진 `GameOverMonkey` 컴포넌트의 게임오버 전용 연출 모듈
@@ -213,8 +214,10 @@ hospital_player.lua BeginPlay
   4. ToolManager:Reset()
   5. UIManager:ResetHospital()
   6. title_mode 설정
-  7. UIManager:ShowTitle()
-  8. 타이틀 카메라 점유
+  7. EnterTitleScreen()
+     - UIManager:ShowTitle()
+     - 타이틀 카메라 점유
+     - TitleMonkey:Ready()
 ```
 
 실제 게임 시작 흐름은 다음 순서를 유지한다.
@@ -222,7 +225,7 @@ hospital_player.lua BeginPlay
 ```txt
 hospital_player.lua StartGame
   1. title 전환 중 상태 설정
-  2. TitleMonkey:PlayStartAnimation()
+  2. TitleMonkey:Strike()
   3. CameraManager.FadeOut() 시작
   4. hospital_player.lua Tick에서 전환 코루틴을 직접 갱신하며 fade-out 시간 대기
   5. 검은 화면 상태에서 현재 `GameManager:IsLoopStopped()` 값을 `bLastLoopStopped`에 동기화
