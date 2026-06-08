@@ -5,6 +5,7 @@ local DoorManager = require("DoorManager")
 local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
 local ToolManager = require("ToolManager")
+local GameOverMonkey = require("GameOverMonkey")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
@@ -378,6 +379,7 @@ function BeginPlay()
     bCanWarp = true
     bLastLoopStopped = IsLoopStopped()
     bTitleMode = true
+    GameOverMonkey:Initialize(obj, GameManager, UIManager)
     DoorManager:Reset()
     SoundManager:EnterTitleState()
     ToolManager:Reset()
@@ -391,6 +393,7 @@ end
 
 function EndPlay()
     StopTitleTransitionCoroutine()
+    GameOverMonkey:Shutdown()
     bCanWarp = true
     bLastLoopStopped = false
     DoorManager:Reset()
@@ -407,6 +410,8 @@ function Tick(dt)
         return
     end
 
+    GameOverMonkey:Tick(dt)
+
     if bTitleTransitioning then
         ResumeTitleTransition(dt)
         if bTitleMode then
@@ -417,6 +422,12 @@ function Tick(dt)
 
     if bTitleMode then
         CaptureTitleCamera()
+        return
+    end
+
+    if GameManager ~= nil
+        and GameManager.GetState ~= nil
+        and GameManager:GetState() == GameManager.State.GameOver then
         return
     end
 
@@ -471,6 +482,23 @@ function StartGame()
     UIManager:CloseTitlePopup()
     PlayTitleMonkeyStartAnimation()
     StartTitleTransitionCoroutine()
+end
+
+function RestartGame()
+    StopTitleTransitionCoroutine()
+    GameOverMonkey:ClearPresentation()
+    bCanWarp = true
+    bTitleMode = false
+    DoorManager:Reset()
+    SoundManager:EnterPlayingState()
+    ToolManager:Reset()
+    UIManager:ResetHospital()
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = false
+    end
+    CapturePlayerCamera()
+    GameManager:RestartGame()
+    bLastLoopStopped = IsLoopStopped()
 end
 
 function ShowSetting()

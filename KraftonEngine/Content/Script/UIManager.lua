@@ -11,6 +11,7 @@ UIManager.TimerPromptElementId = "timer_display"
 UIManager.TitleDocumentPath = "Content/UI/TitleUI.rml"
 UIManager.TitleSettingDocumentPath = "Content/UI/SettingUI.rml"
 UIManager.TitleCreditDocumentPath = "Content/UI/CreditUI.rml"
+UIManager.GameOverDocumentPath = "Content/UI/GameOverUI.rml"
 UIManager.TimerColorNormal = "rgb(71, 255, 105)"
 UIManager.TimerColorWarning = "rgb(255, 71, 71)"
 UIManager.TimerWarningSeconds = 30
@@ -30,6 +31,7 @@ UIManager.TimerUIFrozenSeconds = nil
 UIManager.TimerUILastLiveSeconds = 0
 UIManager.TitleWidget = nil
 UIManager.TitlePopupWidget = nil
+UIManager.GameOverWidget = nil
 
 local unpack_args = table.unpack or unpack
 
@@ -142,6 +144,7 @@ function UIManager:ResetHospital()
     self:RemoveWidget(self.ControlPromptWidget)
     self:RemoveWidget(self.TimerPromptWidget)
     self:DisposeTitle()
+    self:DisposeGameOver()
 
     self.DoorPromptWidget = nil
     self.bDoorPromptVisible = false
@@ -156,6 +159,7 @@ function UIManager:ResetHospital()
     self.bTimerUIWasRunning = false
     self.TimerUIFrozenSeconds = nil
     self.TimerUILastLiveSeconds = 0
+    self.GameOverWidget = nil
 end
 
 function UIManager:EnsureDoorPromptWidget()
@@ -378,6 +382,41 @@ function UIManager:DisposeTitle()
     self:CloseTitlePopup()
     self:RemoveWidget(self.TitleWidget)
     self.TitleWidget = nil
+end
+
+function UIManager:ShowGameOver()
+    if self.GameOverWidget ~= nil and self.GameOverWidget.IsInViewport ~= nil then
+        local ok, bInViewport = pcall(function()
+            return self.GameOverWidget:IsInViewport()
+        end)
+        if ok and bInViewport then
+            return true
+        end
+    end
+
+    self:RemoveWidget(self.DoorPromptWidget)
+    self:RemoveWidget(self.ControlPromptWidget)
+    self:RemoveWidget(self.TimerPromptWidget)
+    self.DoorPromptWidget = nil
+    self.ControlPromptWidget = nil
+    self.TimerPromptWidget = nil
+    self.bDoorPromptVisible = false
+    self.bControlPromptVisible = false
+    self.bTimerPromptVisible = false
+
+    self.GameOverWidget = self:CreateWidget(self.GameOverDocumentPath)
+    return self:AddWidgetToViewport(self.GameOverWidget, 120, {
+        WantsMouse = true,
+        WantsKeyboard = true,
+        BlocksGameInput = true,
+        BlocksGameKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
+function UIManager:DisposeGameOver()
+    self:RemoveWidget(self.GameOverWidget)
+    self.GameOverWidget = nil
 end
 
 return UIManager

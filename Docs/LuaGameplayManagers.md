@@ -18,12 +18,18 @@ hospital_player.lua
   - Hospital.Scene의 플레이어 진입점
   - title mode, 카메라 전환, 워프 트리거, 입력 연결
   - Start 버튼에서 TitleMonkey 타이틀 연출을 호출
+  - GameOverMonkey 모듈에 게임오버 연출 생명주기를 위임
   - title mode 해제 시 현재 loop stopped 상태를 기준값으로 동기화
   - DoorManager, SoundManager, UIManager, ToolManager 호출
 
 TitleMonkey.lua
   - TitleMonkey 액터에 붙는 타이틀 전용 연출 스크립트
   - Start 버튼 입력 시 `CymbalMonkey_Joints_Warning` 애니메이션 재생
+
+GameOverMonkey.lua
+  - 플레이어가 가진 `GameOverMonkey` 컴포넌트의 게임오버 전용 연출 모듈
+  - `GameManager` 상태 변경을 구독해 GameOver 진입 시 표시/애니메이션/지연 UI 전환을 처리
+  - 재시작, 리셋, 씬 종료 시 GameOverMonkey 표시와 GameOver UI를 정리
 
 fps_character.lua
   - FPS 팔/무기/카메라 애니메이션 상태
@@ -70,6 +76,7 @@ ToolManager.lua
 - 마지막 루프 정지 상태
 - 타이틀 카메라/플레이어 카메라 전환
 - Start 버튼 입력 시 TitleMonkey 연출 호출
+- GameOverMonkey 모듈 초기화, Tick, 정리 호출
 - Title 태그 액터 비활성화
 - `Input.GetAxis`, `Input.GetActionDown` 결과를 플레이어 이동과 문 상호작용에 연결
 

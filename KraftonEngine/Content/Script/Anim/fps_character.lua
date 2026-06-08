@@ -21,7 +21,7 @@ local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemp
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
 local FAKE_TARGET_TAG = "Fake"
-local BLACK_PHOTO_RULE_NAME = "BlackPhoto"
+local PHOTO_BLACKOUT_TARGET_TAG = "PhotoBlackoutTarget"
 local TOY_PROJECTILE_TAG = "ToyProjectile"
 
 local TOOL_PISTOL = ToolManager.Tool.Pistol
@@ -443,16 +443,15 @@ end
 
 local function should_blackout_photo_capture()
     if GameManager == nil or
-        GameManager.GetActiveAnomalyRuleName == nil or
         GameManager.GetActiveAnomalyTarget == nil then
         return false
     end
 
-    if GameManager:GetActiveAnomalyRuleName() ~= BLACK_PHOTO_RULE_NAME then
+    local target = GameManager:GetActiveAnomalyTarget()
+    if target == nil or target.HasTag == nil or not target:HasTag(PHOTO_BLACKOUT_TARGET_TAG) then
         return false
     end
 
-    local target = GameManager:GetActiveAnomalyTarget()
     if not is_actor_in_camera_frustum(target) then
         return false
     end
