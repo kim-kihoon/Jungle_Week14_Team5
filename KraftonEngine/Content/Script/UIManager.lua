@@ -1,4 +1,5 @@
 local ToolManager = require("ToolManager")
+local LeaderboardManager = require("LeaderboardManager")
 
 local UIManager = {}
 
@@ -11,6 +12,7 @@ UIManager.TimerPromptElementId = "timer_display"
 UIManager.TitleDocumentPath = "Content/UI/TitleUI.rml"
 UIManager.TitleSettingDocumentPath = "Content/UI/SettingUI.rml"
 UIManager.TitleCreditDocumentPath = "Content/UI/CreditUI.rml"
+UIManager.TitleLeaderboardDocumentPath = "Content/UI/LeaderboardUI.rml"
 UIManager.GameOverDocumentPath = "Content/UI/GameOverUI.rml"
 UIManager.TimerColorNormal = "rgb(71, 255, 105)"
 UIManager.TimerColorWarning = "rgb(255, 71, 71)"
@@ -31,6 +33,7 @@ UIManager.TimerUIFrozenSeconds = nil
 UIManager.TimerUILastLiveSeconds = 0
 UIManager.TitleWidget = nil
 UIManager.TitlePopupWidget = nil
+UIManager.LeaderboardMaxRows = 20
 UIManager.GameOverWidget = nil
 
 local unpack_args = table.unpack or unpack
@@ -119,6 +122,33 @@ local function set_widget_property(widget, elementId, propertyName, value)
     pcall(function()
         widget:SetProperty(elementId, propertyName, value)
     end)
+end
+
+local function format_leaderboard_seconds(totalSeconds)
+    totalSeconds = math.max(0, math.floor(tonumber(totalSeconds) or 0))
+    local minutes = math.floor(totalSeconds / 60)
+    local seconds = totalSeconds % 60
+    return string.format("%d:%02d", minutes, seconds)
+end
+
+local function pad_right(text, width)
+    text = tostring(text or "")
+    width = math.floor(tonumber(width) or 0)
+    if #text >= width then
+        return text
+    end
+    return text .. string.rep(" ", width - #text)
+end
+
+local function format_leaderboard_row(entry, fallbackRank)
+    local rank = math.floor(tonumber(entry.Rank) or fallbackRank or 0)
+    local timeText = format_leaderboard_seconds(entry.TotalTimeSeconds)
+    local score = math.floor(tonumber(entry.Score) or 0)
+    local clearReason = tostring(entry.ClearReason or "")
+    return pad_right(string.format("#%02d", rank), 7)
+        .. pad_right(timeText, 11)
+        .. pad_right(tostring(score), 8)
+        .. clearReason
 end
 
 function UIManager:GetActionMappingDisplayName(name, fallback)
@@ -376,6 +406,34 @@ end
 
 function UIManager:ShowTitleCredit()
     return self:ShowTitlePopup(self.TitleCreditDocumentPath)
+end
+
+function UIManager:PopulateLeaderboard(widget)
+    if widget == nil then
+        return
+    end
+
+    local entries = LeaderboardManager:GetEntries()
+    local entryCount = #entries
+    set_widget_display(widget, "leaderboard_empty", entryCount <= 0)
+
+    for index = 1, self.LeaderboardMaxRows do
+        local rowId = "leaderboard_row_" .. tostring(index)
+        local entry = entries[index]
+        if entry ~= nil then
+            set_widget_text(widget, rowId, format_leaderboard_row(entry, index))
+            set_widget_display(widget, rowId, true)
+        else
+            set_widget_text(widget, rowId, "")
+            set_widget_display(widget, rowId, false)
+        end
+    end
+end
+
+function UIManager:ShowTitleLeaderboard()
+    local bShown = self:ShowTitlePopup(self.TitleLeaderboardDocumentPath)
+    self:PopulateLeaderboard(self.TitlePopupWidget)
+    return bShown
 end
 
 function UIManager:DisposeTitle()
