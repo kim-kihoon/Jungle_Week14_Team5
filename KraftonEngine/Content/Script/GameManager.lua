@@ -933,6 +933,30 @@ function GameManager:GetLastLeaderboardRecord()
     return LeaderboardManager:GetLastRecord()
 end
 
+function GameManager:SerializeLeaderboard()
+    return LeaderboardManager:Serialize()
+end
+
+function GameManager:DeserializeLeaderboard(text)
+    return LeaderboardManager:Deserialize(text)
+end
+
+function GameManager:LoadLeaderboard()
+    return LeaderboardManager:Load()
+end
+
+function GameManager:SaveLeaderboard()
+    return LeaderboardManager:Save()
+end
+
+function GameManager:ReloadLeaderboard()
+    return LeaderboardManager:Reload()
+end
+
+function GameManager:ClearSavedLeaderboard()
+    return LeaderboardManager:ClearSavedRecords()
+end
+
 function GameManager:GetRemainingTime()
     return self.remainingTime
 end

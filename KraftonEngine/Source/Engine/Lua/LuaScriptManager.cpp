@@ -328,6 +328,85 @@ namespace
         return Results;
     }
 
+    bool LuaResolveSaveTextPath(const FString& RelativePath, std::filesystem::path& OutPath)
+    {
+        if (RelativePath.empty())
+        {
+            return false;
+        }
+
+        std::filesystem::path SaveRoot(FPaths::SaveDir());
+        std::filesystem::path Target(FPaths::ToWide(RelativePath));
+        if (Target.is_absolute())
+        {
+            return false;
+        }
+
+        Target = (SaveRoot / Target).lexically_normal();
+        SaveRoot = SaveRoot.lexically_normal();
+
+        const std::filesystem::path Relative = Target.lexically_relative(SaveRoot);
+        if (Relative.empty() || Relative.is_absolute())
+        {
+            return false;
+        }
+
+        const std::wstring RelativeNative = Relative.native();
+        if (RelativeNative == L"." || RelativeNative.rfind(L"..", 0) == 0)
+        {
+            return false;
+        }
+
+        OutPath = Target;
+        return true;
+    }
+
+    bool LuaWriteSaveTextFile(const FString& RelativePath, const FString& Text)
+    {
+        std::filesystem::path TargetPath;
+        if (!LuaResolveSaveTextPath(RelativePath, TargetPath))
+        {
+            return false;
+        }
+
+        std::error_code Ec;
+        std::filesystem::create_directories(TargetPath.parent_path(), Ec);
+        if (Ec)
+        {
+            return false;
+        }
+
+        std::ofstream File(TargetPath, std::ios::binary | std::ios::trunc);
+        if (!File.is_open())
+        {
+            return false;
+        }
+
+        File.write(Text.data(), static_cast<std::streamsize>(Text.size()));
+        return File.good();
+    }
+
+    sol::object LuaReadSaveTextFile(sol::this_state State, const FString& RelativePath)
+    {
+        sol::state_view Lua(State);
+
+        std::filesystem::path TargetPath;
+        if (!LuaResolveSaveTextPath(RelativePath, TargetPath))
+        {
+            return sol::make_object(Lua, sol::nil);
+        }
+
+        std::ifstream File(TargetPath, std::ios::binary);
+        if (!File.is_open())
+        {
+            return sol::make_object(Lua, sol::nil);
+        }
+
+        std::ostringstream Buffer;
+        Buffer << File.rdbuf();
+        return sol::make_object(Lua, Buffer.str());
+    }
+
     struct FLuaReflectedEventOverride
     {
         TWeakObjectPtr<UObject> Target;
@@ -6283,6 +6362,8 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             return Result;
         }
     );
+    World.set_function("ReadSaveTextFile", &LuaReadSaveTextFile);
+    World.set_function("WriteSaveTextFile", &LuaWriteSaveTextFile);
     World.set_function(
         "SpawnPawn",
         [](const FString& ClassName, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale, sol::optional<bool> bPossess) -> APawn*

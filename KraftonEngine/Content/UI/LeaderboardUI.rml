@@ -8,15 +8,15 @@
 			height: 100%;
 			font-family: OCRAStd;
 			color: #FFFFFF;
-			background-color: #000000;
+			background-color: rgba(0, 0, 0, 0);
 		}
 		#overlay {
 			position: absolute;
 			left: 0px;
 			top: 0px;
-			width: 1920px;
+			width: 960px;
 			height: 1080px;
-			background-color: #000000;
+			background-color: rgba(0, 0, 0, 0.88);
 		}
 		#panel_title {
 			position: absolute;
@@ -29,7 +29,7 @@
 			position: absolute;
 			left: 120px;
 			top: 250px;
-			width: 1160px;
+			width: 760px;
 			height: 36px;
 			font-size: 26px;
 			white-space: pre;
@@ -38,7 +38,7 @@
 		.leaderboard-row {
 			position: absolute;
 			left: 120px;
-			width: 1160px;
+			width: 760px;
 			height: 30px;
 			font-size: 24px;
 			white-space: pre;
