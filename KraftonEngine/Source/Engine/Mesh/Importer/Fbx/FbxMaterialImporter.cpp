@@ -253,18 +253,30 @@ namespace
 		Paths.push_back(Path);
 	}
 
+	fs::path GetFbxSidecarFbmDirectory(const fs::path& FbxPath)
+	{
+		const fs::path FbxDir = FbxPath.parent_path();
+		if (FbxDir.empty() || FbxPath.stem().empty())
+		{
+			return fs::path();
+		}
+		return FbxDir / (FbxPath.stem().wstring() + L".fbm");
+	}
+
 	TArray<fs::path> BuildTextureSearchDirectories(const FTextureResolveContext& ResolveContext)
 	{
 		TArray<fs::path> Directories;
 		const fs::path FbxPath = ToFilesystemPath(ResolveContext.FbxSourcePath);
 		const fs::path FbxDir = FbxPath.parent_path();
 		const fs::path ParentDir = FbxDir.parent_path();
+		const fs::path FbmDir = GetFbxSidecarFbmDirectory(FbxPath);
 
 		if (!ResolveContext.EmbeddedTextureScratchDirectory.empty())
 		{
 			AddUniquePath(Directories, ToFilesystemPath(ResolveContext.EmbeddedTextureScratchDirectory));
 		}
 		AddUniquePath(Directories, FbxDir);
+		AddUniquePath(Directories, FbmDir);
 		AddUniquePath(Directories, FbxDir / L"textures");
 		AddUniquePath(Directories, FbxDir / L"Textures");
 		AddUniquePath(Directories, ParentDir);
@@ -287,13 +299,18 @@ namespace
 		const fs::path FbxPath = ToFilesystemPath(ResolveContext.FbxSourcePath);
 		const fs::path FbxDir = FbxPath.parent_path();
 		const fs::path ParentDir = FbxDir.parent_path();
+		const fs::path FbmDir = GetFbxSidecarFbmDirectory(FbxPath);
 		const fs::path EmbeddedDir = ResolveContext.EmbeddedTextureScratchDirectory.empty()
 			? fs::path()
 			: ToFilesystemPath(ResolveContext.EmbeddedTextureScratchDirectory);
 
 		AddUniquePath(Candidates, RawPath);
-		AddUniquePath(Candidates, FbxDir / RawPath);
+		if (!RawPath.is_absolute())
+		{
+			AddUniquePath(Candidates, FbxDir / RawPath);
+		}
 		AddUniquePath(Candidates, FbxDir / FileName);
+		AddUniquePath(Candidates, FbmDir / FileName);
 		AddUniquePath(Candidates, FbxDir / L"textures" / FileName);
 		AddUniquePath(Candidates, FbxDir / L"Textures" / FileName);
 		AddUniquePath(Candidates, ParentDir / RawPath);
@@ -301,6 +318,10 @@ namespace
 		AddUniquePath(Candidates, ParentDir / L"textures" / FileName);
 		AddUniquePath(Candidates, ParentDir / L"Textures" / FileName);
 		AddUniquePath(Candidates, EmbeddedDir / FileName);
+		if (!EmbeddedDir.empty() && RawPath.has_parent_path())
+		{
+			AddUniquePath(Candidates, EmbeddedDir / RawPath.filename());
+		}
 		return Candidates;
 	}
 
@@ -551,8 +572,13 @@ namespace
 			return FString();
 		}
 
-		// 실제 파일을 못 찾으면 기존 동작 유지 (경로만 정리)
-		return FPaths::MakeProjectRelative(NormalizeTexturePathSeparators(RawTexturePath));
+		UE_LOG(
+			"FBX texture not found: Material='%s' Texture='%s' EmbeddedDir='%s'",
+			ResolveContext.MaterialName.c_str(),
+			RawTexturePath.c_str(),
+			ResolveContext.EmbeddedTextureScratchDirectory.c_str()
+		);
+		return FString();
 	}
 
 	bool ContainsAnyToken(const FString& Text, std::initializer_list<const char*> Tokens)
@@ -798,14 +824,19 @@ namespace
 			if (Texture)
 			{
 				const char* FileName = Texture->GetFileName();
-				FString Imported = ImportTextureToProject(FileName ? FileName : "", ResolveContext);
+				const char* RelativeFileName = Texture->GetRelativeFileName();
+
+				auto TryImportPath = [&](const char* Path) -> FString
+				{
+					return (Path && Path[0] != '\0') ? ImportTextureToProject(Path, ResolveContext) : FString();
+				};
+
+				// Blender Copy+Embed exports often keep a portable relative .fbm path while
+				// the absolute path still points at the original export machine.
+				FString Imported = TryImportPath(RelativeFileName);
 				if (Imported.empty())
 				{
-					const char* RelativeFileName = Texture->GetRelativeFileName();
-					if (RelativeFileName && RelativeFileName[0] != '\0' && (!FileName || std::strcmp(RelativeFileName, FileName) != 0))
-					{
-						Imported = ImportTextureToProject(RelativeFileName, ResolveContext);
-					}
+					Imported = TryImportPath(FileName);
 				}
 
 				if (!Imported.empty())
@@ -915,6 +946,19 @@ void FFbxMaterialImporter::CollectMaterials(FbxScene* Scene, FFbxImportContext& 
 			FbxProperty BumpProp = Material->FindProperty(FbxSurfaceMaterial::sBump);
 			bHadExplicitNormalTexture = bHadExplicitNormalTexture || (BumpProp.IsValid() && BumpProp.GetSrcObjectCount<FbxTexture>() > 0);
 			TryAssignNormalMapSlot(MaterialInfo, ReadFirstTextureFromProperty(BumpProp, ResolveContext));
+		}
+
+		if (MaterialInfo.DiffuseTexturePath.empty())
+		{
+			FbxProperty BaseColorProp = Material->FindProperty("base_color_texture");
+			if (BaseColorProp.IsValid())
+			{
+				const FString BaseColorTexturePath = ReadFirstTextureFromProperty(BaseColorProp, ResolveContext);
+				if (!BaseColorTexturePath.empty())
+				{
+					MaterialInfo.DiffuseTexturePath = BaseColorTexturePath;
+				}
+			}
 		}
 
 		if (MaterialInfo.DiffuseTexturePath.empty())
