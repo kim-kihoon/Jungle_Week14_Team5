@@ -99,10 +99,12 @@ function TitleManager:ClosePopup()
         self.PopupWidget:RemoveFromParent()
     end
     self.PopupWidget = nil
+    set_widget_display(self.MainWidget, "ui_canvas", true)
 end
 
 function TitleManager:ShowPopup(document_path)
     self:ClosePopup()
+    set_widget_display(self.MainWidget, "ui_canvas", false)
     self.PopupWidget = create_widget(document_path)
     return add_widget_to_viewport(self.PopupWidget, 110)
 end

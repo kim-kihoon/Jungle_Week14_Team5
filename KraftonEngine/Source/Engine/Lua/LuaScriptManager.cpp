@@ -3991,6 +3991,8 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         },
         "IsVisible",
         &ULightComponentBase::IsVisible,
+        "SetVisible",
+        &ULightComponentBase::SetVisible,
         "CastShadows",
         &ULightComponentBase::CastShadows,
         "GetLightType",

@@ -611,7 +611,7 @@ void ULuaAnimInstance::InstallBindings()
 			Settings3D.Position = Owner->GetActorLocation();
 			Settings3D.MinDistance = 0.25f;
 			Settings3D.MaxDistance = 8.0f;
-			FAudioManager::Get().PlayAudio(FootstepKeys[Index], 0.7f, 1.0f, &Settings3D);
+			FAudioManager::Get().PlayAudio(FootstepKeys[Index], 1.4f, 1.0f, &Settings3D);
 		});
 	Anim.set_function(
 		"apply_head_bob",

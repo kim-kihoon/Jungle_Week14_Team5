@@ -10,7 +10,8 @@ GameManager.State = {
     Playing = "Playing",
     Paused = "Paused",
     GameOver = "GameOver",
-    Clear = "Clear"
+    Clear = "Clear",
+    Ending = "Ending"
 }
 
 GameManager.Pressure = {
@@ -725,6 +726,7 @@ function GameManager:Reset()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     self.manualPressureStage = nil
     self:_SetPressureStage(self.Pressure.EntryStrike, "Reset", false)
+    require("EndingManager"):Reset()
     self:_SetState(self.State.Ready, "Reset")
 end
 
@@ -816,6 +818,10 @@ function GameManager:RestartGame()
 end
 
 function GameManager:Tick(dt)
+    if self.state == self.State.Ending then
+        return
+    end
+
     if self.state ~= self.State.Playing then
         return
     end
@@ -1006,6 +1012,10 @@ function GameManager:IsPlaying()
     return self.state == self.State.Playing
 end
 
+function GameManager:IsEnding()
+    return self.state == self.State.Ending
+end
+
 function GameManager:GetState()
     return self.state
 end
@@ -1015,6 +1025,13 @@ function GameManager:GetWarpCount()
 end
 
 function GameManager:OnWarp(reason)
+    if reason == "PlayerWarp" then
+        local StageManager = require("StageManager")
+        if not StageManager:CanZoneWarp() then
+            return false
+        end
+    end
+
     local bWarped = LoopManager:OnWarp(self, reason, function(setupReason)
         return self:_SetupAnomaly(setupReason)
     end)
@@ -1063,6 +1080,10 @@ function GameManager:ReportAnomalyShot(actor, hit)
     local bHitAnomaly = AnomalyManager:ReportShot(actor, hit)
     if bHitAnomaly then
         self:_PlayAnomalyHitEffect(actor, hit)
+        local StageManager = require("StageManager")
+        if StageManager:IsFinalStage() then
+            return require("EndingManager"):Enter(nil, hit)
+        end
         self:StopLoop("AnomalyShot")
     end
     return bHitAnomaly
@@ -1111,6 +1132,44 @@ function GameManager:DebugSpawnAnomalyRule(ruleName)
 
     self:ClearActiveAnomalyOutline()
     return AnomalyManager:SelectAndSpawnRule(ruleName)
+end
+
+function GameManager:DebugSetStage(stage)
+    if self.state ~= self.State.Playing and self.state ~= self.State.Ending then
+        print("[GameManager] DebugSetStage ignored: state=" .. tostring(self.state))
+        return false
+    end
+
+    local StageManager = require("StageManager")
+    stage = math.floor(tonumber(stage) or 1)
+    stage = math.max(1, math.min(stage, StageManager.MAX_STAGE))
+
+    if self.state == self.State.Ending then
+        require("EndingManager"):Reset()
+        self:_SetState(self.State.Playing, "DebugSetStage")
+    end
+
+    LoopManager.warpCount = stage - 1
+    self:_ResetPlayerBulletsForStage()
+    self:RestLoop("DebugSetStage")
+    self:_SetupAnomaly("DebugSetStage")
+    self:_RefreshPressureStage("DebugSetStage", true)
+
+    print(string.format(
+        "[GameManager] DebugSetStage -> stage %d (warpCount=%d)",
+        stage,
+        LoopManager.warpCount
+    ))
+    return true
+end
+
+function GameManager:DebugEnterEnding()
+    if self.state ~= self.State.Playing and self.state ~= self.State.Ending then
+        print("[GameManager] DebugEnterEnding ignored: state=" .. tostring(self.state))
+        return false
+    end
+
+    return require("EndingManager"):Enter(nil, nil)
 end
 
 return GameManager

@@ -105,6 +105,20 @@ function DebugManager:Tick(dt, gameManager)
             return
         end
     end
+
+    if Input.GetKeyDown("9") then
+        if gameManager ~= nil and gameManager.DebugSetStage ~= nil then
+            gameManager:DebugSetStage(6)
+        end
+        return
+    end
+
+    if Input.GetKeyDown("0") then
+        if gameManager ~= nil and gameManager.DebugEnterEnding ~= nil then
+            gameManager:DebugEnterEnding()
+        end
+        return
+    end
 end
 
 return DebugManager
