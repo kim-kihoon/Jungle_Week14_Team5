@@ -13,7 +13,19 @@ EndingManager.ENDING_MAP_NAME = "EndingHospital"
 
 EndingManager.FALLBACK_SPAWN = Vec3(600.0, 0.0, 38.0)
 EndingManager.ENDING_SPAWN_YAW = -180.0
+EndingManager.ENDING_SPAWN_PITCH = 15.0
 EndingManager.WAKE_UP_SHOT_TRACE_DISTANCE = 1000.0
+
+EndingManager.VICTIM_ACTOR_TEMPLATE = "Content/Blueprint/ending/EndingVictim.ActorTemplate"
+EndingManager.VICTIM_LOCATION = Vec3(597.0, 0.0, 0.0)
+EndingManager.VICTIM_ROTATION = Vec3(0.0, 0.0, 0.0)
+EndingManager.VICTIM_SCALE = Vec3(0.35, 0.35, 0.35)
+EndingManager.VICTIM_ANIMATION_PATH =
+    "Content/Data/ending-hospital-map-data/victim-with-animation_Object_4_C4D_Animation_Take.uasset"
+EndingManager.VICTIM_ANIMATION_LOOPING = false
+EndingManager.VICTIM_ANIMATION_PLAY_RATE = 1.0
+
+EndingManager.VictimActor = nil
 
 EndingManager.HORROR_LIGHT_CLASSES = {
     "AAmbientLightActor",
@@ -110,10 +122,10 @@ local function apply_ending_spawn_facing(player)
         end
     end
 
-    -- FVector(Roll, Pitch, Yaw): yaw(Z)만 -X 방향으로 고정하고 pitch/roll은 유지한다.
+    -- FVector(Roll, Pitch, Yaw): yaw=-X, pitch=아래 15도(+Pitch), roll은 유지.
     local targetRotation = Vec3(
         currentRotation.X,
-        currentRotation.Y,
+        EndingManager.ENDING_SPAWN_PITCH,
         EndingManager.ENDING_SPAWN_YAW
     )
 
@@ -241,8 +253,89 @@ function EndingManager:Initialize()
     self:SetEndingLightingEnabled(false)
 end
 
+local function destroy_ending_victim_actor(actor)
+    if not is_valid_actor(actor) or actor.Destroy == nil then
+        return
+    end
+    pcall(function()
+        actor:Destroy()
+    end)
+end
+
+local function get_skeletal_mesh_from_actor(actor)
+    if not is_valid_actor(actor) or actor.GetSkeletalMeshComponent == nil then
+        return nil
+    end
+    local ok, mesh = pcall(function()
+        return actor:GetSkeletalMeshComponent()
+    end)
+    if ok then
+        return mesh
+    end
+    return nil
+end
+
+function EndingManager:DespawnVictim()
+    destroy_ending_victim_actor(self.VictimActor)
+    self.VictimActor = nil
+end
+
+function EndingManager:SpawnVictim()
+    self:DespawnVictim()
+
+    if World == nil or World.SpawnActorTemplate == nil then
+        print("[EndingManager] SpawnVictim failed: World.SpawnActorTemplate unavailable")
+        return false
+    end
+
+    local ok, actor = pcall(function()
+        return World.SpawnActorTemplate(
+            self.VICTIM_ACTOR_TEMPLATE,
+            self.VICTIM_LOCATION,
+            self.VICTIM_ROTATION,
+            self.VICTIM_SCALE
+        )
+    end)
+    if not ok or not is_valid_actor(actor) then
+        print("[EndingManager] SpawnVictim failed: actor template spawn error")
+        return false
+    end
+
+    self.VictimActor = actor
+
+    local mesh = get_skeletal_mesh_from_actor(actor)
+    if mesh == nil or mesh.PlayAnimationByPath == nil then
+        print("[EndingManager] SpawnVictim failed: skeletal mesh component unavailable")
+        return false
+    end
+
+    local playOk, playResult = pcall(function()
+        return mesh:PlayAnimationByPath(self.VICTIM_ANIMATION_PATH, self.VICTIM_ANIMATION_LOOPING)
+    end)
+    if not playOk or playResult == false then
+        print("[EndingManager] SpawnVictim failed: PlayAnimationByPath returned false")
+        return false
+    end
+
+    if mesh.SetPlayRate ~= nil then
+        pcall(function()
+            mesh:SetPlayRate(self.VICTIM_ANIMATION_PLAY_RATE)
+        end)
+    end
+
+    print(string.format(
+        "[EndingManager] Victim spawned at (%.2f, %.2f, %.2f) anim=%s",
+        self.VICTIM_LOCATION.X,
+        self.VICTIM_LOCATION.Y,
+        self.VICTIM_LOCATION.Z,
+        self.VICTIM_ANIMATION_PATH
+    ))
+    return true
+end
+
 function EndingManager:Reset()
     self.bActive = false
+    self:DespawnVictim()
     UIManager:ExitCutsceneMode()
     self:SetEndingLightingEnabled(false)
     self:SetHorrorLightingEnabled(true)
@@ -344,6 +437,7 @@ function EndingManager:Enter(player, hit)
 
     self:SetHorrorLightingEnabled(false)
     self:SetEndingLightingEnabled(true)
+    self:SpawnVictim()
 
     if GameManager._SetState ~= nil then
         GameManager:_SetState(GameManager.State.Ending, "FinalAnomalyShot")
