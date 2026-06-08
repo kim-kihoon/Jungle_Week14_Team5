@@ -5,7 +5,14 @@ local CYMBALS_MONKEY_TAG = "CymbalsMonkey"
 local POST_PROCESS_MATERIAL_PATH = "Content/Material/PostProcess/HorrorPostProcess.uasset"
 local ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_Warning.uasset"
 local ANIMATION_LOOPING = false
-local ANIMATION_PLAY_RATE = 1.0
+local ANIMATION_PLAY_RATE = 1.5
+local NOISE_AUDIO_KEY = "GameOverNoise"
+local NOISE_AUDIO_LOOP_NAME = "GameOverNoiseLoop"
+local NOISE_AUDIO_PATH = "SFX/Noise.mp3"
+local NOISE_AUDIO_VOLUME = 0.5
+local SCREAM_AUDIO_KEY = "GameOverMonkeyScream"
+local SCREAM_AUDIO_PATH = "CymbalMonkey/MonkeyScream.mp3"
+local SCREAM_AUDIO_VOLUME = 1.0
 
 local LOOK_AT_SECONDS = 0.1
 local REVEAL_DELAY_SECONDS = 0.3
@@ -13,8 +20,6 @@ local RISE_SECONDS = 0.15
 local RED_VIGNETTE_SECONDS = 2.0
 local SQUEEZE_CYCLE_SECONDS = 0.08
 local SQUEEZE_MAX_SCALE = 1.5
-local CAMERA_SHAKE_MAX_SCALE = 0.0
-local CAMERA_SHAKE_PULSE_SECONDS = 0.05
 local unpack_args = table.unpack or unpack
 local POST_PROCESS_SCALAR_PARAMETERS = {
     "VignetteIntensity",
@@ -51,12 +56,14 @@ GameOverMonkey.PlayerPawn = nil
 GameOverMonkey.SavedControlRotation = nil
 GameOverMonkey.LookStartControlRotation = nil
 GameOverMonkey.LookTargetControlRotation = nil
-GameOverMonkey.CameraShakeElapsed = 0.0
 GameOverMonkey.SqueezeElapsed = 0.0
 GameOverMonkey.OriginalScale = nil
 GameOverMonkey.OriginalLocalLocation = nil
 GameOverMonkey.StartLocalLocation = nil
 GameOverMonkey.SavedPostProcessParameters = nil
+GameOverMonkey.bNoiseAudioLoaded = false
+GameOverMonkey.bNoiseAudioPlaying = false
+GameOverMonkey.bScreamAudioLoaded = false
 
 local function log_failure(message)
     print("[GameOverMonkey] " .. tostring(message))
@@ -101,6 +108,22 @@ end
 
 local function make_vec4(x, y, z, w)
     return { X = x, Y = y, Z = z, W = w }
+end
+
+local function get_vec4_component(value, componentName, fallback)
+    if value ~= nil and value[componentName] ~= nil then
+        return value[componentName]
+    end
+    return fallback
+end
+
+local function lerp_vec4(from, to, alpha)
+    return make_vec4(
+        lerp(get_vec4_component(from, "X", 0.0), get_vec4_component(to, "X", 0.0), alpha),
+        lerp(get_vec4_component(from, "Y", 0.0), get_vec4_component(to, "Y", 0.0), alpha),
+        lerp(get_vec4_component(from, "Z", 0.0), get_vec4_component(to, "Z", 0.0), alpha),
+        lerp(get_vec4_component(from, "W", 0.0), get_vec4_component(to, "W", 0.0), alpha)
+    )
 end
 
 local function call_object_function(object, functionName, ...)
@@ -354,36 +377,6 @@ local function ensure_horror_post_process(camera)
     return ok and result ~= false
 end
 
-local function stop_camera_shake()
-    if World == nil or World.GetFirstPlayerController == nil then
-        return
-    end
-
-    local okController, controller = pcall(function()
-        return World.GetFirstPlayerController()
-    end)
-    if not okController or controller == nil or controller.GetPlayerCameraManager == nil then
-        return
-    end
-
-    local okManager, manager = pcall(function()
-        return controller:GetPlayerCameraManager()
-    end)
-    if okManager and manager ~= nil and manager.StopAllCameraShakes ~= nil then
-        pcall(function()
-            manager:StopAllCameraShakes(true)
-        end)
-    end
-end
-
-local function start_camera_shake(scale)
-    if CameraManager ~= nil and CameraManager.StartWaveShake ~= nil then
-        pcall(function()
-            CameraManager.StartWaveShake(scale)
-        end)
-    end
-end
-
 function GameOverMonkey:GetMesh()
     if self.Mesh ~= nil then
         return self.Mesh
@@ -580,15 +573,107 @@ function GameOverMonkey:ResetPresentationState()
     self.SavedControlRotation = nil
     self.LookStartControlRotation = nil
     self.LookTargetControlRotation = nil
-    self.CameraShakeElapsed = 0.0
     self.SqueezeElapsed = 0.0
     self.StartLocalLocation = nil
     self.SavedPostProcessParameters = nil
+    self.bNoiseAudioPlaying = false
+end
+
+function GameOverMonkey:EnsureNoiseAudioLoaded()
+    if self.bNoiseAudioLoaded then
+        return true
+    end
+    if Audio == nil or Audio.Load == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return Audio.Load(NOISE_AUDIO_KEY, NOISE_AUDIO_PATH, true)
+    end)
+    self.bNoiseAudioLoaded = ok and result ~= false
+    return self.bNoiseAudioLoaded
+end
+
+function GameOverMonkey:StartNoiseAudio()
+    if self.bNoiseAudioPlaying then
+        return true
+    end
+    if not self:EnsureNoiseAudioLoaded() then
+        return false
+    end
+    if Audio == nil or Audio.PlayLoop == nil then
+        return false
+    end
+
+    local ok = pcall(function()
+        Audio.PlayLoop(NOISE_AUDIO_KEY, NOISE_AUDIO_LOOP_NAME, 0.0)
+    end)
+    self.bNoiseAudioPlaying = ok == true
+    return self.bNoiseAudioPlaying
+end
+
+function GameOverMonkey:SetNoiseAudioVolume(alpha)
+    if not self.bNoiseAudioPlaying or Audio == nil or Audio.SetLoopVolume == nil then
+        return false
+    end
+
+    local volume = NOISE_AUDIO_VOLUME * clamp01(alpha)
+    local ok = pcall(function()
+        Audio.SetLoopVolume(NOISE_AUDIO_LOOP_NAME, volume)
+    end)
+    return ok == true
+end
+
+function GameOverMonkey:StopNoiseAudio()
+    if not self.bNoiseAudioPlaying then
+        return true
+    end
+
+    if Audio ~= nil and Audio.StopLoop ~= nil then
+        pcall(function()
+            Audio.StopLoop(NOISE_AUDIO_LOOP_NAME)
+        end)
+    end
+    self.bNoiseAudioPlaying = false
+    return true
+end
+
+function GameOverMonkey:EnsureScreamAudioLoaded()
+    if self.bScreamAudioLoaded then
+        return true
+    end
+    if Audio == nil or Audio.Load == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return Audio.Load(SCREAM_AUDIO_KEY, SCREAM_AUDIO_PATH, false)
+    end)
+    self.bScreamAudioLoaded = ok and result ~= false
+    return self.bScreamAudioLoaded
+end
+
+function GameOverMonkey:PlayScreamAudio()
+    if not self:EnsureScreamAudioLoaded() then
+        return false
+    end
+    if Audio == nil or Audio.Play == nil then
+        return false
+    end
+
+    local ok = pcall(function()
+        Audio.Play(SCREAM_AUDIO_KEY, SCREAM_AUDIO_VOLUME)
+    end)
+    return ok == true
 end
 
 function GameOverMonkey:SavePostProcessParameters()
     local camera = self.ActiveCamera or get_active_camera(self.PlayerActor)
-    if camera == nil or not ensure_horror_post_process(camera) then
+    if camera == nil then
+        return false
+    end
+
+    if not ensure_horror_post_process(camera) then
         return false
     end
 
@@ -655,6 +740,22 @@ function GameOverMonkey:RestorePostProcessParameters()
     return true
 end
 
+function GameOverMonkey:GetSavedPostProcessScalar(name, fallback)
+    local saved = self.SavedPostProcessParameters
+    if saved ~= nil and saved.Scalars ~= nil and saved.Scalars[name] ~= nil then
+        return saved.Scalars[name]
+    end
+    return fallback
+end
+
+function GameOverMonkey:GetSavedPostProcessVector(name, fallback)
+    local saved = self.SavedPostProcessParameters
+    if saved ~= nil and saved.Vectors ~= nil and saved.Vectors[name] ~= nil then
+        return saved.Vectors[name]
+    end
+    return fallback
+end
+
 function GameOverMonkey:ApplyPostProcess(vignetteAlpha, noiseAlpha)
     local camera = self.ActiveCamera or get_active_camera(self.PlayerActor)
     if camera == nil then
@@ -667,24 +768,27 @@ function GameOverMonkey:ApplyPostProcess(vignetteAlpha, noiseAlpha)
     vignetteAlpha = clamp01(vignetteAlpha)
     noiseAlpha = clamp01(noiseAlpha)
 
-    set_post_process_vector(camera, "VignetteColor", make_vec4(1.0, 0.0, 0.0, vignetteAlpha))
-    set_post_process_scalar(camera, "VignetteIntensity", 1.35 * vignetteAlpha)
-    set_post_process_scalar(camera, "VignetteRadius", 0.05)
-    set_post_process_scalar(camera, "VignetteSoftness", 1.0)
-    set_post_process_scalar(camera, "ChromaticStrength", 0.5 * vignetteAlpha)
+    set_post_process_vector(camera, "VignetteColor", lerp_vec4(
+        self:GetSavedPostProcessVector("VignetteColor", make_vec4(0.0, 0.0, 0.0, 0.0)),
+        make_vec4(1.0, 0.0, 0.0, 1.0),
+        vignetteAlpha
+    ))
+    --set_post_process_scalar(camera, "VignetteIntensity", lerp(self:GetSavedPostProcessScalar("VignetteIntensity", 0.0), 1.35, vignetteAlpha))
+    --set_post_process_scalar(camera, "VignetteRadius", lerp(self:GetSavedPostProcessScalar("VignetteRadius", 0.05), 0.05, vignetteAlpha))
+    --set_post_process_scalar(camera, "VignetteSoftness", lerp(self:GetSavedPostProcessScalar("VignetteSoftness", 1.0), 1.0, vignetteAlpha))
+    --set_post_process_scalar(camera, "ChromaticStrength", lerp(self:GetSavedPostProcessScalar("ChromaticStrength", 0.0), 0.5, vignetteAlpha))
     set_post_process_scalar(camera, "Time", self.PresentationElapsed)
 
-    if noiseAlpha > 0.0 then
-        set_post_process_scalar(camera, "GrainStrength", 3.0 * noiseAlpha)
-        set_post_process_scalar(camera, "GrainScale", 1.0)
-        set_post_process_scalar(camera, "GrainDarkPower", 0.0)
-        set_post_process_scalar(camera, "NoiseMin", 0.0)
-        set_post_process_scalar(camera, "NoiseMax", 1.0)
-        set_post_process_vector(camera, "NoiseColor", make_vec4(1.0, 1.0, 1.0, noiseAlpha))
-    else
-        set_post_process_scalar(camera, "GrainStrength", 0.0)
-        set_post_process_vector(camera, "NoiseColor", make_vec4(1.0, 1.0, 1.0, 0.0))
-    end
+    set_post_process_scalar(camera, "GrainStrength", lerp(self:GetSavedPostProcessScalar("GrainStrength", 0.0), 3.0, noiseAlpha))
+    set_post_process_scalar(camera, "GrainScale", lerp(self:GetSavedPostProcessScalar("GrainScale", 1.0), 1.0, noiseAlpha))
+    set_post_process_scalar(camera, "GrainDarkPower", lerp(self:GetSavedPostProcessScalar("GrainDarkPower", 0.0), 0.0, noiseAlpha))
+    set_post_process_scalar(camera, "NoiseMin", lerp(self:GetSavedPostProcessScalar("NoiseMin", 0.0), 0.0, noiseAlpha))
+    set_post_process_scalar(camera, "NoiseMax", lerp(self:GetSavedPostProcessScalar("NoiseMax", 1.0), 1.0, noiseAlpha))
+    set_post_process_vector(camera, "NoiseColor", lerp_vec4(
+        self:GetSavedPostProcessVector("NoiseColor", make_vec4(1.0, 1.0, 1.0, 0.0)),
+        make_vec4(1.0, 1.0, 1.0, 1.0),
+        noiseAlpha
+    ))
 
     return true
 end
@@ -778,6 +882,7 @@ function GameOverMonkey:StartRiseMonkey()
     )
     self:SetMeshLocalLocation(self.StartLocalLocation)
     self:SetVisible(true)
+    self:PlayScreamAudio()
     return true
 end
 
@@ -796,23 +901,21 @@ end
 function GameOverMonkey:StartRedVignetteAndShake()
     self.State = STATE_RED_VIGNETTE
     self.StateElapsed = 0.0
-    self.CameraShakeElapsed = CAMERA_SHAKE_PULSE_SECONDS
     self.SqueezeElapsed = 0.0
     self:PlayAnimation()
     self:ApplyPostProcess(0.0, 0.0)
+    self:StartNoiseAudio()
+    self:SetNoiseAudioVolume(0.0)
 end
 
 function GameOverMonkey:TickRedVignetteAndShake(dt)
     self.StateElapsed = self.StateElapsed + dt
-    local alpha = smooth_step(self.StateElapsed / RED_VIGNETTE_SECONDS)
-    self:ApplyPostProcess(alpha, 0.0)
+    local progress = self.StateElapsed / RED_VIGNETTE_SECONDS
+    local vignetteAlpha = clamp01(progress)
+    local noiseAlpha = clamp01(progress)
+    self:ApplyPostProcess(vignetteAlpha, noiseAlpha)
+    self:SetNoiseAudioVolume(noiseAlpha)
     self:ApplySqueeze(dt)
-
-    self.CameraShakeElapsed = self.CameraShakeElapsed + dt
-    if self.CameraShakeElapsed >= CAMERA_SHAKE_PULSE_SECONDS then
-        self.CameraShakeElapsed = 0.0
-        start_camera_shake(CAMERA_SHAKE_MAX_SCALE)
-    end
 
     if self.StateElapsed >= RED_VIGNETTE_SECONDS then
         self:StartNoiseAndMenu()
@@ -822,9 +925,9 @@ end
 function GameOverMonkey:StartNoiseAndMenu()
     self.State = STATE_FINISHED
     self.StateElapsed = 0.0
-    stop_camera_shake()
     self:SetMeshScale(self.OriginalScale)
     self:ApplyPostProcess(1.0, 1.0)
+    self:SetNoiseAudioVolume(1.0)
 
     local callback = self.OnFinished
     self.OnFinished = nil
@@ -892,7 +995,7 @@ function GameOverMonkey:ClearPresentation()
     end
     self:SetVisible(false)
     self:ClearPostProcess()
-    stop_camera_shake()
+    self:StopNoiseAudio()
 
     if savedControlRotation ~= nil then
         set_control_rotation(pawn, savedControlRotation)
