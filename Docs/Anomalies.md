@@ -35,6 +35,8 @@ AnomalyCandidate
 ActiveAnomalyTarget
 PhotoInvisible
 PhotoBlackoutTarget
+PhotoGhostReplacementTarget
+PhotoGhostReplacementActor
 PhotoBoneTwistTarget
 CymbalsMonkey
 CymbalsMonkeyInitPosition
@@ -45,13 +47,15 @@ CymbalsMonkeyPositionCandidate
 - `ActiveAnomalyTarget`: 현재 활성 Anomaly 대상에 런타임으로 붙는다.
 - `PhotoInvisible`: 촬영 결과에서 대상이 빠지는 규칙에 사용한다.
 - `PhotoBlackoutTarget`: 촬영 조건을 만족하면 사진 내부 이미지를 검게 만드는 규칙에 사용한다.
+- `PhotoGhostReplacementTarget`: 사진에서 원본 대신 Ghost actor가 보이게 할 원본 대상에 붙인다.
+- `PhotoGhostReplacementActor`: 촬영 순간에만 표시할 별도 Ghost actor에 붙인다.
 - `PhotoBoneTwistTarget`: 촬영 순간에만 skeletal mesh bone 회전을 무작위로 비트는 규칙에 사용한다.
 
 ## 랜덤 풀과 디버그 풀
 
 `AnomalyManager.Rules`는 실제 루프 랜덤 선택에 사용하고, `AnomalyManager.AllRules`는 디버그 강제 적용 이름 검색에 사용한다.
 
-- 랜덤 풀 포함: `PhotoInvisible`, `PhotoLookAtInvisible`, `PhotoLookAtBlackPhoto`, `BlackPhoto`, `PhotoBoneTwist`
+- 랜덤 풀 포함: `PhotoInvisible`, `PhotoLookAtInvisible`, `PhotoLookAtBlackPhoto`, `BlackPhoto`, `PhotoGhostReplacement`, `PhotoBoneTwist`
 - 랜덤 풀 제외: `NoShadow`, `OffscreenAnimation`, `OffscreenFacePlayer`, `NearSilentCymbalMonkey`
 - 디버그 강제 적용: `AllRules`에 등록된 규칙은 `GameManager:DebugSpawnAnomalyRule(ruleName)`로 직접 호출할 수 있다.
 
@@ -62,7 +66,8 @@ CymbalsMonkeyPositionCandidate
 2 -> PhotoLookAtInvisible
 3 -> PhotoLookAtBlackPhoto
 4 -> BlackPhoto
-5 -> PhotoBoneTwist
+5 -> PhotoGhostReplacement
+6 -> PhotoBoneTwist
 ```
 
 ## 게임 흐름
@@ -105,6 +110,7 @@ CymbalsMonkeyPositionCandidate
 
 - `PhotoInvisible`: `PhotoInvisible` 태그 액터를 캡처 중에만 숨긴다.
 - `BlackPhoto`: 조건을 만족한 한 장의 사진 내부 이미지만 검게 만든다.
+- `PhotoGhostReplacement`: 원본 대상 actor는 숨기고, 미리 생성해 둔 별도 Ghost actor를 캡처 중에만 표시한다.
 - `PhotoBoneTwist`: `PhotoBoneTwistTarget` 태그 액터의 skeletal mesh bone local rotation을 캡처 중에만 무작위로 비틀고 직후 복구한다.
 - 플레이어가 들고 있는 카메라 mesh는 캡처 중에만 숨긴다.
 
@@ -134,6 +140,16 @@ CymbalsMonkeyPositionCandidate
 - 촬영 요청 직전에 대상 yaw를 플레이어 방향으로 돌린다.
 - 동시에 `PhotoBlackoutTarget` 태그를 사용한다.
 - 대상이 프러스텀과 라인트레이스 조건을 만족하면 해당 사진만 검게 나온다.
+
+### PhotoGhostReplacement
+
+- `Spawn`: `World.SpawnStaticMeshActor("Content/Data/Ghost/Ghost.uasset", ...)`로 별도 Ghost actor를 대상 위치, 회전, 스케일에 생성한다.
+- 평상시: Ghost actor에는 `PhotoGhostReplacementActor` 태그를 붙이고 `SetVisible(false)`로 숨겨 둔다.
+- 원본 대상: `PhotoGhostReplacementTarget` 태그만 붙인다. 원본 대상에는 `StaticMeshComponent`를 추가하지 않는다.
+- 캡처 직전: `FPhotoOverlay`가 `PhotoGhostReplacementTarget` actor를 숨기고, `PhotoGhostReplacementActor` actor를 표시한다.
+- 캡처 직후: 두 actor의 visibility를 촬영 전 상태로 복구한다.
+- `Despawn`: 원래 없던 target 태그만 제거하고, 생성해 둔 Ghost actor를 `Destroy()`로 제거한다.
+- `Content/Data/Ghost/Ghost.uasset`가 없거나 static mesh 로드에 실패하면 룰 `Spawn`은 실패한다.
 
 ### PhotoBoneTwist
 
@@ -182,6 +198,7 @@ PrimitiveComponent:SetVisibility(bool)
 PrimitiveComponent:IsVisible()
 Actor:GetAudioComponent()
 Actor:SetGameplayOutline(bool)
+Actor:Destroy()
 AudioComponent:SetVolume(float)
 AudioComponent:GetVolume()
 
@@ -191,6 +208,7 @@ SkeletalMeshComponent:GetPlayRate()
 SkeletalMeshComponent:GetLooping()
 SkeletalMeshComponent:IsPlaying()
 
+World.SpawnStaticMeshActor(meshPath, location, rotation, scale)
 World.IsActorInViewFrustum(actor)
 World.IsComponentInViewFrustum(component)
 World.GetGameTime()
@@ -205,6 +223,7 @@ World.GetRealTimeSeconds()
 - `2`를 누르면 촬영 시점에 대상이 플레이어를 바라본 뒤 사진에서 빠지는지 확인한다.
 - `3`을 누르면 촬영 시점에 대상이 플레이어를 바라본 뒤 조건 만족 시 사진이 검게 나오는지 확인한다.
 - `4`를 누르면 `BlackPhoto` 조건을 만족한 사진만 검게 나오는지 확인한다.
-- `5`를 누르면 촬영 결과에서만 skeletal mesh bone rotation이 무작위로 비틀리고 월드 포즈는 즉시 복구되는지 확인한다.
+- `5`를 누르면 월드에서는 원본만 보이고, 촬영 결과에는 원본 대신 별도 Ghost actor가 보이는지 확인한다.
+- `6`을 누르면 촬영 결과에서만 skeletal mesh bone rotation이 무작위로 비틀리고 월드 포즈는 즉시 복구되는지 확인한다.
 - 정답 대상을 맞추면 시간과 `CymbalMonkey` 애니메이션이 멈추고, 다음 루프에서 기존 Anomaly가 원복되는지 확인한다.
 - `Q` 또는 패드 `L2`를 누르고 있는 동안에만 활성 Anomaly 대상 outline이 보이는지 확인한다.

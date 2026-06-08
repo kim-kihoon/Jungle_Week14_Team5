@@ -23,6 +23,10 @@ DebugManager.Scenarios = {
     },
     {
         Key = "5",
+        RuleName = "PhotoGhostReplacement"
+    },
+    {
+        Key = "6",
         RuleName = "PhotoBoneTwist"
     }
 }

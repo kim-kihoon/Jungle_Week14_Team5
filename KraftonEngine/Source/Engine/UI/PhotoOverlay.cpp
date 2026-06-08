@@ -33,6 +33,8 @@ namespace
 	constexpr float DefaultFrameAspectRatio = 1672.0f / 941.0f;
 	constexpr const char* HeldCameraMeshPath = "Content/Data/camera/camera_StaticMesh.uasset";
 	constexpr const char* HeldCameraMeshFileName = "camera_StaticMesh.uasset";
+	constexpr const char* PhotoGhostReplacementTargetTagName = "PhotoGhostReplacementTarget";
+	constexpr const char* PhotoGhostReplacementActorTagName = "PhotoGhostReplacementActor";
 	constexpr const char* PhotoBoneTwistTargetTagName = "PhotoBoneTwistTarget";
 	constexpr float PhotoBoneTwistMaxDegrees = 35.0f;
 	constexpr float PhotoBoneTwistRootMaxDegrees = 8.0f;
@@ -175,6 +177,16 @@ namespace
 	bool IsPhotoBoneTwistTarget(AActor* Actor)
 	{
 		return Actor && Actor->HasTag(FName(PhotoBoneTwistTargetTagName));
+	}
+
+	bool IsPhotoGhostReplacementTarget(AActor* Actor)
+	{
+		return Actor && Actor->HasTag(FName(PhotoGhostReplacementTargetTagName));
+	}
+
+	bool IsPhotoGhostReplacementActor(AActor* Actor)
+	{
+		return Actor && Actor->HasTag(FName(PhotoGhostReplacementActorTagName));
 	}
 
 	bool IsActorVisibilityTracked(AActor* Actor)
@@ -404,6 +416,32 @@ namespace
 		SetComponentVisibilityForCapture(HeldCamera, false);
 	}
 
+	void PreparePhotoGhostReplacementForCapture(UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		for (AActor* Actor : World->GetActors())
+		{
+			if (!Actor)
+			{
+				continue;
+			}
+
+			if (IsPhotoGhostReplacementTarget(Actor) && Actor->IsVisible())
+			{
+				SetActorVisibilityForCapture(Actor, false);
+			}
+
+			if (IsPhotoGhostReplacementActor(Actor))
+			{
+				SetActorVisibilityForCapture(Actor, true);
+			}
+		}
+	}
+
 	void PreparePhotoBoneTwistForCapture(UWorld* World)
 	{
 		if (!World)
@@ -504,7 +542,7 @@ void FPhotoOverlay::PreparePendingCaptureWorldState(UWorld* World)
 	{
 		for (AActor* Actor : CaptureWorld->GetActors())
 		{
-			if (!Actor || !Actor->IsVisible() || !Actor->HasTag(PendingCaptureExcludeActorTag))
+			if (!Actor || !Actor->IsVisible() || !Actor->HasTag(PendingCaptureExcludeActorTag) || IsPhotoGhostReplacementTarget(Actor))
 			{
 				continue;
 			}
@@ -513,6 +551,7 @@ void FPhotoOverlay::PreparePendingCaptureWorldState(UWorld* World)
 		}
 	}
 
+	PreparePhotoGhostReplacementForCapture(CaptureWorld);
 	PreparePhotoBoneTwistForCapture(CaptureWorld);
 	HideHeldCameraForCapture(CaptureWorld);
 	bCaptureWorldStatePrepared = true;
