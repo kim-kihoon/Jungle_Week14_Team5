@@ -4156,6 +4156,11 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         &UMaterial::GetScalarParameterValue,
         "GetVector3ParameterValue",
         &UMaterial::GetVector3ParameterValue,
+        "GetVector4ParameterValue",
+        [](sol::this_state State, UMaterial& Material, const FString& ParamName)
+        {
+            return LuaVector4ToTable(State, Material.GetVector4ParameterValue(ParamName));
+        },
         "IsMaterialInstance",
         &UMaterial::IsMaterialInstance,
         "IsDynamicMaterialInstance",
