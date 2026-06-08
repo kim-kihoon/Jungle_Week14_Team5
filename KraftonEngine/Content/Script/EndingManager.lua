@@ -41,6 +41,9 @@ EndingManager.STAGGER_PITCH_DEGREES = 0.25
 EndingManager.STAGGER_LOC_Z = 0.01
 EndingManager.STAGGER_LOC_XY = 0.006
 
+EndingManager.ENDING_SIREN_KEY = "DistantSiren"
+EndingManager.ENDING_SIREN_VOLUME = 0.7
+
 EndingManager.VictimActor = nil
 EndingManager.SpawnFacingYaw = EndingManager.ENDING_SPAWN_YAW
 EndingManager.SequenceCoroutine = nil
@@ -591,6 +594,16 @@ local function play_wake_up_pistol_audio()
     end)
 end
 
+local function play_ending_siren_audio()
+    if Audio == nil or Audio.Play == nil then
+        return
+    end
+
+    pcall(function()
+        Audio.Play(EndingManager.ENDING_SIREN_KEY, EndingManager.ENDING_SIREN_VOLUME)
+    end)
+end
+
 local function get_wake_up_shot_hit(player)
     if player == nil or player.GetCamera == nil or World == nil or World.LineTraceObjects == nil then
         return nil
@@ -673,6 +686,7 @@ function EndingManager:Enter(player, hit)
         player:SetLocation(spawnLocation)
     end)
     apply_ending_spawn_facing(player)
+    play_ending_siren_audio()
     UIManager:EnterCutsceneMode()
 
     self:SetHorrorLightingEnabled(false)
