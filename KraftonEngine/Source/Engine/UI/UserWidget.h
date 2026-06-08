@@ -83,6 +83,7 @@ public:
 	bool ActivateNavigationSelection();
 	bool ActivateCloseNavigationTarget();
 	void ClearNavigationSelection();
+	void SetGamepadNavigationHighlightEnabled(bool bEnabled);
 	UFUNCTION(Callable, Category="UI")
 	void SetText(const FString& ElementId, const FString& Text);
 	UFUNCTION(Callable, Category="UI")
@@ -180,6 +181,7 @@ private:
 	int32 ZOrder = 0;
 	EUIRenderLayout LayoutMode = EUIRenderLayout::ScaledDesign;
 	int32 NavigationSelectionIndex = -1;
+	bool bGamepadNavigationHighlightEnabled = false;
 	bool bInViewport = false;
 	bool bDocumentLoaded = false;
 	bool bWantsMouse = false;

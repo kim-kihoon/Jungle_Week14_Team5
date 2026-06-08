@@ -1348,10 +1348,22 @@ void UUIManager::ProcessNavigationInput()
 
 	InputSystem& Input = InputSystem::Get();
 	const FInputDeviceSnapshot& Gamepad = Input.GetGamepadSnapshot();
+	const bool bUseGamepadNavigation =
+		Input.GetPrimaryInputDevice() == EInputDeviceClass::Gamepad &&
+		Gamepad.Info.bConnected;
+
+	Widget->SetGamepadNavigationHighlightEnabled(bUseGamepadNavigation);
+	if (!bUseGamepadNavigation)
+	{
+		Widget->ClearNavigationSelection();
+		HeldNavigationX = 0;
+		HeldNavigationY = 0;
+		NextNavigationRepeatTime = 0.0;
+	}
 
 	if (Input.GetKeyDown(VK_RETURN) ||
 		Input.GetKeyDown(VK_SPACE) ||
-		WasGamepadButtonPressed(Gamepad, EGamepadButton::FaceDown))
+		(bUseGamepadNavigation && WasGamepadButtonPressed(Gamepad, EGamepadButton::FaceDown)))
 	{
 		Widget->ActivateNavigationSelection();
 	}
@@ -1364,22 +1376,27 @@ void UUIManager::ProcessNavigationInput()
 		Widget->ActivateCloseNavigationTarget();
 	}
 
+	if (!bUseGamepadNavigation)
+	{
+		return;
+	}
+
 	int32 DirectionX = 0;
 	int32 DirectionY = 0;
-	if (Input.GetKeyDown(VK_LEFT) || Input.GetKeyDown('A') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadLeft))
+	if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadLeft))
 	{
 		DirectionX = -1;
 	}
-	else if (Input.GetKeyDown(VK_RIGHT) || Input.GetKeyDown('D') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadRight))
+	else if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadRight))
 	{
 		DirectionX = 1;
 	}
 
-	if (Input.GetKeyDown(VK_UP) || Input.GetKeyDown('W') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadUp))
+	if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadUp))
 	{
 		DirectionY = -1;
 	}
-	else if (Input.GetKeyDown(VK_DOWN) || Input.GetKeyDown('S') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadDown))
+	else if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadDown))
 	{
 		DirectionY = 1;
 	}

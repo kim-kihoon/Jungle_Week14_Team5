@@ -221,7 +221,6 @@ void UUserWidget::RegisterEventListeners()
 
 	RegisterDeclarativeEventListeners(Document);
 	RefreshNavigationButtons();
-	ApplyNavigationSelection();
 }
 
 void UUserWidget::RegisterDeclarativeEventListeners(Rml::Element* Root)
@@ -441,9 +440,26 @@ void UUserWidget::RefreshNavigationButtons()
 		}
 	}
 
-	if (NavigationSelectionIndex < 0 && !NavigationButtons.empty())
+}
+
+void UUserWidget::SetGamepadNavigationHighlightEnabled(bool bEnabled)
+{
+	if (bGamepadNavigationHighlightEnabled == bEnabled)
 	{
-		NavigationSelectionIndex = 0;
+		return;
+	}
+
+	bGamepadNavigationHighlightEnabled = bEnabled;
+	if (!bGamepadNavigationHighlightEnabled)
+	{
+		for (const FNavigationButton& Button : NavigationButtons)
+		{
+			RestoreNavigationButtonStyle(Button.ElementId);
+		}
+	}
+	else if (NavigationSelectionIndex >= 0)
+	{
+		ApplyNavigationSelection();
 	}
 }
 
@@ -489,7 +505,9 @@ void UUserWidget::ApplyNavigationSelection()
 		RestoreNavigationButtonStyle(Button.ElementId);
 	}
 
-	if (NavigationSelectionIndex < 0 || NavigationSelectionIndex >= static_cast<int32>(NavigationButtons.size()))
+	if (!bGamepadNavigationHighlightEnabled ||
+		NavigationSelectionIndex < 0 ||
+		NavigationSelectionIndex >= static_cast<int32>(NavigationButtons.size()))
 	{
 		return;
 	}
