@@ -5,6 +5,8 @@
 
 #include "Source/Engine/Runtime/GameEngine.generated.h"
 
+class FGameRenderPipeline;
+
 UCLASS()
 class UGameEngine : public UEngine
 {
@@ -19,6 +21,10 @@ public:
 	void OnWindowResized(uint32 Width, uint32 Height) override;
 
 	FViewport* GetStandaloneViewport() const { return StandaloneViewport; }
+	void SetGammaCorrectionEnabled(bool bEnabled);
+	bool IsGammaCorrectionEnabled() const;
+	void SetGamma(float InGamma);
+	float GetGamma() const;
 
 	// 다음 frame Tick 끝에서 active world 를 destroy 하고 InScenePath 의 scene 으로 교체.
 	// 호출은 Lua / GameMode 어디서든 안전 — 실제 destroy/load 는 World->Tick 바깥에서 일어나
@@ -38,6 +44,7 @@ private:
 
 private:
 	FViewport* StandaloneViewport = nullptr;
+	FGameRenderPipeline* GameRenderPipeline = nullptr;
 
 	bool bPendingSceneTransition = false;
 	FString PendingScenePath;

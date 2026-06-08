@@ -5,6 +5,7 @@ local DoorManager = require("DoorManager")
 local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
 local ToolManager = require("ToolManager")
+local SettingManager = require("SettingManager")
 local GameOverMonkey = require("GameOverMonkey")
 local StageManager = require("StageManager")
 local EndingManager = require("EndingManager")
@@ -815,6 +816,7 @@ function BeginPlay()
     SoundManager:EnterTitleState()
     PlayTitleMusicNow()
     ToolManager:Reset()
+    SettingManager:ApplyAll(obj)
     UIManager:ResetHospital()
     if HospitalPlayer ~= nil then
         HospitalPlayer.title_mode = true
@@ -1043,6 +1045,36 @@ function ShowSetting()
     end
     PlayTitleMonkeyStrikeAnimation()
     UIManager:ShowTitleSetting()
+end
+
+function CycleSettingGamma()
+    SettingManager:CycleGamma()
+    UIManager:RefreshTitleSetting()
+end
+
+function CycleSettingMasterVolume()
+    SettingManager:CycleMasterVolume()
+    UIManager:RefreshTitleSetting()
+end
+
+function CycleSettingMouseSensitivity()
+    SettingManager:CycleMouseSensitivity(obj)
+    UIManager:RefreshTitleSetting()
+end
+
+function ToggleSettingInvertY()
+    SettingManager:ToggleInvertY(obj)
+    UIManager:RefreshTitleSetting()
+end
+
+function ToggleSettingHeadBob()
+    SettingManager:ToggleHeadBob()
+    UIManager:RefreshTitleSetting()
+end
+
+function ToggleSettingControlPrompt()
+    SettingManager:ToggleControlPrompt()
+    UIManager:RefreshTitleSetting()
 end
 
 function ShowRanking()

@@ -570,7 +570,7 @@ void ULuaAnimInstance::InstallBindings()
 		[]()
 		{
 			FAudioManager::Get().PlayAudio("PistolFire", 1.0f);
-			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.25f, 1.5f);
+			FAudioManager::Get().PlayAudioFadeOut("Tinnitus", 0.6f, 1.5f);
 		});
 	Anim.set_function("play_footstep_audio",
 		[this]()
