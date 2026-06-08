@@ -3,7 +3,7 @@ local GameOverMonkey = {}
 local COMPONENT_NAME = "GameOverMonkey"
 local ANIMATION_PATH = "Content/Data/CymbalMonkey/CymbalMonkey_Joints_Warning.uasset"
 local ANIMATION_LOOPING = false
-local ANIMATION_PLAY_RATE = 1.0
+local ANIMATION_PLAY_RATE = 0.6
 
 GameOverMonkey.PlayerActor = nil
 GameOverMonkey.Mesh = nil

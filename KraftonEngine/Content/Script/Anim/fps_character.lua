@@ -489,6 +489,13 @@ local function consume_pistol_bullet()
     return GameManager:ConsumePlayerBullet()
 end
 
+local function report_pistol_shot_failure()
+    if GameManager == nil or GameManager.ReportPlayerShotFailure == nil then
+        return false
+    end
+    return GameManager:ReportPlayerShotFailure("PistolShotMiss")
+end
+
 local function can_request_photo_capture()
     if Anim == nil or Anim.is_photo_capture_available == nil then
         return true
@@ -695,6 +702,7 @@ function update(self, dt)
                 if handledHit then
                     start_pistol_fire_action(self)
                 else
+                    report_pistol_shot_failure()
                     play_party_blower_audio()
                     spawn_projectile_from_muzzle()
                 end

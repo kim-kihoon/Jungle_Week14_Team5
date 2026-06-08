@@ -5721,6 +5721,19 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         {
             return Actor.GetComponentByClass<USkeletalMeshComponent>();
         },
+        "GetSkeletalMeshComponentByName",
+        [](AActor& Actor, const FString& ComponentName) -> USkeletalMeshComponent*
+        {
+            for (UActorComponent* Component : Actor.GetComponents())
+            {
+                USkeletalMeshComponent* SkeletalMeshComponent = Cast<USkeletalMeshComponent>(Component);
+                if (SkeletalMeshComponent && SkeletalMeshComponent->GetFName().ToString() == ComponentName)
+                {
+                    return SkeletalMeshComponent;
+                }
+            }
+            return nullptr;
+        },
         "GetAudioComponent",
         [](AActor& Actor)
         {
