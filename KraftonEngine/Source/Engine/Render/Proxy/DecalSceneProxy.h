@@ -15,6 +15,7 @@ public:
 	FDecalSceneProxy(UDecalComponent* InComponent);
 	~FDecalSceneProxy() override;
 
+	void UpdateTransform() override;
 	void UpdateMaterial() override;
 	void UpdateMesh() override;
 	void AddReferencedObjects(FReferenceCollector& Collector) override;
@@ -28,6 +29,7 @@ public:
 
 private:
 	UDecalComponent* GetDecalComponent() const;
+	void UpdateDecalConstants();
 	void RebuildReceiverProxies();
 
 	FConstantBuffer* DecalCB;

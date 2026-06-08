@@ -19,6 +19,20 @@ namespace
 		FMatrix WorldToDecal;
 		FVector4 Color;
 	};
+
+	FShader* ResolveDecalProjectionShader(const UMaterial* Material)
+	{
+		if (Material && Material->GetDomain() == EMaterialDomain::Decal && Material->GetShader())
+		{
+			const FString& ShaderPath = Material->GetShaderPathForSerialize();
+			if (ShaderPath == EShaderPath::Decal || ShaderPath.find("_Decal.hlsl") != FString::npos)
+			{
+				return Material->GetShader();
+			}
+		}
+
+		return FShaderManager::Get().GetOrCreate(EShaderPath::Decal);
+	}
 }
 
 FDecalSceneProxy::FDecalSceneProxy(UDecalComponent* InComponent)
@@ -60,6 +74,26 @@ void FDecalSceneProxy::AddReferencedObjects(FReferenceCollector& Collector)
 	Collector.AddReferencedObject(DecalProxyMaterial, "DecalProxyMaterial");
 }
 
+void FDecalSceneProxy::UpdateTransform()
+{
+	FPrimitiveSceneProxy::UpdateTransform();
+	UpdateDecalConstants();
+}
+
+void FDecalSceneProxy::UpdateDecalConstants()
+{
+	UDecalComponent* DecalComp = GetDecalComponent();
+	if (!IsValid(DecalComp) || !DecalProxyMaterial)
+	{
+		return;
+	}
+
+	// 데칼 박스 클리핑은 transform 기반 상수에 의존하므로 이동/회전/스케일 변경 시 즉시 갱신한다.
+	auto& CB = DecalProxyMaterial->BindPerShaderCB<FDecalConstants>(DecalCB, ECBSlot::PerShader0);
+	CB.WorldToDecal = DecalComp->GetWorldMatrix().GetInverse();
+	CB.Color = DecalComp->GetColor();
+}
+
 void FDecalSceneProxy::RemoveReceiverProxy(FPrimitiveSceneProxy* ReceiverProxy)
 {
 	if (!ReceiverProxy)
@@ -84,13 +118,9 @@ void FDecalSceneProxy::UpdateMaterial()
 
 	DecalMaterial = DecalComp->GetMaterial();
 
-	FShader* Shader = (DecalMaterial && DecalMaterial->GetShader())
-		? DecalMaterial->GetShader()
-		: FShaderManager::Get().GetOrCreate(EShaderPath::Decal);
+	FShader* Shader = ResolveDecalProjectionShader(DecalMaterial);
 
-	// UDecalComponent is the routing authority. Source graph materials can carry stale
-	// Surface render state when their graph target/domain was edited independently, but
-	// decal projection still must execute in the Decal/AdditiveDecal passes.
+	// 데칼 투영은 receiver 메시를 다시 그리므로 박스 discard가 있는 데칼 셰이더만 사용해야 한다.
 	const EBlendMode DecalBlend = DecalMaterial ? DecalMaterial->GetBlendMode() : EBlendMode::Transparent;
 	const FMaterialRenderState DecalState = ResolveMaterialRenderState(EMaterialDomain::Decal, DecalBlend);
 	ERenderPass Pass = DecalState.Pass;
@@ -125,9 +155,7 @@ void FDecalSceneProxy::UpdateMaterial()
 	}
 
 	// Per-shader CB (WorldToDecal, Color) 바인딩
-	auto& CB = DecalProxyMaterial->BindPerShaderCB<FDecalConstants>(DecalCB, ECBSlot::PerShader0);
-	CB.WorldToDecal = DecalComp->GetWorldMatrix().GetInverse();
-	CB.Color = DecalComp->GetColor();
+	UpdateDecalConstants();
 
 	// SectionDraws — 래퍼 Material 사용
 	SectionDraws.clear();

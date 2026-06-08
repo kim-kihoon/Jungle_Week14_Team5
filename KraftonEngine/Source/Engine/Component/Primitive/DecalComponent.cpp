@@ -1,4 +1,4 @@
-#include "DecalComponent.h"
+﻿#include "DecalComponent.h"
 #include "Component/Primitive/BillboardComponent.h"
 #include "Materials/MaterialManager.h"
 #include "Collision/Math/OBB.h"
@@ -121,6 +121,7 @@ void UDecalComponent::OnTransformDirty()
 {
 	UPrimitiveComponent::OnTransformDirty();
 	UpdateReceivers();
+	MarkProxyDirty(EDirtyFlag::Material);
 }
 
 bool UDecalComponent::ShouldReceivePrimitive(UPrimitiveComponent* PrimitiveComp) const
