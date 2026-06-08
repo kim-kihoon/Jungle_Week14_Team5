@@ -1,5 +1,6 @@
 local ToolManager = require("ToolManager")
 local LeaderboardManager = require("LeaderboardManager")
+local SettingManager = require("SettingManager")
 
 local UIManager = {}
 
@@ -395,6 +396,12 @@ function UIManager:UpdateControlPrompt()
         return
     end
 
+    if not SettingManager:IsControlPromptEnabled() then
+        self:SetControlPromptVisible(false)
+        set_widget_display(widget, self.ControlPromptAmmoElementId, false)
+        return
+    end
+
     local firePrompt = self:FormatActionPrompt("Fire", "LMB")
     local toolPrompt = self:FormatActionPrompt("Jump", "Space")
     local promptText = ToolManager:IsCamera()
@@ -414,7 +421,7 @@ function UIManager:UpdateAmmoPrompt(gameManager)
         return
     end
 
-    if not ToolManager:IsPistol() then
+    if not SettingManager:IsControlPromptEnabled() or not ToolManager:IsPistol() then
         set_widget_display(widget, self.ControlPromptAmmoElementId, false)
         return
     end
@@ -571,7 +578,14 @@ function UIManager:ShowTitlePopup(documentPath)
 end
 
 function UIManager:ShowTitleSetting()
-    return self:ShowTitlePopup(self.TitleSettingDocumentPath)
+    local bShown = self:ShowTitlePopup(self.TitleSettingDocumentPath)
+    SettingManager:Apply()
+    self:RefreshTitleSetting()
+    return bShown
+end
+
+function UIManager:RefreshTitleSetting()
+    SettingManager:RefreshWidget(self.TitlePopupWidget)
 end
 
 function UIManager:ShowTitleCredit()

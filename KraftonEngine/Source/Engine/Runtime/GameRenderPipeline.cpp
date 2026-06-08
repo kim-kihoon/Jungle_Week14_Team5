@@ -35,6 +35,7 @@ namespace
 FGameRenderPipeline::FGameRenderPipeline(UGameEngine* InGame, FRenderer& InRenderer)
 	: Game(InGame)
 {
+	RuntimeRenderOptions.ViewMode = EViewMode::Lit_Lambert;
 }
 
 FGameRenderPipeline::~FGameRenderPipeline()
@@ -62,9 +63,7 @@ void FGameRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 
 	Frame.WorldType = World->GetWorldType();
 
-	FViewportRenderOptions Opts;
-	Opts.ViewMode = EViewMode::Lit_Lambert;
-	Frame.SetRenderOptions(Opts);
+	Frame.SetRenderOptions(RuntimeRenderOptions);
 
 	FScene* Scene = &World->GetScene();
 
@@ -81,6 +80,26 @@ void FGameRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 	Renderer.BeginFrame();
 	Renderer.BlitToBackBuffer(VP->GetSRV());
 	Renderer.EndFrame();
+}
+
+void FGameRenderPipeline::SetGammaCorrectionEnabled(bool bEnabled)
+{
+	RuntimeRenderOptions.ShowFlags.bGammaCorrection = bEnabled;
+}
+
+bool FGameRenderPipeline::IsGammaCorrectionEnabled() const
+{
+	return RuntimeRenderOptions.ShowFlags.bGammaCorrection;
+}
+
+void FGameRenderPipeline::SetGamma(float InGamma)
+{
+	RuntimeRenderOptions.Gamma = FMath::Clamp(InGamma, 1.0f, 3.0f);
+}
+
+float FGameRenderPipeline::GetGamma() const
+{
+	return RuntimeRenderOptions.Gamma;
 }
 
 void FGameRenderPipeline::PrepareViewport(FViewport* VP, ID3D11DeviceContext* Ctx)

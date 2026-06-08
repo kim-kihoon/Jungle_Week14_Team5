@@ -515,6 +515,16 @@ void ACharacter::Jump()
 	}
 }
 
+void ACharacter::SetMouseSensitivity(float InSensitivity)
+{
+	MouseSensitivity = std::clamp(InSensitivity, 0.0f, 10.0f);
+}
+
+void ACharacter::SetInvertMouseY(bool bInvert)
+{
+	bInvertMouseY = bInvert;
+}
+
 void ACharacter::SavePreRagdollCharacterState()
 {
 	if (bSavedPreRagdollCharacterState)
@@ -986,14 +996,14 @@ void ACharacter::SetupInputComponent()
 
 	if (bAutoInputMouseLook)
 	{
-		InputComponent->AddMouseAxisMapping("Turn", EInputAxisSourceType::MouseX, MouseSensitivity);
-		InputComponent->AddMouseAxisMapping("LookUp", EInputAxisSourceType::MouseY, MouseSensitivity);
+		InputComponent->AddMouseAxisMapping("Turn", EInputAxisSourceType::MouseX, 1.0f);
+		InputComponent->AddMouseAxisMapping("LookUp", EInputAxisSourceType::MouseY, 1.0f);
 
 		InputComponent->BindAxis("Turn", [this](float Value)
 		{
 			if (Value == 0.0f) return;
 			FRotator Rot = GetControlRotation();
-			Rot.Yaw += Value;
+			Rot.Yaw += Value * MouseSensitivity;
 			SetControlRotation(Rot);
 		});
 
@@ -1001,7 +1011,8 @@ void ACharacter::SetupInputComponent()
 		{
 			if (Value == 0.0f) return;
 			FRotator Rot = GetControlRotation();
-			Rot.Pitch += Value;
+			const float PitchScale = bInvertMouseY ? -MouseSensitivity : MouseSensitivity;
+			Rot.Pitch += Value * PitchScale;
 			Rot.Pitch = std::clamp(Rot.Pitch, MinCameraPitch, MaxCameraPitch);
 			SetControlRotation(Rot);
 		});
