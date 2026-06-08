@@ -33,14 +33,15 @@ EndingManager.MONKEY_ENTRY_ANIMATION_PATH =
     "Content/Data/CymbalMonkey/CymbalMonkey_Joints_ArmOnlyCymbalEntry.uasset"
 EndingManager.MONKEY_STRIKE_ANIMATION_PATH =
     "Content/Data/CymbalMonkey/CymbalMonkey_Joints_ArmOnlyCymbalStrike.uasset"
-EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS = 3.0
+EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS = 5.0
 EndingManager.MONKEY_STRIKE_PLAY_RATE = 1.0
+EndingManager.MONKEY_AUDIO_VOLUME = 10.0
 
 -- 엔딩 진입 후 카메라 연출 타이밍 (초)
 EndingManager.STAGGER_DELAY = 2.0
 EndingManager.STAGGER_SHAKE_DURATION = 10.0
 EndingManager.TURN_START_TIME = EndingManager.STAGGER_DELAY + EndingManager.STAGGER_SHAKE_DURATION
-EndingManager.FACING_TURN_BLEND = 1.2
+EndingManager.FACING_TURN_BLEND = 2.0
 EndingManager.FACING_TURN_EASE_POWER = 5.0
 
 -- Lua 연속 휘청: 빠름 <-> 느림 교차 (멈춤 없음, Roll 위주)
@@ -579,6 +580,24 @@ function EndingManager:DespawnMonkey()
     self.MonkeyActor = nil
 end
 
+local function configure_monkey_audio(actor)
+    if not is_valid_actor(actor) or actor.GetAudioComponent == nil then
+        return false
+    end
+
+    local ok, audio = pcall(function()
+        return actor:GetAudioComponent()
+    end)
+    if not ok or audio == nil or audio.SetVolume == nil then
+        return false
+    end
+
+    ok = pcall(function()
+        audio:SetVolume(EndingManager.MONKEY_AUDIO_VOLUME)
+    end)
+    return ok == true
+end
+
 local function play_monkey_animation(mesh, animationPath, looping, playRate)
     if mesh == nil or mesh.PlayAnimationByPath == nil then
         return false
@@ -632,6 +651,7 @@ end
 
 start_ending_monkey_cymbal_sequence = function()
     stop_ending_monkey_sequence_coroutine()
+    configure_monkey_audio(EndingManager.MonkeyActor)
 
     if StartCoroutine == nil or Wait == nil then
         print("[EndingManager] Ending monkey sequence skipped: coroutine API unavailable")
@@ -709,13 +729,15 @@ function EndingManager:SpawnMonkey()
     end
 
     self.MonkeyActor = actor
+    configure_monkey_audio(actor)
 
     print(string.format(
-        "[EndingManager] Monkey spawned at (%.2f, %.2f, %.2f) yaw=%.1f",
+        "[EndingManager] Monkey spawned at (%.2f, %.2f, %.2f) yaw=%.1f volume=%.1f",
         self.MONKEY_LOCATION.X,
         self.MONKEY_LOCATION.Y,
         self.MONKEY_LOCATION.Z,
-        self.MONKEY_ROTATION.Z or 0.0
+        self.MONKEY_ROTATION.Z or 0.0,
+        self.MONKEY_AUDIO_VOLUME
     ))
     return true
 end
