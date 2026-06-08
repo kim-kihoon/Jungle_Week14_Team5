@@ -78,6 +78,7 @@
 #include "GameFramework/World.h"
 #include "UI/CrosshairOverlay.h"
 #include "GameFramework/Actor/ParticleSystemActor.h"
+#include "GameFramework/Actor/StaticMeshActor.h"
 #include "GameFramework/Camera/CameraModifier.h"
 #include "Render/Scene/FScene.h"
 #include "GameFramework/Camera/CameraShakeBase.h"
@@ -6168,6 +6169,31 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
                 Actor->SetActorRotation(Rotation.value_or(FVector(0, 0, 0)));
                 Actor->SetActorScale(Scale.value_or(FVector(1, 1, 1)));
             }
+            return Actor;
+        }
+    );
+    World.set_function(
+        "SpawnStaticMeshActor",
+        [](const FString& MeshPath, sol::optional<FVector> Location, sol::optional<FVector> Rotation, sol::optional<FVector> Scale) -> AActor*
+        {
+            if (!GEngine || MeshPath.empty() || MeshPath == "None") return nullptr;
+            UWorld* W = GEngine->GetWorld();
+            if (!W) return nullptr;
+
+            AStaticMeshActor* Actor = W->SpawnActor<AStaticMeshActor>();
+            if (!IsValid(Actor)) return nullptr;
+
+            Actor->InitDefaultComponents(MeshPath);
+            UStaticMeshComponent* MeshComponent = Actor->GetStaticMeshComponent();
+            if (!IsValid(MeshComponent) || !IsValid(MeshComponent->GetStaticMesh()))
+            {
+                W->DestroyActor(Actor);
+                return nullptr;
+            }
+
+            Actor->SetActorLocation(Location.value_or(FVector(0, 0, 0)));
+            Actor->SetActorRotation(Rotation.value_or(FVector(0, 0, 0)));
+            Actor->SetActorScale(Scale.value_or(FVector(1, 1, 1)));
             return Actor;
         }
     );

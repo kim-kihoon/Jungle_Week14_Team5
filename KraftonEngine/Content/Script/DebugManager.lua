@@ -11,31 +11,23 @@ DebugManager.Scenarios = {
     },
     {
         Key = "2",
-        RuleName = "NoShadow"
-    },
-    {
-        Key = "3",
-        RuleName = "OffscreenAnimation"
-    },
-    {
-        Key = "4",
-        RuleName = "OffscreenFacePlayer"
-    },
-    {
-        Key = "5",
-        RuleName = "BlackPhoto"
-    },
-    {
-        Key = "6",
-        RuleName = "NearSilentCymbalMonkey"
-    },
-    {
-        Key = "7",
         RuleName = "PhotoLookAtInvisible"
     },
     {
-        Key = "8",
+        Key = "3",
         RuleName = "PhotoLookAtBlackPhoto"
+    },
+    {
+        Key = "4",
+        RuleName = "BlackPhoto"
+    },
+    {
+        Key = "5",
+        RuleName = "PhotoGhostReplacement"
+    },
+    {
+        Key = "6",
+        RuleName = "PhotoBoneTwist"
     }
 }
 
