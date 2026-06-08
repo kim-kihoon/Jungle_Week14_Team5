@@ -25,6 +25,17 @@ EndingManager.VICTIM_ANIMATION_PATH =
 EndingManager.VICTIM_ANIMATION_LOOPING = false
 EndingManager.VICTIM_ANIMATION_PLAY_RATE = 1.0
 
+EndingManager.MONKEY_ACTOR_TEMPLATE = "Content/Blueprint/TitleMonkey.ActorTemplate"
+EndingManager.MONKEY_LOCATION = Vec3(604.0, 0.0, 0.0)
+EndingManager.MONKEY_ROTATION = Vec3(0.0, 0.0, 270.0)
+EndingManager.MONKEY_SCALE = Vec3(0.25, 0.25, 0.25)
+EndingManager.MONKEY_ENTRY_ANIMATION_PATH =
+    "Content/Data/CymbalMonkey/CymbalMonkey_Joints_ArmOnlyCymbalEntry.uasset"
+EndingManager.MONKEY_STRIKE_ANIMATION_PATH =
+    "Content/Data/CymbalMonkey/CymbalMonkey_Joints_ArmOnlyCymbalStrike.uasset"
+EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS = 3.0
+EndingManager.MONKEY_STRIKE_PLAY_RATE = 0.5
+
 -- 엔딩 진입 후 카메라 연출 타이밍 (초)
 EndingManager.STAGGER_DELAY = 2.0
 EndingManager.STAGGER_SHAKE_DURATION = 10.0
@@ -45,8 +56,10 @@ EndingManager.ENDING_SIREN_KEY = "DistantSiren"
 EndingManager.ENDING_SIREN_VOLUME = 0.7
 
 EndingManager.VictimActor = nil
+EndingManager.MonkeyActor = nil
 EndingManager.SpawnFacingYaw = EndingManager.ENDING_SPAWN_YAW
 EndingManager.SequenceCoroutine = nil
+EndingManager.MonkeySequenceCoroutine = nil
 EndingManager.bStaggerShakeActive = false
 EndingManager.StaggerElapsed = 0.0
 EndingManager.StaggerPhase = 0.0
@@ -149,12 +162,12 @@ end
 
 local function set_control_yaw(player, yaw, pitch)
     local pawn = get_pawn_from_player(player)
-    if pawn == nil or pawn.SetControlRotation == nil then
+    if pawn == nil and player == nil then
         return
     end
 
     local roll = 0.0
-    if pawn.GetControlRotation ~= nil then
+    if pawn ~= nil and pawn.GetControlRotation ~= nil then
         local ok, rotation = pcall(function()
             return pawn:GetControlRotation()
         end)
@@ -163,9 +176,23 @@ local function set_control_yaw(player, yaw, pitch)
         end
     end
 
-    pcall(function()
-        pawn:SetControlRotation(Vec3(roll, pitch or EndingManager.ENDING_SPAWN_PITCH, yaw))
-    end)
+    local targetRotation = Vec3(roll, pitch or EndingManager.ENDING_SPAWN_PITCH, yaw)
+
+    if pawn ~= nil and pawn.SetControlRotation ~= nil then
+        pcall(function()
+            pawn:SetControlRotation(targetRotation)
+        end)
+    end
+
+    if player ~= nil and player.SetRotation ~= nil then
+        pcall(function()
+            player:SetRotation(targetRotation)
+        end)
+    elseif pawn ~= nil and pawn.SetRotation ~= nil then
+        pcall(function()
+            pawn:SetRotation(targetRotation)
+        end)
+    end
 end
 
 local function stop_camera_shakes()
@@ -216,6 +243,15 @@ local function stop_ending_sequence_coroutine()
     end
     EndingManager.SequenceCoroutine = nil
 end
+
+local function stop_ending_monkey_sequence_coroutine()
+    if EndingManager.MonkeySequenceCoroutine ~= nil and StopCoroutine ~= nil then
+        StopCoroutine(EndingManager.MonkeySequenceCoroutine)
+    end
+    EndingManager.MonkeySequenceCoroutine = nil
+end
+
+local start_ending_monkey_cymbal_sequence
 
 local function blend_control_yaw(player, fromYaw, toYaw, duration)
     local steps = math.max(1, math.floor((duration or 0.0) * 60.0))
@@ -287,6 +323,16 @@ local function start_ending_sequence_coroutine(player)
             targetYaw,
             EndingManager.FACING_TURN_BLEND
         ))
+        if StartCoroutine ~= nil and Wait ~= nil then
+            StartCoroutine(function()
+                Wait(0)
+                pcall(function()
+                    if start_ending_monkey_cymbal_sequence ~= nil then
+                        start_ending_monkey_cymbal_sequence()
+                    end
+                end)
+            end)
+        end
         blend_control_yaw(player, startYaw, targetYaw, EndingManager.FACING_TURN_BLEND)
 
         stop_camera_shakes()
@@ -518,6 +564,153 @@ function EndingManager:DespawnVictim()
     self.VictimActor = nil
 end
 
+function EndingManager:DespawnMonkey()
+    stop_ending_monkey_sequence_coroutine()
+    destroy_ending_victim_actor(self.MonkeyActor)
+    self.MonkeyActor = nil
+end
+
+local function play_monkey_animation(mesh, animationPath, looping, playRate)
+    if mesh == nil or mesh.PlayAnimationByPath == nil then
+        return false
+    end
+
+    local playOk, playResult = pcall(function()
+        return mesh:PlayAnimationByPath(animationPath, looping)
+    end)
+    if not playOk or playResult == false then
+        return false
+    end
+
+    if mesh.SetPlayRate ~= nil then
+        pcall(function()
+            mesh:SetPlayRate(playRate or 1.0)
+        end)
+    end
+
+    return true
+end
+
+local function set_monkey_entry_play_rate_for_duration(mesh, duration)
+    if mesh == nil then
+        return 0.1
+    end
+
+    local length = 0.0
+    if mesh.GetCurrentAnimationLength ~= nil then
+        local ok, value = pcall(function()
+            return mesh:GetCurrentAnimationLength()
+        end)
+        if ok and value ~= nil then
+            length = tonumber(value) or 0.0
+        end
+    end
+
+    local safeDuration = math.max(tonumber(duration) or 0.0, 0.001)
+    local playRate = 0.1
+    if length > 0.0 then
+        playRate = length / safeDuration
+    end
+
+    if mesh.SetPlayRate ~= nil then
+        pcall(function()
+            mesh:SetPlayRate(playRate)
+        end)
+    end
+
+    return playRate
+end
+
+start_ending_monkey_cymbal_sequence = function()
+    stop_ending_monkey_sequence_coroutine()
+
+    if StartCoroutine == nil or Wait == nil then
+        print("[EndingManager] Ending monkey sequence skipped: coroutine API unavailable")
+        return
+    end
+
+    EndingManager.MonkeySequenceCoroutine = StartCoroutine(function()
+        local mesh = get_skeletal_mesh_from_actor(EndingManager.MonkeyActor)
+        if mesh == nil then
+            print("[EndingManager] Ending monkey sequence skipped: skeletal mesh unavailable")
+            return
+        end
+
+        if not play_monkey_animation(
+            mesh,
+            EndingManager.MONKEY_ENTRY_ANIMATION_PATH,
+            false,
+            1.0
+        ) then
+            print("[EndingManager] Ending monkey entry animation failed")
+            return
+        end
+
+        local entryPlayRate = set_monkey_entry_play_rate_for_duration(
+            mesh,
+            EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS
+        )
+        print(string.format(
+            "[EndingManager] Ending monkey entry started (duration=%.1fs playRate=%.3f)",
+            EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS,
+            entryPlayRate
+        ))
+
+        Wait(EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS)
+        if not EndingManager:IsActive() then
+            return
+        end
+
+        if not play_monkey_animation(
+            mesh,
+            EndingManager.MONKEY_STRIKE_ANIMATION_PATH,
+            false,
+            EndingManager.MONKEY_STRIKE_PLAY_RATE
+        ) then
+            print("[EndingManager] Ending monkey strike animation failed")
+            return
+        end
+
+        print(string.format(
+            "[EndingManager] Ending monkey strike started (playRate=%.2f)",
+            EndingManager.MONKEY_STRIKE_PLAY_RATE
+        ))
+    end)
+end
+
+function EndingManager:SpawnMonkey()
+    self:DespawnMonkey()
+
+    if World == nil or World.SpawnActorTemplate == nil then
+        print("[EndingManager] SpawnMonkey failed: World.SpawnActorTemplate unavailable")
+        return false
+    end
+
+    local ok, actor = pcall(function()
+        return World.SpawnActorTemplate(
+            self.MONKEY_ACTOR_TEMPLATE,
+            self.MONKEY_LOCATION,
+            self.MONKEY_ROTATION,
+            self.MONKEY_SCALE
+        )
+    end)
+    if not ok or not is_valid_actor(actor) then
+        print("[EndingManager] SpawnMonkey failed: actor template spawn error")
+        return false
+    end
+
+    self.MonkeyActor = actor
+
+    print(string.format(
+        "[EndingManager] Monkey spawned at (%.2f, %.2f, %.2f) yaw=%.1f",
+        self.MONKEY_LOCATION.X,
+        self.MONKEY_LOCATION.Y,
+        self.MONKEY_LOCATION.Z,
+        self.MONKEY_ROTATION.Z or 0.0
+    ))
+    return true
+end
+
 function EndingManager:SpawnVictim()
     self:DespawnVictim()
 
@@ -578,6 +771,7 @@ function EndingManager:Reset()
     reset_stagger_shake_state()
     self.bActive = false
     self:DespawnVictim()
+    self:DespawnMonkey()
     UIManager:ExitCutsceneMode()
     self:SetEndingLightingEnabled(false)
     self:SetHorrorLightingEnabled(true)
@@ -692,6 +886,7 @@ function EndingManager:Enter(player, hit)
     self:SetHorrorLightingEnabled(false)
     self:SetEndingLightingEnabled(true)
     self:SpawnVictim()
+    self:SpawnMonkey()
 
     if GameManager._SetState ~= nil then
         GameManager:_SetState(GameManager.State.Ending, "FinalAnomalyShot")
