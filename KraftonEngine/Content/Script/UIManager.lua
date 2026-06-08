@@ -143,12 +143,10 @@ end
 local function format_leaderboard_row(entry, fallbackRank)
     local rank = math.floor(tonumber(entry.Rank) or fallbackRank or 0)
     local timeText = format_leaderboard_seconds(entry.TotalTimeSeconds)
-    local score = math.floor(tonumber(entry.Score) or 0)
-    local clearReason = tostring(entry.ClearReason or "")
+    local playerName = tostring(entry.PlayerName or "Player")
     return pad_right(string.format("#%02d", rank), 7)
         .. pad_right(timeText, 11)
-        .. pad_right(tostring(score), 8)
-        .. clearReason
+        .. playerName
 end
 
 function UIManager:GetActionMappingDisplayName(name, fallback)

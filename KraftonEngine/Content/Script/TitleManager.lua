@@ -41,12 +41,10 @@ end
 local function format_leaderboard_row(entry, fallback_rank)
     local rank = math.floor(tonumber(entry.Rank) or fallback_rank or 0)
     local time_text = format_leaderboard_seconds(entry.TotalTimeSeconds)
-    local score = math.floor(tonumber(entry.Score) or 0)
-    local clear_reason = tostring(entry.ClearReason or "")
+    local player_name = tostring(entry.PlayerName or "Player")
     return pad_right(string.format("#%02d", rank), 7)
         .. pad_right(time_text, 11)
-        .. pad_right(tostring(score), 8)
-        .. clear_reason
+        .. player_name
 end
 
 local function add_widget_to_viewport(widget, z_order)
