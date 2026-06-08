@@ -17,6 +17,11 @@ SoundManager.PartyBlowerSoundKey = "PartyBlower"
 SoundManager.PartyBlowerSoundVolume = 0.25
 SoundManager.EmptyGunShotSoundKey = "EmptyGunShot"
 SoundManager.EmptyGunShotSoundVolume = 0.8
+SoundManager.TitleMusicKey = "HospitalTitleMusic"
+SoundManager.TitleMusicPath = "Music/A1 - It's just a burning memory.mp3"
+SoundManager.TitleMusicVolume = 1.0
+SoundManager.bTitleMusicLoaded = false
+SoundManager.bTitleMusicPlaying = false
 SoundManager.PendingDoorCloseSounds = {}
 SoundManager.TitleMutedAudioComponents = {}
 SoundManager.bTitleWorldAudioMuted = false
@@ -305,7 +310,54 @@ function SoundManager:Tick(dt)
     self:TickGameplaySounds(dt)
 end
 
+function SoundManager:LoadTitleMusic()
+    if self.bTitleMusicLoaded then
+        return true
+    end
+
+    if Audio == nil or Audio.Load == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return Audio.Load(self.TitleMusicKey, self.TitleMusicPath, true)
+    end)
+    self.bTitleMusicLoaded = ok and result ~= false
+    return self.bTitleMusicLoaded
+end
+
+function SoundManager:PlayTitleMusic()
+    if self.bTitleMusicPlaying then
+        return true
+    end
+
+    if Audio == nil or Audio.PlayBGM == nil then
+        return false
+    end
+
+    if not self:LoadTitleMusic() then
+        return false
+    end
+
+    local ok = pcall(function()
+        Audio.PlayBGM(self.TitleMusicKey, self.TitleMusicVolume)
+    end)
+    self.bTitleMusicPlaying = ok == true
+    return self.bTitleMusicPlaying
+end
+
+function SoundManager:StopTitleMusic()
+    if Audio ~= nil and Audio.StopBGM ~= nil then
+        pcall(function()
+            Audio.StopBGM()
+        end)
+    end
+
+    self.bTitleMusicPlaying = false
+end
+
 function SoundManager:ResetTitleSounds()
+    self:StopTitleMusic()
     self:RestoreTitleWorldAudio()
 end
 
@@ -330,15 +382,18 @@ end
 function SoundManager:EnterTitleState()
     self.CurrentState = self.State.Title
     self:ResetGameplaySounds()
-    return self:MuteTitleWorldAudio()
+    self:MuteTitleWorldAudio()
+    return self:PlayTitleMusic()
 end
 
 function SoundManager:ExitTitleState()
+    self:StopTitleMusic()
     self:RestoreTitleWorldAudio()
 end
 
 function SoundManager:EnterPlayingState()
     self.CurrentState = self.State.Playing
+    self:StopTitleMusic()
     self:RestoreTitleWorldAudio()
 end
 

@@ -540,6 +540,7 @@ end
 local function EnterTitleScreen()
     UIManager:ShowTitle()
     CaptureTitleCamera()
+    SoundManager:PlayTitleMusic()
     PlayTitleMonkeyReadyAnimation()
 end
 
@@ -652,6 +653,7 @@ function StartGame()
     end
 
     bTitleTransitioning = true
+    SoundManager:StopTitleMusic()
     UIManager:CloseTitlePopup()
     PlayTitleMonkeyStrikeAnimation()
     StartTitleTransitionCoroutine()
