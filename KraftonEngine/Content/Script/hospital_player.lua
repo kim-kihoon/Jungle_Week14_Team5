@@ -683,6 +683,7 @@ function RestartGame()
     bCanWarp = true
     bTitleMode = false
     DoorManager:Reset()
+    DoorManager:ClearToyProjectiles()
     SoundManager:EnterPlayingState()
     ToolManager:Reset()
     UIManager:ResetHospital()
