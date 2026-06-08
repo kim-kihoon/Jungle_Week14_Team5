@@ -40,7 +40,8 @@ EndingManager.MONKEY_STRIKE_PLAY_RATE = 1.0
 EndingManager.STAGGER_DELAY = 2.0
 EndingManager.STAGGER_SHAKE_DURATION = 10.0
 EndingManager.TURN_START_TIME = EndingManager.STAGGER_DELAY + EndingManager.STAGGER_SHAKE_DURATION
-EndingManager.FACING_TURN_BLEND = 2.0
+EndingManager.FACING_TURN_BLEND = 1.2
+EndingManager.FACING_TURN_EASE_POWER = 5.0
 
 -- Lua 연속 휘청: 빠름 <-> 느림 교차 (멈춤 없음, Roll 위주)
 EndingManager.STAGGER_SPEED_CYCLE = 5.0
@@ -253,17 +254,24 @@ end
 
 local start_ending_monkey_cymbal_sequence
 
+local function ease_in_turn(alpha, power)
+    alpha = math.max(0.0, math.min(tonumber(alpha) or 0.0, 1.0))
+    power = math.max(1.0, tonumber(power) or 1.0)
+    return alpha ^ power
+end
+
 local function blend_control_yaw(player, fromYaw, toYaw, duration)
     local steps = math.max(1, math.floor((duration or 0.0) * 60.0))
     local stepDuration = (duration or 0.0) / steps
     local pitch = EndingManager.ENDING_SPAWN_PITCH
+    local easePower = EndingManager.FACING_TURN_EASE_POWER or 3.0
 
     for step = 1, steps do
         if not EndingManager:IsActive() then
             return
         end
 
-        local alpha = step / steps
+        local alpha = ease_in_turn(step / steps, easePower)
         local yaw = fromYaw + (toYaw - fromYaw) * alpha
         set_control_yaw(player, yaw, pitch)
 
@@ -318,10 +326,11 @@ local function start_ending_sequence_coroutine(player)
         local startYaw = EndingManager.SpawnFacingYaw or EndingManager.ENDING_SPAWN_YAW
         local targetYaw = get_opposite_yaw(startYaw)
         print(string.format(
-            "[EndingManager] Turning to opposite yaw %.1f -> %.1f over %.1fs",
+            "[EndingManager] Turning to opposite yaw %.1f -> %.1f over %.1fs (easePower=%.1f)",
             startYaw,
             targetYaw,
-            EndingManager.FACING_TURN_BLEND
+            EndingManager.FACING_TURN_BLEND,
+            EndingManager.FACING_TURN_EASE_POWER
         ))
         if StartCoroutine ~= nil and Wait ~= nil then
             StartCoroutine(function()
