@@ -5928,6 +5928,22 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         &APawn::SetAutoPossessPlayer,
         "GetAutoPossessPlayer",
         &APawn::GetAutoPossessPlayer,
+        "GetControlRotation",
+        [](APawn& Pawn)
+        {
+            return Pawn.GetControlRotation().ToVector();
+        },
+        "SetControlRotation",
+        [](APawn& Pawn, sol::object RotationObject)
+        {
+            FVector Rotation;
+            if (!LuaObjectToVector(RotationObject, Rotation))
+            {
+                UE_LOG("[Lua] Pawn.SetControlRotation ignored: expected Vector or {X,Y,Z}");
+                return;
+            }
+            Pawn.SetControlRotation(FRotator(Rotation));
+        },
         "GetInputComponent",
         &APawn::GetInputComponent
     );

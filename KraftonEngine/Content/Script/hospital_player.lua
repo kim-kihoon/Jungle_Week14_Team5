@@ -36,9 +36,109 @@ local TitleTransitionWaitRemaining = 0.0
 local GameOverStateChangedHandle = nil
 local GameOverPresentationCoroutine = nil
 local GameOverPresentationWaitRemaining = 0.0
+local InitialPlayerLocation = nil
+local InitialPlayerRotation = nil
+local InitialPlayerControlRotation = nil
 
 local function IsInTriggerZone(location)
     return location.Y > TRIGGER_Y_MIN and location.X < TRIGGER_X_MAX
+end
+
+local function CopyVec3(value)
+    if value == nil then
+        return nil
+    end
+
+    return Vec3(value.X or 0.0, value.Y or 0.0, value.Z or 0.0)
+end
+
+local function GetActorRotation(actor)
+    if actor == nil then
+        return nil
+    end
+
+    local ok, rotation = pcall(function()
+        return actor.Rotation
+    end)
+    if ok then
+        return rotation
+    end
+    return nil
+end
+
+local function GetPlayerPawn()
+    if obj == nil or obj.AsPawn == nil then
+        return nil
+    end
+
+    local ok, pawn = pcall(function()
+        return obj:AsPawn()
+    end)
+    if ok then
+        return pawn
+    end
+    return nil
+end
+
+local function GetPawnControlRotation(pawn)
+    if pawn == nil or pawn.GetControlRotation == nil then
+        return nil
+    end
+
+    local ok, rotation = pcall(function()
+        return pawn:GetControlRotation()
+    end)
+    if ok then
+        return rotation
+    end
+    return nil
+end
+
+local function CaptureInitialPlayerTransform()
+    if obj == nil then
+        return false
+    end
+
+    local pawn = GetPlayerPawn()
+    InitialPlayerLocation = CopyVec3(obj:GetLocation())
+    InitialPlayerRotation = CopyVec3(GetActorRotation(obj))
+    InitialPlayerControlRotation = CopyVec3(GetPawnControlRotation(pawn))
+    return InitialPlayerLocation ~= nil
+        and InitialPlayerRotation ~= nil
+        and InitialPlayerControlRotation ~= nil
+end
+
+local function RestoreInitialPlayerTransform()
+    if obj == nil then
+        return false
+    end
+
+    local pawn = GetPlayerPawn()
+    local bRestored = false
+    if InitialPlayerLocation ~= nil and obj.SetLocation ~= nil then
+        local ok = pcall(function()
+            obj:SetLocation(InitialPlayerLocation)
+        end)
+        bRestored = bRestored or ok
+    end
+
+    if InitialPlayerRotation ~= nil and obj.SetRotation ~= nil then
+        local ok = pcall(function()
+            obj:SetRotation(InitialPlayerRotation)
+        end)
+        bRestored = bRestored or ok
+    end
+
+    if InitialPlayerControlRotation ~= nil
+        and pawn ~= nil
+        and pawn.SetControlRotation ~= nil then
+        local ok = pcall(function()
+            pawn:SetControlRotation(InitialPlayerControlRotation)
+        end)
+        bRestored = bRestored or ok
+    end
+
+    return bRestored
 end
 
 local function IsKeyDown(key)
@@ -426,6 +526,7 @@ local function ApplyGameplayStart()
     end
     UIManager:DisposeTitle()
     CapturePlayerCamera()
+    CaptureInitialPlayerTransform()
     DeactivateTitleActors()
 end
 
@@ -481,6 +582,9 @@ end
 function BeginPlay()
     StopTitleTransitionCoroutine()
     StopGameOverPresentationCoroutine()
+    InitialPlayerLocation = nil
+    InitialPlayerRotation = nil
+    InitialPlayerControlRotation = nil
     bCanWarp = true
     bLastLoopStopped = IsLoopStopped()
     bTitleMode = true
@@ -595,6 +699,7 @@ end
 function RestartGame()
     StopTitleTransitionCoroutine()
     ClearGameOverPresentation()
+    RestoreInitialPlayerTransform()
     bCanWarp = true
     bTitleMode = false
     DoorManager:Reset()

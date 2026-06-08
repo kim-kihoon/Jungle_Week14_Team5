@@ -15,6 +15,8 @@ SoundManager.DoorOpenSoundVolume = 0.7
 SoundManager.DoorCloseSoundDelay = 1.0
 SoundManager.PartyBlowerSoundKey = "PartyBlower"
 SoundManager.PartyBlowerSoundVolume = 0.25
+SoundManager.EmptyGunShotSoundKey = "EmptyGunShot"
+SoundManager.EmptyGunShotSoundVolume = 0.8
 SoundManager.PendingDoorCloseSounds = {}
 SoundManager.TitleMutedAudioComponents = {}
 SoundManager.bTitleWorldAudioMuted = false
@@ -319,6 +321,10 @@ end
 
 function SoundManager:PlayPartyBlower()
     return self:PlayGameplay(self.PartyBlowerSoundKey, self.PartyBlowerSoundVolume)
+end
+
+function SoundManager:PlayEmptyGunShot()
+    return self:PlayGameplay(self.EmptyGunShotSoundKey, self.EmptyGunShotSoundVolume)
 end
 
 function SoundManager:EnterTitleState()

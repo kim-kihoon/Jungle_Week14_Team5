@@ -282,6 +282,10 @@ local function play_party_blower_audio()
     SoundManager:PlayPartyBlower()
 end
 
+local function play_empty_gun_shot_audio()
+    SoundManager:PlayEmptyGunShot()
+end
+
 local function spawn_projectile_from_muzzle()
     if World == nil or World.SpawnActorTemplate == nil then
         return nil
@@ -496,6 +500,30 @@ local function report_pistol_shot_failure()
     return GameManager:ReportPlayerShotFailure("PistolShotMiss")
 end
 
+local function can_fire_pistol()
+    if GameManager ~= nil
+        and GameManager.IsLoopStopped ~= nil
+        and GameManager:IsLoopStopped() then
+        return false
+    end
+
+    return true
+end
+
+local function try_consume_pistol_bullet_for_fire()
+    if not can_fire_pistol() then
+        play_empty_gun_shot_audio()
+        return false
+    end
+
+    if not consume_pistol_bullet() then
+        play_empty_gun_shot_audio()
+        return false
+    end
+
+    return true
+end
+
 local function can_request_photo_capture()
     if Anim == nil or Anim.is_photo_capture_available == nil then
         return true
@@ -697,7 +725,7 @@ function update(self, dt)
                 update_switch_to_pistol(self, 0.0)
             end
         elseif self.CurrentTool == TOOL_PISTOL and (is_action_pressed("Fire") or Anim.is_left_mouse_pressed()) then
-            if consume_pistol_bullet() then
+            if try_consume_pistol_bullet_for_fire() then
                 local handledHit = should_play_pistol_fire_from_camera()
                 if handledHit then
                     start_pistol_fire_action(self)
