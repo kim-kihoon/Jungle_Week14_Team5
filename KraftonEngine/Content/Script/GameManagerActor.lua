@@ -52,7 +52,7 @@ end
 
 function BeginPlay()
     GameManager:Reset()
-    GameManager:SetTimeLimit(60)
+    GameManager:SetTimeLimit(120)
     GameManager:StartGame()
     initialize_cymbal_monkey()
     print("[GameManagerActor] BeginPlay")
