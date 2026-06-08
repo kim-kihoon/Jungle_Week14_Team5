@@ -1,5 +1,6 @@
 local TitleManager = {}
 local LeaderboardManager = require("LeaderboardManager")
+local SoundManager = require("SoundManager")
 
 TitleManager.MainDocumentPath = "Content/UI/TitleUI.rml"
 TitleManager.SettingDocumentPath = "Content/UI/SettingUI.rml"
@@ -146,6 +147,7 @@ function TitleManager:ShowRanking()
 end
 
 function TitleManager:StartGame()
+    SoundManager:StopTitleMusic()
     self:Dispose()
     if Engine ~= nil and Engine.TransitionToScene ~= nil then
         Engine.TransitionToScene(self.StartSceneName)
@@ -167,11 +169,18 @@ function TitleManager:Dispose()
 end
 
 function BeginPlay()
+    SoundManager:EnterTitleState()
     TitleManager:Show()
+    if SoundManager.PlayTitleMusicIfNeeded ~= nil then
+        SoundManager:PlayTitleMusicIfNeeded()
+    else
+        SoundManager:PlayTitleMusic()
+    end
 end
 
 function EndPlay()
     TitleManager:Dispose()
+    SoundManager:StopTitleMusic()
 end
 
 function StartGame()

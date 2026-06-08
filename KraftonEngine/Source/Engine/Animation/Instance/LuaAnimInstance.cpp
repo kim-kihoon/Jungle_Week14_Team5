@@ -725,6 +725,39 @@ void ULuaAnimInstance::InstallBindings()
 			FRotator Rotation = OwningComponent->GetRelativeRotation();
 			Rotation.Pitch = PitchDegrees;
 			OwningComponent->SetRelativeRotation(Rotation);
+			InvalidateOwnerMeshBaseTransform();
+			return true;
+		});
+
+	Anim.set_function("apply_owner_mesh_shake_offset",
+		[this](float RollDegrees, float PitchDegrees, float LocalX, float LocalY, float LocalZ) -> bool
+		{
+			if (!OwningComponent)
+			{
+				return false;
+			}
+
+			CacheOwnerMeshBaseTransform();
+
+			FRotator Rotation = OwnerMeshBaseRelativeRotation;
+			Rotation.Roll += RollDegrees;
+			Rotation.Pitch += PitchDegrees;
+			OwningComponent->SetRelativeRotation(Rotation);
+			OwningComponent->SetRelativeLocation(
+				OwnerMeshBaseRelativeLocation + FVector(LocalX, LocalY, LocalZ));
+			return true;
+		});
+
+	Anim.set_function("clear_owner_mesh_shake_offset",
+		[this]() -> bool
+		{
+			if (!OwningComponent || !bOwnerMeshBaseCached)
+			{
+				return false;
+			}
+
+			OwningComponent->SetRelativeRotation(OwnerMeshBaseRelativeRotation);
+			OwningComponent->SetRelativeLocation(OwnerMeshBaseRelativeLocation);
 			return true;
 		});
 
@@ -1071,6 +1104,26 @@ void ULuaAnimInstance::InstallBindings()
 		{
 			if (B) B->ActiveChildIndex = Idx;
 		});
+}
+
+void ULuaAnimInstance::CacheOwnerMeshBaseTransform()
+{
+	if (!OwningComponent)
+	{
+		return;
+	}
+
+	if (!bOwnerMeshBaseCached)
+	{
+		OwnerMeshBaseRelativeLocation = OwningComponent->GetRelativeLocation();
+		OwnerMeshBaseRelativeRotation = OwningComponent->GetRelativeRotation();
+		bOwnerMeshBaseCached = true;
+	}
+}
+
+void ULuaAnimInstance::InvalidateOwnerMeshBaseTransform()
+{
+	bOwnerMeshBaseCached = false;
 }
 
 // ──────────────────────────────────────────────

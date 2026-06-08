@@ -88,6 +88,11 @@ function DebugManager:Tick(dt, gameManager)
     if not self:IsEnabled() then
         return
     end
+    if gameManager ~= nil
+        and gameManager.IsEnding ~= nil
+        and gameManager:IsEnding() then
+        return
+    end
     if Input == nil then
         return
     end

@@ -8,6 +8,7 @@ local ToolManager = require("ToolManager")
 local GameOverMonkey = require("GameOverMonkey")
 local StageManager = require("StageManager")
 local EndingManager = require("EndingManager")
+local StartupManager = require("StartupManager")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
@@ -50,6 +51,11 @@ local function SyncCrosshairVisibility()
     end
 
     if bTitleMode then
+        Crosshair.set_visible(false)
+        return
+    end
+
+    if EndingManager:IsActive() then
         Crosshair.set_visible(false)
         return
     end
@@ -616,15 +622,35 @@ local function StartTitleTransitionCoroutine()
     ResumeTitleTransition(0.0)
 end
 
+local function PlayTitleMusicNow()
+    local playFn = SoundManager.PlayTitleMusicIfNeeded or SoundManager.PlayTitleMusic
+    playFn(SoundManager)
+end
+
+local function ScheduleTitleMusic()
+    if StartCoroutine == nil or Wait == nil then
+        PlayTitleMusicNow()
+        return
+    end
+
+    StartCoroutine(function()
+        Wait(0.0)
+        if bTitleMode and not bTitleTransitioning then
+            PlayTitleMusicNow()
+        end
+    end)
+end
+
 local function EnterTitleScreen()
     UIManager:ShowTitle()
     CaptureTitleCamera()
-    SoundManager:PlayTitleMusic()
+    ScheduleTitleMusic()
     PlayTitleMonkeyReadyAnimation()
 end
 
 function BeginPlay()
     StopTitleTransitionCoroutine()
+    StartupManager:Cancel()
     InitialPlayerLocation = nil
     InitialPlayerRotation = nil
     InitialPlayerControlRotation = nil
@@ -637,19 +663,26 @@ function BeginPlay()
     DoorManager:Reset()
     DoorManager:ResetSessionState()
     SoundManager:EnterTitleState()
+    PlayTitleMusicNow()
     ToolManager:Reset()
     UIManager:ResetHospital()
     if HospitalPlayer ~= nil then
         HospitalPlayer.title_mode = true
     end
-    EnterTitleScreen()
     CaptureTitleCamera()
+    StartupManager:Begin(function()
+        EnterTitleScreen()
+        CaptureTitleCamera()
+    end)
 end
 
 function EndPlay()
     StopTitleTransitionCoroutine()
+    StartupManager:Cancel()
     UnbindGameOverStateChanged()
     GameOverMonkey:Shutdown()
+    EndingManager:Reset()
+    SoundManager:StopTitleMusic()
     bCanWarp = true
     bLastLoopStopped = false
     DoorManager:Reset()
@@ -665,6 +698,12 @@ function Tick(dt)
     end
 
     GameOverMonkey:Tick(dt)
+
+    if StartupManager:IsActive() then
+        CaptureTitleCamera()
+        SyncCrosshairVisibility()
+        return
+    end
 
     if bTitleTransitioning then
         ResumeTitleTransition(dt)
@@ -687,9 +726,8 @@ function Tick(dt)
         return
     end
 
-    if EndingManager:IsActive() then
-        AddPlayerMovement()
-        UIManager:UpdateAmmoPrompt(GameManager)
+    if EndingManager.ShouldProcessEndingTick ~= nil and EndingManager:ShouldProcessEndingTick() then
+        EndingManager:Tick(dt)
         SyncCrosshairVisibility()
         return
     end
@@ -793,6 +831,51 @@ function ExitToTitle()
     EnterTitleScreen()
     SyncCrosshairVisibility()
 end
+
+local function RestoreTitleViewFromEnding()
+    if CameraManager ~= nil then
+        if CameraManager.StopCameraFade ~= nil then
+            pcall(function()
+                CameraManager.StopCameraFade()
+            end)
+        elseif CameraManager.FadeIn ~= nil then
+            pcall(function()
+                CameraManager.FadeIn(0.5)
+            end)
+        end
+    end
+
+    UIManager:ExitCutsceneMode()
+end
+
+function ExitToTitleFromEnding()
+    StopTitleTransitionCoroutine()
+    ClearGameOverPresentation()
+    RestoreTitleViewFromEnding()
+    GameManager:Reset()
+    RestoreInitialPlayerTransform()
+    bCanWarp = true
+    bTitleMode = true
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = true
+    end
+    bLastLoopStopped = IsLoopStopped()
+    DoorManager:Reset()
+    DoorManager:ResetSessionState()
+    DoorManager:ClearToyProjectiles()
+    SoundManager:EnterTitleState()
+    ToolManager:Reset()
+    ActivateTitleActors()
+    UIManager:ResetHospital()
+    EnterTitleScreen()
+    SyncCrosshairVisibility()
+end
+
+function SubmitEndingPlayerName()
+    EndingManager:SubmitPlayerName()
+end
+
+EndingManager:RegisterReturnToTitleCallback(ExitToTitleFromEnding)
 
 function ShowSetting()
     if not bTitleMode or bTitleTransitioning then

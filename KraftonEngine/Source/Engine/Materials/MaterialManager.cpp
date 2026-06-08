@@ -96,6 +96,49 @@ namespace
 			}
 		}
 
+		const bool bIsBloodDecal =
+			AssetPath.find("blood-decal") != FString::npos ||
+			AssetPath.find("drag-blood-decal") != FString::npos;
+		if (bIsBloodDecal && DiffuseTex)
+		{
+			if (Material->GetBlendMode() != EBlendMode::Masked)
+			{
+				Material->SetDomainBlend(EMaterialDomain::Surface, EBlendMode::Masked);
+				bDirty = true;
+			}
+			if (!Material->IsTwoSided())
+			{
+				Material->SetTwoSided(true);
+				bDirty = true;
+			}
+			if (Material->GetScalarParameterValue("Opacity") < 0.99f)
+			{
+				Material->SetScalarParameter("Opacity", 1.0f);
+				bDirty = true;
+			}
+			if (Material->GetScalarParameterValue("bEmissive") < 0.5f)
+			{
+				Material->SetScalarParameter("bEmissive", 1.0f);
+				bDirty = true;
+			}
+			if (std::fabs(Material->GetScalarParameterValue("EmissiveIntensity") - 1.0f) > 0.001f)
+			{
+				Material->SetScalarParameter("EmissiveIntensity", 1.0f);
+				bDirty = true;
+			}
+			if (Material->GetScalarParameterValue("AlphaClip") < 0.49f)
+			{
+				Material->SetScalarParameter("AlphaClip", 0.5f);
+				bDirty = true;
+			}
+			const FVector4 White(1.0f, 1.0f, 1.0f, 1.0f);
+			if (SectionColor.X < 0.99f || SectionColor.Y < 0.99f || SectionColor.Z < 0.99f)
+			{
+				Material->SetVector4Parameter("SectionColor", White);
+				bDirty = true;
+			}
+		}
+
 		if (bDirty)
 		{
 			Material->RebuildCachedSRVs();
@@ -349,8 +392,8 @@ UMaterial* FMaterialManager::LoadMaterialBinary(const FString& UassetPath)
 // 임포터용 — JSON 없이 머티리얼을 직접 만들고 .uasset 으로 저장한다.
 UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPath, const FVector4& SectionColor,
 	const FString& DiffuseTexturePath, const FString& NormalTexturePath,
-	bool bEmissive, float EmissiveIntensity, bool bTransparent, float Opacity,
-	bool bTwoSided, float SpecularIntensity, float Shininess, float Metallic)
+	bool bEmissive, float EmissiveIntensity, bool bTransparent, bool bMasked, float Opacity,
+	bool bTwoSided, float SpecularIntensity, float Shininess, float Metallic, float AlphaClip)
 {
 	MaterialCache.erase(UassetPath);
 
@@ -359,7 +402,8 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	auto Buffers = CreateConstantBuffers(Template);
 
 	UMaterial* Material = UObjectManager::Get().CreateObject<UMaterial>();
-	const EBlendMode BlendMode = bTransparent ? EBlendMode::Transparent : EBlendMode::Opaque;
+	const EBlendMode BlendMode = bMasked ? EBlendMode::Masked
+		: (bTransparent ? EBlendMode::Transparent : EBlendMode::Opaque);
 	Material->Create(UassetPath, Template, EMaterialDomain::Surface, BlendMode, std::move(Buffers));
 	Material->SetShaderPathForSerialize(DefaultShaderPath);
 	Material->SetVector4Parameter("SectionColor", SectionColor);
@@ -370,6 +414,7 @@ UMaterial* FMaterialManager::CreateImportedMaterialAsset(const FString& UassetPa
 	Material->SetScalarParameter("SpecularIntensity", std::clamp(SpecularIntensity, 0.0f, 4.0f));
 	Material->SetScalarParameter("Shininess", std::clamp(Shininess, 2.0f, 256.0f));
 	Material->SetScalarParameter("Metallic", std::clamp(Metallic, 0.0f, 1.0f));
+	Material->SetScalarParameter("AlphaClip", std::clamp(AlphaClip, 0.0f, 1.0f));
 	Material->SetTwoSided(bTwoSided);
 
 	if (!DiffuseTexturePath.empty())

@@ -13,6 +13,9 @@ UIManager.TimerPromptElementId = "timer_display"
 UIManager.TitleDocumentPath = "Content/UI/TitleUI.rml"
 UIManager.TitleSettingDocumentPath = "Content/UI/SettingUI.rml"
 UIManager.TitleCreditDocumentPath = "Content/UI/CreditUI.rml"
+UIManager.EndingCreditDocumentPath = "Content/UI/EndingCreditUI.rml"
+UIManager.EndingNameInputDocumentPath = "Content/UI/EndingNameInputUI.rml"
+UIManager.StartupIntroDocumentPath = "Content/UI/StartupIntroUI.rml"
 UIManager.TitleLeaderboardDocumentPath = "Content/UI/LeaderboardUI.rml"
 UIManager.GameOverDocumentPath = "Content/UI/GameOverUI.rml"
 UIManager.TimerColorNormal = "rgb(71, 255, 105)"
@@ -37,6 +40,11 @@ UIManager.TitleWidget = nil
 UIManager.TitlePopupWidget = nil
 UIManager.LeaderboardMaxRows = 20
 UIManager.GameOverWidget = nil
+UIManager.CutsceneBlockerWidget = nil
+UIManager.CutsceneBlockerDocumentPath = UIManager.DoorPromptDocumentPath
+UIManager.EndingCreditWidget = nil
+UIManager.EndingNameInputWidget = nil
+UIManager.StartupIntroWidget = nil
 
 local unpack_args = table.unpack or unpack
 
@@ -74,6 +82,7 @@ function UIManager:AddWidgetToViewport(widget, zOrder, options)
     options = options or {}
     call_if_exists(widget, "SetWantsMouse", options.WantsMouse == true)
     call_if_exists(widget, "SetWantsKeyboard", options.WantsKeyboard == true)
+    call_if_exists(widget, "SetWantsTextInput", options.WantsTextInput == true)
     call_if_exists(widget, "SetBlocksGameInput", options.BlocksGameInput == true)
     call_if_exists(widget, "SetBlocksGameKeyboard", options.BlocksGameKeyboard == true)
     call_if_exists(widget, "SetBlocksGameMouseLook", options.BlocksGameMouseLook == true)
@@ -169,7 +178,137 @@ function UIManager:FormatActionPrompt(name, fallback)
     return "[" .. self:GetActionMappingDisplayName(name, fallback) .. "]"
 end
 
+function UIManager:HideGameplayHud()
+    if self.DoorPromptWidget ~= nil then
+        self:SetDoorPromptVisible(false)
+        self:RemoveWidget(self.DoorPromptWidget)
+    end
+    if self.ControlPromptWidget ~= nil then
+        self:SetControlPromptVisible(false)
+        self:RemoveWidget(self.ControlPromptWidget)
+    end
+    if self.TimerPromptWidget ~= nil then
+        self:SetTimerPromptVisible(false)
+        self:RemoveWidget(self.TimerPromptWidget)
+    end
+    self:DisposeGameOver()
+
+    self.DoorPromptWidget = nil
+    self.bDoorPromptVisible = false
+    self.ControlPromptWidget = nil
+    self.bControlPromptVisible = false
+    self.LastControlPromptText = nil
+    self.LastAmmoDisplayText = nil
+    self.TimerPromptWidget = nil
+    self.bTimerPromptVisible = false
+end
+
+function UIManager:EnterCutsceneMode()
+    self:HideGameplayHud()
+
+    if self.CutsceneBlockerWidget == nil then
+        self.CutsceneBlockerWidget = self:CreateWidget(self.CutsceneBlockerDocumentPath)
+    end
+    if self.CutsceneBlockerWidget == nil then
+        return false
+    end
+
+    set_widget_display(self.CutsceneBlockerWidget, self.DoorPromptElementId, false)
+    return self:AddWidgetToViewport(self.CutsceneBlockerWidget, 150, {
+        BlocksGameInput = true,
+        BlocksGameKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
+function UIManager:ExitCutsceneMode()
+    self:RemoveWidget(self.CutsceneBlockerWidget)
+    self.CutsceneBlockerWidget = nil
+end
+
+function UIManager:HideEndingCredits()
+    self:RemoveWidget(self.EndingCreditWidget)
+    self.EndingCreditWidget = nil
+end
+
+function UIManager:ShowEndingCredits()
+    self:HideEndingCredits()
+    self.EndingCreditWidget = self:CreateWidget(self.EndingCreditDocumentPath)
+    if self.EndingCreditWidget == nil then
+        return false
+    end
+
+    return self:AddWidgetToViewport(self.EndingCreditWidget, 200, {
+        BlocksGameInput = true,
+        BlocksGameKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
+function UIManager:HideEndingNameInput()
+    self:RemoveWidget(self.EndingNameInputWidget)
+    self.EndingNameInputWidget = nil
+end
+
+function UIManager:ShowEndingNameInput(displayName)
+    self:HideEndingNameInput()
+    self.EndingNameInputWidget = self:CreateWidget(self.EndingNameInputDocumentPath)
+    if self.EndingNameInputWidget == nil then
+        return false
+    end
+
+    set_widget_text(self.EndingNameInputWidget, "name_display", tostring(displayName or "_"))
+    return self:AddWidgetToViewport(self.EndingNameInputWidget, 210, {
+        WantsMouse = true,
+        WantsKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
+function UIManager:SetEndingNameInputText(displayName)
+    set_widget_text(self.EndingNameInputWidget, "name_display", tostring(displayName or ""))
+end
+
+function UIManager:ShowStartupIntro()
+    self:HideStartupIntro()
+    self.StartupIntroWidget = self:CreateWidget(self.StartupIntroDocumentPath)
+    if self.StartupIntroWidget == nil then
+        return false
+    end
+
+    set_widget_display(self.StartupIntroWidget, "logo_panel", true)
+    set_widget_display(self.StartupIntroWidget, "warning_panel", false)
+    self:SetStartupLogoOpacity(0.0)
+
+    return self:AddWidgetToViewport(self.StartupIntroWidget, 300, {
+        WantsMouse = true,
+        WantsKeyboard = true,
+        BlocksGameInput = true,
+        BlocksGameKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
+function UIManager:SetStartupLogoOpacity(opacity)
+    opacity = math.max(0.0, math.min(1.0, tonumber(opacity) or 0.0))
+    set_widget_property(self.StartupIntroWidget, "studio_logo", "opacity", string.format("%.3f", opacity))
+end
+
+function UIManager:ShowStartupWarning()
+    set_widget_display(self.StartupIntroWidget, "logo_panel", false)
+    set_widget_display(self.StartupIntroWidget, "warning_panel", true)
+end
+
+function UIManager:HideStartupIntro()
+    self:RemoveWidget(self.StartupIntroWidget)
+    self.StartupIntroWidget = nil
+end
+
 function UIManager:ResetHospital()
+    self:ExitCutsceneMode()
+    self:HideStartupIntro()
+    self:HideEndingCredits()
+    self:HideEndingNameInput()
     self:RemoveWidget(self.DoorPromptWidget)
     self:RemoveWidget(self.ControlPromptWidget)
     self:RemoveWidget(self.TimerPromptWidget)

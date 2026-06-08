@@ -47,9 +47,9 @@ public:
 	UMaterial* CreateImportedMaterialAsset(const FString& UassetPath, const FVector4& SectionColor,
 		const FString& DiffuseTexturePath, const FString& NormalTexturePath,
 		bool bEmissive = false, float EmissiveIntensity = 4.0f,
-		bool bTransparent = false, float Opacity = 1.0f,
+		bool bTransparent = false, bool bMasked = false, float Opacity = 1.0f,
 		bool bTwoSided = false, float SpecularIntensity = 1.0f,
-		float Shininess = 32.0f, float Metallic = 0.0f);
+		float Shininess = 32.0f, float Metallic = 0.0f, float AlphaClip = 0.0f);
 
 	// 에디터 Create Material 팩토리용 — 빈(흰색) 머티리얼을 만들어 .uasset 으로 저장.
 	UMaterial* CreateMaterialAsset(const FString& UassetPath);
