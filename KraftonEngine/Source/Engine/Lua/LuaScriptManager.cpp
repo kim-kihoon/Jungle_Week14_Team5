@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 #include <vector>
 #include <windows.h>  // PostQuitMessage
 #ifdef GetCurrentTime
@@ -135,6 +136,107 @@ FSubscriptionID                             FLuaScriptManager::WatchSub = 0;
 
 namespace
 {
+    std::wstring GetLuaUserSettingsPath()
+    {
+        return FPaths::Combine(FPaths::SaveDir(), L"UserSettings.ini");
+    }
+
+    bool IsSafeLuaUserSettingKey(const FString& Key)
+    {
+        if (Key.empty() || Key.size() > 64)
+        {
+            return false;
+        }
+
+        for (char C : Key)
+        {
+            const bool bAllowed =
+                (C >= 'A' && C <= 'Z') ||
+                (C >= 'a' && C <= 'z') ||
+                (C >= '0' && C <= '9') ||
+                C == '_' ||
+                C == '-' ||
+                C == '.';
+            if (!bAllowed)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    std::unordered_map<FString, FString> LoadLuaUserSettings()
+    {
+        std::unordered_map<FString, FString> Values;
+        std::ifstream File{ std::filesystem::path(GetLuaUserSettingsPath()) };
+        if (!File.is_open())
+        {
+            return Values;
+        }
+
+        FString Line;
+        while (std::getline(File, Line))
+        {
+            const size_t Delimiter = Line.find('=');
+            if (Delimiter == FString::npos)
+            {
+                continue;
+            }
+
+            FString Key = Line.substr(0, Delimiter);
+            FString Value = Line.substr(Delimiter + 1);
+            if (IsSafeLuaUserSettingKey(Key))
+            {
+                Values[std::move(Key)] = std::move(Value);
+            }
+        }
+        return Values;
+    }
+
+    bool SaveLuaUserSettings(const std::unordered_map<FString, FString>& Values)
+    {
+        FPaths::CreateDir(FPaths::SaveDir());
+
+        std::ofstream File{ std::filesystem::path(GetLuaUserSettingsPath()), std::ios::trunc };
+        if (!File.is_open())
+        {
+            return false;
+        }
+
+        for (const auto& [Key, Value] : Values)
+        {
+            if (IsSafeLuaUserSettingKey(Key))
+            {
+                File << Key << '=' << Value << '\n';
+            }
+        }
+        return true;
+    }
+
+    FString LoadLuaUserSettingValue(const FString& Key, const FString& DefaultValue)
+    {
+        if (!IsSafeLuaUserSettingKey(Key))
+        {
+            return DefaultValue;
+        }
+
+        std::unordered_map<FString, FString> Values = LoadLuaUserSettings();
+        auto It = Values.find(Key);
+        return It != Values.end() ? It->second : DefaultValue;
+    }
+
+    bool SaveLuaUserSettingValue(const FString& Key, const FString& Value)
+    {
+        if (!IsSafeLuaUserSettingKey(Key))
+        {
+            return false;
+        }
+
+        std::unordered_map<FString, FString> Values = LoadLuaUserSettings();
+        Values[Key] = Value;
+        return SaveLuaUserSettings(Values);
+    }
+
     FVector LuaSafeComponentScaleRatio(const FVector& TargetScale, const FVector& SourceScale)
     {
         return FVector(
@@ -2473,6 +2575,45 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
                 return GameEngine->GetGamma();
             }
             return 2.4f;
+        }
+    );
+
+    sol::table UserSettings = Lua.create_named_table("UserSettings");
+    UserSettings.set_function(
+        "LoadInt",
+        [](const FString& Key, int32 DefaultValue) -> int32
+        {
+            const FString Value = LoadLuaUserSettingValue(Key, std::to_string(DefaultValue));
+            try
+            {
+                return std::stoi(Value);
+            }
+            catch (...)
+            {
+                return DefaultValue;
+            }
+        }
+    );
+    UserSettings.set_function(
+        "SaveInt",
+        [](const FString& Key, int32 Value) -> bool
+        {
+            return SaveLuaUserSettingValue(Key, std::to_string(Value));
+        }
+    );
+    UserSettings.set_function(
+        "LoadBool",
+        [](const FString& Key, bool bDefaultValue) -> bool
+        {
+            const FString Value = LoadLuaUserSettingValue(Key, bDefaultValue ? "1" : "0");
+            return Value == "1" || Value == "true" || Value == "True";
+        }
+    );
+    UserSettings.set_function(
+        "SaveBool",
+        [](const FString& Key, bool bValue) -> bool
+        {
+            return SaveLuaUserSettingValue(Key, bValue ? "1" : "0");
         }
     );
 
