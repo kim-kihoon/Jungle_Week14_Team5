@@ -1,10 +1,10 @@
 local OffscreenFacePlayer = require("Anomalies/OffscreenFacePlayer")
 
-local OffscreenFacePlayerBlackPhoto = {}
+local PhotoLookAtBlackPhoto = {}
 
-OffscreenFacePlayerBlackPhoto.Name = "OffscreenFacePlayerBlackPhoto"
+PhotoLookAtBlackPhoto.Name = "PhotoLookAtBlackPhoto"
 
-function OffscreenFacePlayerBlackPhoto:Spawn(context)
+function PhotoLookAtBlackPhoto:Spawn(context)
     local ok, message = OffscreenFacePlayer.Spawn(OffscreenFacePlayer, context)
     if not ok then
         return false, message
@@ -24,11 +24,11 @@ function OffscreenFacePlayerBlackPhoto:Spawn(context)
     return true
 end
 
-function OffscreenFacePlayerBlackPhoto:Tick(context)
-    OffscreenFacePlayer.Tick(OffscreenFacePlayer, context)
+function PhotoLookAtBlackPhoto:OnPhotoCapture(context)
+    return OffscreenFacePlayer.FaceTargetToPlayer(OffscreenFacePlayer, context)
 end
 
-function OffscreenFacePlayerBlackPhoto:Despawn(context)
+function PhotoLookAtBlackPhoto:Despawn(context)
     local target = context.Target
     if target ~= nil and not context.State.HadPhotoBlackoutTargetTag then
         target:RemoveTag(context.Tags.PhotoBlackoutTarget)
@@ -37,8 +37,8 @@ function OffscreenFacePlayerBlackPhoto:Despawn(context)
     OffscreenFacePlayer.Despawn(OffscreenFacePlayer, context)
 end
 
-function OffscreenFacePlayerBlackPhoto:IsCleared(context)
+function PhotoLookAtBlackPhoto:IsCleared(context)
     return context.State.bCleared == true
 end
 
-return OffscreenFacePlayerBlackPhoto
+return PhotoLookAtBlackPhoto

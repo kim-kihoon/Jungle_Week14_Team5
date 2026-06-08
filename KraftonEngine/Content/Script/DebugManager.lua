@@ -31,11 +31,11 @@ DebugManager.Scenarios = {
     },
     {
         Key = "7",
-        RuleName = "OffscreenFacePlayerPhotoInvisible"
+        RuleName = "PhotoLookAtInvisible"
     },
     {
         Key = "8",
-        RuleName = "OffscreenFacePlayerBlackPhoto"
+        RuleName = "PhotoLookAtBlackPhoto"
     }
 }
 
