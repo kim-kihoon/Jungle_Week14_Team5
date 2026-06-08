@@ -1174,6 +1174,7 @@ void UUIManager::CloseDocument(UUserWidget* Widget)
 	}
 
 	Widget->ClearEventListeners();
+	Widget->ReleasePendingBindings();
 	Widget->GetDocument()->Close();
 	Widget->ClearDocument();
 }

@@ -622,15 +622,16 @@ local function StartTitleTransitionCoroutine()
 end
 
 local function ScheduleTitleMusic()
+    local playFn = SoundManager.PlayTitleMusicIfNeeded or SoundManager.PlayTitleMusic
     if StartCoroutine == nil or Wait == nil then
-        SoundManager:PlayTitleMusic()
+        playFn(SoundManager)
         return
     end
 
     StartCoroutine(function()
         Wait(0.0)
         if bTitleMode and not bTitleTransitioning then
-            SoundManager:PlayTitleMusic()
+            playFn(SoundManager)
         end
     end)
 end
@@ -708,7 +709,8 @@ function Tick(dt)
         return
     end
 
-    if EndingManager:IsActive() then
+    if EndingManager.ShouldProcessEndingTick ~= nil and EndingManager:ShouldProcessEndingTick() then
+        EndingManager:Tick(dt)
         SyncCrosshairVisibility()
         return
     end
@@ -812,6 +814,51 @@ function ExitToTitle()
     EnterTitleScreen()
     SyncCrosshairVisibility()
 end
+
+local function RestoreTitleViewFromEnding()
+    if CameraManager ~= nil then
+        if CameraManager.StopCameraFade ~= nil then
+            pcall(function()
+                CameraManager.StopCameraFade()
+            end)
+        elseif CameraManager.FadeIn ~= nil then
+            pcall(function()
+                CameraManager.FadeIn(0.5)
+            end)
+        end
+    end
+
+    UIManager:ExitCutsceneMode()
+end
+
+function ExitToTitleFromEnding()
+    StopTitleTransitionCoroutine()
+    ClearGameOverPresentation()
+    RestoreTitleViewFromEnding()
+    GameManager:Reset()
+    RestoreInitialPlayerTransform()
+    bCanWarp = true
+    bTitleMode = true
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = true
+    end
+    bLastLoopStopped = IsLoopStopped()
+    DoorManager:Reset()
+    DoorManager:ResetSessionState()
+    DoorManager:ClearToyProjectiles()
+    SoundManager:EnterTitleState()
+    ToolManager:Reset()
+    ActivateTitleActors()
+    UIManager:ResetHospital()
+    EnterTitleScreen()
+    SyncCrosshairVisibility()
+end
+
+function SubmitEndingPlayerName()
+    EndingManager:SubmitPlayerName()
+end
+
+EndingManager:RegisterReturnToTitleCallback(ExitToTitleFromEnding)
 
 function ShowSetting()
     if not bTitleMode or bTitleTransitioning then

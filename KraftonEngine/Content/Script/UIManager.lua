@@ -14,6 +14,7 @@ UIManager.TitleDocumentPath = "Content/UI/TitleUI.rml"
 UIManager.TitleSettingDocumentPath = "Content/UI/SettingUI.rml"
 UIManager.TitleCreditDocumentPath = "Content/UI/CreditUI.rml"
 UIManager.EndingCreditDocumentPath = "Content/UI/EndingCreditUI.rml"
+UIManager.EndingNameInputDocumentPath = "Content/UI/EndingNameInputUI.rml"
 UIManager.TitleLeaderboardDocumentPath = "Content/UI/LeaderboardUI.rml"
 UIManager.GameOverDocumentPath = "Content/UI/GameOverUI.rml"
 UIManager.TimerColorNormal = "rgb(71, 255, 105)"
@@ -41,6 +42,7 @@ UIManager.GameOverWidget = nil
 UIManager.CutsceneBlockerWidget = nil
 UIManager.CutsceneBlockerDocumentPath = UIManager.DoorPromptDocumentPath
 UIManager.EndingCreditWidget = nil
+UIManager.EndingNameInputWidget = nil
 
 local unpack_args = table.unpack or unpack
 
@@ -78,6 +80,7 @@ function UIManager:AddWidgetToViewport(widget, zOrder, options)
     options = options or {}
     call_if_exists(widget, "SetWantsMouse", options.WantsMouse == true)
     call_if_exists(widget, "SetWantsKeyboard", options.WantsKeyboard == true)
+    call_if_exists(widget, "SetWantsTextInput", options.WantsTextInput == true)
     call_if_exists(widget, "SetBlocksGameInput", options.BlocksGameInput == true)
     call_if_exists(widget, "SetBlocksGameKeyboard", options.BlocksGameKeyboard == true)
     call_if_exists(widget, "SetBlocksGameMouseLook", options.BlocksGameMouseLook == true)
@@ -240,9 +243,34 @@ function UIManager:ShowEndingCredits()
     })
 end
 
+function UIManager:HideEndingNameInput()
+    self:RemoveWidget(self.EndingNameInputWidget)
+    self.EndingNameInputWidget = nil
+end
+
+function UIManager:ShowEndingNameInput(displayName)
+    self:HideEndingNameInput()
+    self.EndingNameInputWidget = self:CreateWidget(self.EndingNameInputDocumentPath)
+    if self.EndingNameInputWidget == nil then
+        return false
+    end
+
+    set_widget_text(self.EndingNameInputWidget, "name_display", tostring(displayName or "_"))
+    return self:AddWidgetToViewport(self.EndingNameInputWidget, 210, {
+        WantsMouse = true,
+        WantsKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
+function UIManager:SetEndingNameInputText(displayName)
+    set_widget_text(self.EndingNameInputWidget, "name_display", tostring(displayName or ""))
+end
+
 function UIManager:ResetHospital()
     self:ExitCutsceneMode()
     self:HideEndingCredits()
+    self:HideEndingNameInput()
     self:RemoveWidget(self.DoorPromptWidget)
     self:RemoveWidget(self.ControlPromptWidget)
     self:RemoveWidget(self.TimerPromptWidget)

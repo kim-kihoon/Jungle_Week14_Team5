@@ -79,6 +79,7 @@ public:
 	void BindEvent(const FString& ElementId, const FString& EventName, sol::protected_function Callback);
 	void RegisterEventListeners();
 	void ClearEventListeners();
+	void ReleasePendingBindings();
 	bool NavigateSelection(int32 DirectionX, int32 DirectionY);
 	bool ActivateNavigationSelection();
 	bool ActivateCloseNavigationTarget();

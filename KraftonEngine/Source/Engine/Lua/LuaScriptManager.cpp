@@ -2169,6 +2169,19 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
         )
     );
     Input.set_function(
+        "GetRawKeyDown",
+        sol::overload(
+            [](const FString& KeyName)
+            {
+                return InputSystem::Get().MakeSnapshot().WasPressed(ResolveInputKeyCode(KeyName));
+            },
+            [](int VK)
+            {
+                return InputSystem::Get().MakeSnapshot().WasPressed(VK);
+            }
+        )
+    );
+    Input.set_function(
         "GetKey",
         sol::overload(
             [](const FString& KeyName)

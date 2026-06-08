@@ -135,6 +135,7 @@ void UUserWidget::BeginDestroy()
 	// regular UIManager shutdown path, so detach listeners and release the document
 	// handle before the UObject enters PendingKill/Garbage state.
 	ClearEventListeners();
+	ReleasePendingBindings();
 	if (Document)
 	{
 		Document->Close();
@@ -294,6 +295,12 @@ void UUserWidget::ClearEventListeners()
 
 	ClearNavigationSelection();
 	NavigationButtons.clear();
+}
+
+void UUserWidget::ReleasePendingBindings()
+{
+	PendingClickBindings.clear();
+	PendingEventBindings.clear();
 }
 
 bool UUserWidget::NavigateSelection(int32 DirectionX, int32 DirectionY)

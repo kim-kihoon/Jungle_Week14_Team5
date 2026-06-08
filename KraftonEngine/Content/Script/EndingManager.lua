@@ -2,6 +2,7 @@ local GameManager = require("GameManager")
 local StageManager = require("StageManager")
 local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
+local LeaderboardManager = require("LeaderboardManager")
 
 local EndingManager = {}
 
@@ -38,6 +39,9 @@ EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS = 5.0
 EndingManager.MONKEY_STRIKE_PLAY_RATE = 1.0
 EndingManager.MONKEY_AUDIO_VOLUME = 10.0
 EndingManager.MONKEY_STRIKE_BLACKOUT_HOLD_SECONDS = 2.0
+EndingManager.ENDING_CREDIT_DISPLAY_SECONDS = 4.0
+EndingManager.MAX_PLAYER_NAME_LENGTH = 16
+EndingManager.DEFAULT_PLAYER_NAME = "Player"
 
 -- 엔딩 진입 후 카메라 연출 타이밍 (초)
 EndingManager.STAGGER_DELAY = 2.0
@@ -66,6 +70,12 @@ EndingManager.SpawnFacingYaw = EndingManager.ENDING_SPAWN_YAW
 EndingManager.SequenceCoroutine = nil
 EndingManager.MonkeySequenceCoroutine = nil
 EndingManager.bEndingCreditsMusicActive = false
+EndingManager.bPreserveCreditsMusicOnReset = false
+EndingManager.bNameInputActive = false
+EndingManager.PlayerNameBuffer = ""
+EndingManager.PendingLeaderboardRecord = nil
+EndingManager.bSubmittingToTitle = false
+EndingManager.ReturnToTitleCallback = nil
 EndingManager.bStaggerShakeActive = false
 EndingManager.StaggerElapsed = 0.0
 EndingManager.StaggerPhase = 0.0
@@ -685,7 +695,8 @@ local function play_ending_credits_music()
         return false
     end
 
-    local bStarted = SoundManager:PlayTitleMusic() == true
+    local playFn = SoundManager.PlayTitleMusicIfNeeded or SoundManager.PlayTitleMusic
+    local bStarted = playFn(SoundManager) == true
     EndingManager.bEndingCreditsMusicActive = bStarted
     return bStarted
 end
@@ -728,7 +739,30 @@ local function hide_ending_credits_and_music()
     stop_ending_credits_music()
 end
 
-local function play_ending_strike_blackout()
+local function hide_ending_name_input()
+    EndingManager.bNameInputActive = false
+    EndingManager.PlayerNameBuffer = ""
+    if UIManager ~= nil and UIManager.HideEndingNameInput ~= nil then
+        UIManager:HideEndingNameInput()
+    end
+end
+
+local function get_name_input_display_text(buffer)
+    buffer = tostring(buffer or "")
+    if buffer == "" then
+        return "_"
+    end
+    return buffer
+end
+
+local function refresh_ending_name_input_display()
+    if UIManager == nil or UIManager.SetEndingNameInputText == nil then
+        return
+    end
+    UIManager:SetEndingNameInputText(get_name_input_display_text(EndingManager.PlayerNameBuffer))
+end
+
+local function ensure_ending_black_screen()
     if CameraManager == nil or CameraManager.FadeOut == nil then
         return
     end
@@ -736,13 +770,246 @@ local function play_ending_strike_blackout()
     pcall(function()
         CameraManager.FadeOut(0.0)
     end)
+end
+
+local function show_ending_name_input()
+    EndingManager.PlayerNameBuffer = ""
+    EndingManager.bNameInputActive = true
+    if UIManager == nil or UIManager.ShowEndingNameInput == nil then
+        print("[EndingManager] Name input failed: UIManager.ShowEndingNameInput unavailable")
+        EndingManager.bNameInputActive = false
+        return false
+    end
+
+    ensure_ending_black_screen()
+    local bShown = UIManager:ShowEndingNameInput(get_name_input_display_text("")) == true
+    if not bShown then
+        print("[EndingManager] Name input failed: widget could not be shown")
+        EndingManager.bNameInputActive = false
+    else
+        print("[EndingManager] Name input shown")
+    end
+    return bShown
+end
+
+local KEY_BACKSPACE = 0x08
+local KEY_RETURN = 0x0D
+local KEY_SPACE = 0x20
+
+local function normalize_player_name(rawName)
+    rawName = tostring(rawName or "")
+    rawName = string.gsub(rawName, "^%s+", "")
+    rawName = string.gsub(rawName, "%s+$", "")
+    rawName = string.gsub(rawName, "%s+", " ")
+    if rawName == "" then
+        return EndingManager.DEFAULT_PLAYER_NAME
+    end
+    if #rawName > EndingManager.MAX_PLAYER_NAME_LENGTH then
+        rawName = string.sub(rawName, 1, EndingManager.MAX_PLAYER_NAME_LENGTH)
+    end
+    return rawName
+end
+
+local function capture_pending_leaderboard_record()
+    local createdAtSeconds = 0
+    if World ~= nil and World.GetRealTimeSeconds ~= nil then
+        createdAtSeconds = tonumber(World.GetRealTimeSeconds()) or 0
+    end
+
+    EndingManager.PendingLeaderboardRecord = {
+        TotalTimeSeconds = GameManager:GetTotalGameTime(),
+        ElapsedTimeSeconds = GameManager:GetElapsedTime(),
+        Score = GameManager:GetScore(),
+        ClearReason = "Ending",
+        CreatedAtSeconds = createdAtSeconds,
+    }
+end
+
+local function submit_pending_leaderboard_record(playerName)
+    local record = EndingManager.PendingLeaderboardRecord
+    if record == nil then
+        capture_pending_leaderboard_record()
+        record = EndingManager.PendingLeaderboardRecord
+    end
+    if record == nil then
+        return nil
+    end
+
+    return LeaderboardManager:AddClearRecord({
+        TotalTimeSeconds = record.TotalTimeSeconds,
+        ElapsedTimeSeconds = record.ElapsedTimeSeconds,
+        Score = record.Score,
+        ClearReason = record.ClearReason,
+        CreatedAtSeconds = record.CreatedAtSeconds,
+        PlayerName = normalize_player_name(playerName),
+    })
+end
+
+function EndingManager:RegisterReturnToTitleCallback(callback)
+    self.ReturnToTitleCallback = callback
+end
+
+local function return_to_title_from_ending()
+    stop_ending_camera_fade()
+    EndingManager.bPreserveCreditsMusicOnReset = true
+    if EndingManager.bEndingCreditsMusicActive == true and SoundManager ~= nil then
+        if SoundManager.SetPreserveBgmOnReset ~= nil then
+            SoundManager:SetPreserveBgmOnReset(true)
+        end
+        if SoundManager.SetContinueEndingCreditsBgm ~= nil then
+            SoundManager:SetContinueEndingCreditsBgm(true)
+        end
+    end
+
+    local returnCallback = EndingManager.ReturnToTitleCallback
+    if type(returnCallback) == "function" then
+        local ok, err = pcall(returnCallback)
+        if not ok then
+            print("[EndingManager] ReturnToTitleCallback failed: " .. tostring(err))
+        end
+        return
+    end
+
+    print("[EndingManager] ReturnToTitleCallback is not registered; title transition skipped.")
+end
+
+local function transition_ending_credits_to_name_input()
+    if not EndingManager:IsActive() then
+        return false
+    end
+
+    hide_ending_credits()
+    if UIManager ~= nil and UIManager.ExitCutsceneMode ~= nil then
+        UIManager:ExitCutsceneMode()
+    end
+    ensure_ending_black_screen()
+    return show_ending_name_input() == true
+end
+
+local function process_name_input_key(keyCode)
+    if keyCode == KEY_BACKSPACE then
+        local buffer = EndingManager.PlayerNameBuffer or ""
+        if #buffer > 0 then
+            EndingManager.PlayerNameBuffer = string.sub(buffer, 1, #buffer - 1)
+            refresh_ending_name_input_display()
+        end
+        return true
+    end
+
+    if keyCode == KEY_RETURN then
+        EndingManager:SubmitPlayerName()
+        return true
+    end
+
+    if keyCode == KEY_SPACE then
+        local buffer = EndingManager.PlayerNameBuffer or ""
+        if #buffer >= EndingManager.MAX_PLAYER_NAME_LENGTH then
+            return true
+        end
+        if buffer ~= "" and string.sub(buffer, -1) ~= " " then
+            EndingManager.PlayerNameBuffer = buffer .. " "
+            refresh_ending_name_input_display()
+        end
+        return true
+    end
+
+    if keyCode >= 0x30 and keyCode <= 0x39 then
+        local buffer = EndingManager.PlayerNameBuffer or ""
+        if #buffer >= EndingManager.MAX_PLAYER_NAME_LENGTH then
+            return true
+        end
+        EndingManager.PlayerNameBuffer = buffer .. string.char(keyCode)
+        refresh_ending_name_input_display()
+        return true
+    end
+
+    if keyCode >= 0x41 and keyCode <= 0x5A then
+        local buffer = EndingManager.PlayerNameBuffer or ""
+        if #buffer >= EndingManager.MAX_PLAYER_NAME_LENGTH then
+            return true
+        end
+        EndingManager.PlayerNameBuffer = buffer .. string.char(keyCode)
+        refresh_ending_name_input_display()
+        return true
+    end
+
+    if keyCode >= 0x61 and keyCode <= 0x7A then
+        local buffer = EndingManager.PlayerNameBuffer or ""
+        if #buffer >= EndingManager.MAX_PLAYER_NAME_LENGTH then
+            return true
+        end
+        EndingManager.PlayerNameBuffer = buffer .. string.char(keyCode - 0x20)
+        refresh_ending_name_input_display()
+        return true
+    end
+
+    return false
+end
+
+local ENDING_NAME_INPUT_KEYS = {
+    KEY_BACKSPACE,
+    KEY_RETURN,
+    KEY_SPACE,
+}
+
+for keyCode = 0x30, 0x39 do
+    ENDING_NAME_INPUT_KEYS[#ENDING_NAME_INPUT_KEYS + 1] = keyCode
+end
+for keyCode = 0x41, 0x5A do
+    ENDING_NAME_INPUT_KEYS[#ENDING_NAME_INPUT_KEYS + 1] = keyCode
+end
+for keyCode = 0x61, 0x7A do
+    ENDING_NAME_INPUT_KEYS[#ENDING_NAME_INPUT_KEYS + 1] = keyCode
+end
+
+local function is_ending_name_input_key_down(keyCode)
+    if Input == nil then
+        return false
+    end
+
+    if Input.GetRawKeyDown ~= nil then
+        local ok, pressed = pcall(function()
+            return Input.GetRawKeyDown(keyCode)
+        end)
+        return ok and pressed == true
+    end
+
+    if Input.GetKeyDown ~= nil then
+        local ok, pressed = pcall(function()
+            return Input.GetKeyDown(keyCode)
+        end)
+        return ok and pressed == true
+    end
+
+    return false
+end
+
+local function play_ending_strike_blackout()
+    ensure_ending_black_screen()
 
     if Wait ~= nil then
         Wait(EndingManager.MONKEY_STRIKE_BLACKOUT_HOLD_SECONDS)
     end
+    if not EndingManager:IsActive() then
+        return
+    end
 
-    if EndingManager:IsActive() then
-        show_ending_credits()
+    if show_ending_credits() ~= true then
+        print("[EndingManager] Ending credits could not be shown")
+        return
+    end
+
+    print(string.format(
+        "[EndingManager] Ending credits shown for %.1fs",
+        EndingManager.ENDING_CREDIT_DISPLAY_SECONDS
+    ))
+
+    if Wait ~= nil then
+        Wait(EndingManager.ENDING_CREDIT_DISPLAY_SECONDS)
+    end
+
+    if not transition_ending_credits_to_name_input() then
+        print("[EndingManager] Ending credits to name input transition failed")
     end
 end
 
@@ -896,14 +1163,72 @@ function EndingManager:SpawnVictim()
     return true
 end
 
-function EndingManager:Reset()
+function EndingManager:IsNameInputActive()
+    return self.bNameInputActive == true
+end
+
+function EndingManager:ShouldProcessEndingTick()
+    return self:IsActive() or self:IsNameInputActive()
+end
+
+function EndingManager:Tick(dt)
+    if not self:IsNameInputActive() then
+        return
+    end
+
+    for _, keyCode in ipairs(ENDING_NAME_INPUT_KEYS) do
+        if is_ending_name_input_key_down(keyCode) and process_name_input_key(keyCode) then
+            break
+        end
+    end
+end
+
+function EndingManager:SubmitPlayerName(playerName)
+    if self.bSubmittingToTitle == true then
+        return false
+    end
+    if not self.bActive and not self:IsNameInputActive() then
+        return false
+    end
+
+    self.bSubmittingToTitle = true
+
+    local resolvedName = playerName
+    if resolvedName == nil then
+        resolvedName = self.PlayerNameBuffer
+    end
+
+    self.bNameInputActive = false
+    hide_ending_name_input()
+
+    submit_pending_leaderboard_record(resolvedName)
+    return_to_title_from_ending()
+    return true
+end
+
+function EndingManager:Reset(bStopCreditsMusic)
     stop_ending_sequence_coroutine()
     stop_ending_camera_fade()
-    hide_ending_credits_and_music()
+
+    local bShouldStopMusic = bStopCreditsMusic
+    if bShouldStopMusic == nil then
+        bShouldStopMusic = self.bPreserveCreditsMusicOnReset ~= true
+    end
+    self.bPreserveCreditsMusicOnReset = false
+
+    if bShouldStopMusic then
+        hide_ending_credits_and_music()
+    else
+        hide_ending_credits()
+        hide_ending_name_input()
+    end
+
     stop_camera_shakes()
     self.bStaggerShakeActive = false
     reset_stagger_shake_state()
     self.bActive = false
+    self.bSubmittingToTitle = false
+    self.PendingLeaderboardRecord = nil
     self:DespawnVictim()
     self:DespawnMonkey()
     UIManager:ExitCutsceneMode()
@@ -1026,6 +1351,7 @@ function EndingManager:Enter(player, hit)
         GameManager:_SetState(GameManager.State.Ending, "FinalAnomalyShot")
     end
 
+    capture_pending_leaderboard_record()
     self:PlayWakeUpShot(player)
     start_ending_sequence_coroutine(player)
 
