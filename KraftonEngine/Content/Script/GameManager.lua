@@ -30,6 +30,8 @@ GameManager.bLoopStopped = false
 GameManager.bCymbalMonkeyCycleStarted = false
 GameManager.pressureStage = GameManager.Pressure.EntryStrike
 GameManager.manualPressureStage = nil
+GameManager.maxPlayerBulletsPerStage = 3
+GameManager.playerBulletsRemaining = GameManager.maxPlayerBulletsPerStage
 GameManager.AnomalyPlacementTemplateSetName = "Runtime"
 GameManager.AnomalyPlacementTemplateExtension = ".ActorTemplate"
 GameManager.AnomalyPlacementTemplateSets = {
@@ -197,6 +199,10 @@ function GameManager:_RefreshPressureStage(reason, forceNotify)
     return self:_SetPressureStage(self:_ResolvePressureStage(), reason, forceNotify)
 end
 
+function GameManager:_ResetPlayerBulletsForStage()
+    self.playerBulletsRemaining = self.maxPlayerBulletsPerStage
+end
+
 function GameManager:_ClearAnomalyPlacement()
     local record = self.ActiveAnomalyPlacementRecord
     self.ActiveAnomalyPlacementRecord = nil
@@ -279,6 +285,7 @@ end
 
 function GameManager:_SetupAnomaly(reason)
     reason = reason or "SetupAnomaly"
+    self:_ResetPlayerBulletsForStage()
     AnomalyManager:DespawnCurrent(reason)
     self:_ClearAnomalyPlacement()
     local bPlacementReady = self:_SpawnRandomAnomalyPlacement(reason)
@@ -596,6 +603,21 @@ end
 
 function GameManager:GetPressureStage()
     return self.pressureStage
+end
+
+function GameManager:GetPlayerBulletsRemaining()
+    return self.playerBulletsRemaining
+end
+
+function GameManager:ConsumePlayerBullet()
+    local bulletsRemaining = tonumber(self.playerBulletsRemaining) or 0
+    if bulletsRemaining <= 0 then
+        self.playerBulletsRemaining = 0
+        return false
+    end
+
+    self.playerBulletsRemaining = bulletsRemaining - 1
+    return true
 end
 
 function GameManager:SetPressureStageOverride(pressure)

@@ -49,6 +49,7 @@ AnomalyCandidate
 ### 게임 시작과 워프 이벤트에서 호출
 
 게임 시작 시 `GameManager:StartGame()`은 초기 이상현상 세팅을 수행한다. 이때 타이머는 바로 흐르지 않도록 루프 정지 상태로 시작한다.
+새 스테이지가 세팅되면 플레이어 권총 탄환은 3발로 초기화된다.
 
 플레이어 워프 직후에는 아래 함수를 호출해서 배치와 새 이상현상을 다시 세팅한다. 이 함수는 타이머를 재설정하지 않는다.
 
@@ -82,6 +83,7 @@ GameManager:ReportAnomalyShot(hit.Actor)
 ```
 
 현재 활성 이상현상 대상과 같은 액터를 맞추면 `true`를 반환하고 `GameManager:StopLoop()`을 호출한다. 이때 활성 이상현상은 즉시 원복하지 않고, 게임 시간과 `CymbalMonkey` 애니메이션만 정지한다. 대상이 아니면 `false`를 반환하며 기존 투사체 스폰 흐름을 계속 진행하면 된다.
+권총 발사 탄환은 총격 판정 전에 소모되므로 정답 이상현상, `Fake` 태그 대상, 일반 투사체 발사가 모두 스테이지당 3발 제한에 포함된다.
 
 ### 디버그 키
 
@@ -119,6 +121,7 @@ CymbalsMonkeyPositionCandidate
 ```txt
 GameManager:StartGame()
   ├─ Playing 상태 진입
+  ├─ 플레이어 권총 탄환 3발 초기화
   ├─ 루프 정지 상태로 시작
   └─ GameManager:_SetupAnomaly("StartGame")
        ├─ 기존 활성 이상현상 Despawn
@@ -137,6 +140,7 @@ GameManager:StartGame()
 ```txt
 GameManager:OnWarp("PlayerWarp")
   └─ GameManager:_SetupAnomaly("PlayerWarp")
+       ├─ 플레이어 권총 탄환 3발 초기화
        ├─ 기존 활성 이상현상 Despawn
        ├─ 기존 배치 제거
        ├─ 새 배치 Spawn
@@ -391,6 +395,8 @@ World.GetRealTimeSeconds()
 - `3`을 눌렀을 때 대상이 화면 밖에 있을 때만 애니메이션이 재생되는지 확인한다.
 - 다른 후보나 일반 오브젝트를 쏘면 클리어되지 않고, 활성 대상만 클리어되는지 확인한다.
 - 활성 대상을 쏘면 게임 시간이 멈추고 `CymbalMonkey` 애니메이션도 정지하는지 확인한다.
+- 한 스테이지에서 권총 발사는 정답 이상현상, `Fake` 태그 대상, 일반 투사체 발사를 합쳐 3회까지만 가능하다.
+- 워프 후 새 스테이지가 세팅되면 권총 발사 가능 횟수가 다시 3회로 초기화된다.
 - `DoorEntry` 문을 열면 `remainingTime`이 초기값으로 복구되고, 시간이 다시 흐르며 `CymbalMonkey` 애니메이션이 재개되는지 확인한다.
 - 씬을 재시작하거나 게임이 리셋될 때 이전 이상현상 상태가 복구되는지 확인한다.
 

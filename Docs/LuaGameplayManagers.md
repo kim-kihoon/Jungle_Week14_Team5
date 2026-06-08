@@ -85,6 +85,7 @@ ToolManager.lua
 - projectile spawn, muzzle/socket 기반 발사 위치 계산
 - head bob, camera bob, footstep timing
 - 이상현상 총격 판정은 `GameManager:ReportAnomalyShot()`으로 위임
+- 권총 발사 탄환 소모는 정답 이상현상, `Fake` 태그 대상, 일반 투사체 발사 모두 `GameManager:ConsumePlayerBullet()`을 먼저 통과한다.
 
 `ToolManager`는 장비 상태 공유를 위한 단일 진실이다. `fps_character.lua` 내부의 애니메이션 전환 상태와 `ToolManager.CurrentTool`이 어긋나지 않도록 장비 표시가 확정되는 지점에서 동기화한다.
 
@@ -98,6 +99,7 @@ ToolManager.lua
 
 - `StartGame`, `PauseGame`, `ResumeGame`, `GameOver`, `ClearGame`, `RestartGame`
 - 점수와 타이머 갱신
+- 스테이지별 플레이어 권총 탄환 수 초기화와 소모
 - 압박 단계 계산
 - 이상현상 배치와 활성 이상현상 선택
 - 상태 변경 이벤트 발행
