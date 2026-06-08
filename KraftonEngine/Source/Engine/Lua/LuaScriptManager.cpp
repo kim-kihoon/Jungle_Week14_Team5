@@ -76,6 +76,7 @@
 #include "Core/Types/CollisionTypes.h"
 #include "GameFramework/AActor.h"
 #include "GameFramework/World.h"
+#include "UI/CrosshairOverlay.h"
 #include "GameFramework/Actor/ParticleSystemActor.h"
 #include "GameFramework/Camera/CameraModifier.h"
 #include "Render/Scene/FScene.h"
@@ -2054,6 +2055,22 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
             }
 
             UE_LOG("[Lua] %s", Message.c_str());
+        }
+    );
+
+    sol::table Crosshair = Lua.create_named_table("Crosshair");
+    Crosshair.set_function(
+        "set_visible",
+        [](bool bVisible)
+        {
+            FCrosshairOverlay::SetVisible(bVisible);
+        }
+    );
+    Crosshair.set_function(
+        "is_visible",
+        []()
+        {
+            return FCrosshairOverlay::IsVisible();
         }
     );
 

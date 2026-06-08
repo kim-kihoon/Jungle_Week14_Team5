@@ -27,7 +27,6 @@ UWorld* FEditorViewportClient::GetWorld() const
 #include "Editor/EditorEngine.h"
 #include "GameFramework/AActor.h"
 #include "Viewport/GameViewportClient.h"
-#include "UI/CrosshairOverlay.h"
 #include "UI/PhotoOverlay.h"
 #include "ImGui/imgui.h"
 #include "Component/Light/LightComponentBase.h"
@@ -793,11 +792,6 @@ void FEditorViewportClient::RenderViewportImage(bool bIsActiveViewport)
 			DrawList->AddRectFilled(Min, Max, IM_COL32(255, 255, 255, AlphaByte(FlashAlpha * 0.9f)));
 		}
 
-		if (FCrosshairOverlay::IsVisible())
-		{
-			const ImVec2 Center(R.X + R.Width * 0.5f, R.Y + R.Height * 0.5f);
-			DrawList->AddCircleFilled(Center, 1.6f, IM_COL32(220, 220, 220, 150), 12);
-		}
 	}
 
 	// 활성 뷰포트 테두리 강조

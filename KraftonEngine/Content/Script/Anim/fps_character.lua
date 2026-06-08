@@ -538,9 +538,8 @@ local function notify_photo_capture_requested()
     return GameManager:NotifyPhotoCaptureRequested()
 end
 
-local function show_pistol()
+local function show_pistol(self)
     sync_tool_state(TOOL_PISTOL)
-    Anim.set_crosshair_visible(true)
     Anim.set_owner_mesh_pitch(ARMS_READY_PITCH)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -548,9 +547,8 @@ local function show_pistol()
     set_camera_mesh_position(0.0)
 end
 
-local function show_camera()
+local function show_camera(self)
     sync_tool_state(TOOL_CAMERA)
-    Anim.set_crosshair_visible(false)
     Anim.set_owner_mesh_pitch(ARMS_DOWN_PITCH)
     Anim.set_owner_mesh_visibility(false)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, false)
@@ -559,7 +557,6 @@ local function show_camera()
 end
 
 local function update_switch_to_camera(self, alpha)
-    Anim.set_crosshair_visible(false)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -607,7 +604,6 @@ local function update_footsteps(self)
 end
 
 local function update_switch_to_pistol(self, alpha)
-    Anim.set_crosshair_visible(false)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -705,7 +701,7 @@ function init(self)
     Anim.sm_set_initial_state(fps, "PistolIdle")
     Anim.set_root_node(fps)
     self.FpsStateMachine = fps
-    show_pistol()
+    show_pistol(self)
     sync_tool_state(TOOL_PISTOL)
 end
 
@@ -770,7 +766,7 @@ function update(self, dt)
             self.SwitchTime = 0.0
             self.SwitchPhase = SWITCH_NONE
             self.CurrentTool = TOOL_CAMERA
-            show_camera()
+            show_camera(self)
         end
     elseif self.SwitchPhase == SWITCH_TO_PISTOL then
         update_switch_to_pistol(self, alpha)
@@ -778,7 +774,7 @@ function update(self, dt)
             self.SwitchTime = 0.0
             self.SwitchPhase = SWITCH_NONE
             self.CurrentTool = TOOL_PISTOL
-            show_pistol()
+            show_pistol(self)
         end
     end
 end

@@ -23,6 +23,9 @@
 #include "Editor/Slate/SlateApplication.h"
 #include "Editor/UI/Util/ImGuiSetting.h"
 #include "Editor/UI/Util/NotificationToast.h"
+#include "UI/CrosshairOverlay.h"
+#include "Viewport/GameViewportClient.h"
+#include "Viewport/Viewport.h"
 
 #include "Editor/UI/Asset/Curve/FloatCurveEditorWidget.h"
 #include "Editor/UI/Asset/CameraShake/CameraShakeEditorWidget.h"
@@ -38,6 +41,63 @@
 #include <filesystem>
 #include <random>
 #include <utility>
+
+namespace
+{
+	const FRect* FindPlayViewportScreenRect(UEditorEngine* EditorEngine)
+	{
+		if (!EditorEngine)
+		{
+			return nullptr;
+		}
+
+		FViewport* PlayViewport = nullptr;
+		if (UGameViewportClient* GameViewportClient = EditorEngine->GetGameViewportClient())
+		{
+			PlayViewport = GameViewportClient->GetViewport();
+		}
+
+		const TArray<FLevelEditorViewportClient*>& ViewportClients = EditorEngine->GetLevelViewportClients();
+		for (FLevelEditorViewportClient* ViewportClient : ViewportClients)
+		{
+			if (!ViewportClient || !EditorEngine->ShouldRenderViewportClient(ViewportClient))
+			{
+				continue;
+			}
+
+			if (PlayViewport != nullptr && ViewportClient->GetViewport() == PlayViewport)
+			{
+				return &ViewportClient->GetViewportScreenRect();
+			}
+		}
+
+		if (FLevelEditorViewportClient* ActiveViewport = EditorEngine->GetActiveViewport())
+		{
+			return &ActiveViewport->GetViewportScreenRect();
+		}
+
+		return nullptr;
+	}
+
+	void RenderPlayCrosshairOverlay(UEditorEngine* EditorEngine)
+	{
+		if (!EditorEngine || !EditorEngine->IsPlayingInEditor() || !FCrosshairOverlay::IsVisible())
+		{
+			return;
+		}
+
+		const FRect* ViewportRect = FindPlayViewportScreenRect(EditorEngine);
+		if (ViewportRect == nullptr || ViewportRect->Width <= 0.0f || ViewportRect->Height <= 0.0f)
+		{
+			return;
+		}
+
+		const ImVec2 Center(
+			ViewportRect->X + ViewportRect->Width * 0.5f,
+			ViewportRect->Y + ViewportRect->Height * 0.5f);
+		FCrosshairOverlay::Draw(ImGui::GetForegroundDrawList(), Center);
+	}
+}
 
 #include "Asset/Particle/ParticleEditorWidget.h"
 
@@ -340,6 +400,9 @@ void FEditorMainPanel::Render(float DeltaTime)
 
 	// 토스트 알림 (항상 최상위에 표시)
 	FNotificationToast::Render();
+
+	// PIE HUD 위에 조준점을 마지막에 그린다.
+	RenderPlayCrosshairOverlay(EditorEngine);
 
 	ImGui::Render();
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

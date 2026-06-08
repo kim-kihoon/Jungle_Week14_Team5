@@ -485,9 +485,21 @@ function GameManager:IsCymbalMonkeyCycleStarted()
     return LoopManager:IsCymbalMonkeyCycleStarted()
 end
 
+function GameManager:IsCymbalDoorTriggerUsed()
+    return LoopManager:IsCymbalDoorTriggerUsed()
+end
+
 function GameManager:StartCymbalMonkeyCycle()
     local bStarted = LoopManager:StartCymbalMonkeyCycle(self)
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
+    if bStarted
+        and LoopManager:GetWarpCount() == 0
+        and not LoopManager:HasConsumedFirstTimerChaos() then
+        local bScheduled = require("DoorManager"):TryScheduleChaosSingleDoorToggles("first_timer")
+        if bScheduled then
+            LoopManager:MarkFirstTimerChaosConsumed()
+        end
+    end
     return bStarted
 end
 
@@ -504,6 +516,7 @@ end
 function GameManager:StopLoop(reason)
     local bStopped = LoopManager:StopLoop(self, reason)
     self.bLoopStopped = LoopManager:IsLoopStopped()
+    self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     return bStopped
 end
 
@@ -658,6 +671,7 @@ function GameManager:Tick(dt)
     end
 
     self:_RefreshPressureStage("Tick", false)
+    require("DoorManager"):UpdateChaosSingleDoorToggles(self.remainingTime)
 end
 
 function GameManager:AddScore(amount)
@@ -813,10 +827,17 @@ function GameManager:GetState()
     return self.state
 end
 
+function GameManager:GetWarpCount()
+    return LoopManager:GetWarpCount()
+end
+
 function GameManager:OnWarp(reason)
     local bWarped = LoopManager:OnWarp(self, reason, function(setupReason)
         return self:_SetupAnomaly(setupReason)
     end)
+    if bWarped and LoopManager:GetWarpCount() >= 1 then
+        require("DoorManager"):TryScheduleChaosSingleDoorToggles("warp")
+    end
     self.bLoopStopped = LoopManager:IsLoopStopped()
     self.bCymbalMonkeyCycleStarted = LoopManager:IsCymbalMonkeyCycleStarted()
     return bWarped

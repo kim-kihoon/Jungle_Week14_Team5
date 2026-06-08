@@ -7,6 +7,7 @@ UIManager.DoorPromptDocumentPath = "Content/UI/HospitalDoorPrompt.rml"
 UIManager.DoorPromptElementId = "door_prompt"
 UIManager.ControlPromptDocumentPath = "Content/UI/HospitalControlPrompt.rml"
 UIManager.ControlPromptElementId = "control_prompt"
+UIManager.ControlPromptAmmoElementId = "ammo_display"
 UIManager.TimerPromptDocumentPath = "Content/UI/HospitalTimer.rml"
 UIManager.TimerPromptElementId = "timer_display"
 UIManager.TitleDocumentPath = "Content/UI/TitleUI.rml"
@@ -23,6 +24,7 @@ UIManager.bDoorPromptVisible = false
 UIManager.ControlPromptWidget = nil
 UIManager.bControlPromptVisible = false
 UIManager.LastControlPromptText = nil
+UIManager.LastAmmoDisplayText = nil
 UIManager.TimerPromptWidget = nil
 UIManager.bTimerPromptVisible = false
 UIManager.LastTimerDisplaySeconds = nil
@@ -179,6 +181,7 @@ function UIManager:ResetHospital()
     self.ControlPromptWidget = nil
     self.bControlPromptVisible = false
     self.LastControlPromptText = nil
+    self.LastAmmoDisplayText = nil
     self.TimerPromptWidget = nil
     self.bTimerPromptVisible = false
     self.LastTimerDisplaySeconds = nil
@@ -264,6 +267,30 @@ function UIManager:UpdateControlPrompt()
         set_widget_text(widget, self.ControlPromptElementId, promptText)
     end
     self:SetControlPromptVisible(true)
+end
+
+function UIManager:UpdateAmmoPrompt(gameManager)
+    local widget = self:EnsureControlPromptWidget()
+    if widget == nil then
+        return
+    end
+
+    if not ToolManager:IsPistol() then
+        set_widget_display(widget, self.ControlPromptAmmoElementId, false)
+        return
+    end
+
+    local bulletsRemaining = 0
+    if gameManager ~= nil and gameManager.GetPlayerBulletsRemaining ~= nil then
+        bulletsRemaining = tonumber(gameManager:GetPlayerBulletsRemaining()) or 0
+    end
+
+    local ammoText = tostring(math.max(0, math.floor(bulletsRemaining)))
+    if self.LastAmmoDisplayText ~= ammoText then
+        self.LastAmmoDisplayText = ammoText
+        set_widget_text(widget, self.ControlPromptAmmoElementId, ammoText)
+    end
+    set_widget_display(widget, self.ControlPromptAmmoElementId, true)
 end
 
 local function format_countdown_seconds(totalSeconds)
