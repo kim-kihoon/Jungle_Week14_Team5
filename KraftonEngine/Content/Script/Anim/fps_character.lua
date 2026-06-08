@@ -531,6 +531,13 @@ local function can_request_photo_capture()
     return Anim.is_photo_capture_available()
 end
 
+local function notify_photo_capture_requested()
+    if GameManager == nil or GameManager.NotifyPhotoCaptureRequested == nil then
+        return false
+    end
+    return GameManager:NotifyPhotoCaptureRequested()
+end
+
 local function show_pistol(self)
     sync_tool_state(TOOL_PISTOL)
     Anim.set_owner_mesh_pitch(ARMS_READY_PITCH)
@@ -733,6 +740,7 @@ function update(self, dt)
             end
         elseif self.CurrentTool == TOOL_CAMERA then
             if (is_action_pressed("Fire") or Anim.is_left_mouse_pressed()) and can_request_photo_capture() then
+                notify_photo_capture_requested()
                 Anim.request_photo_capture(should_blackout_photo_capture())
             end
         end

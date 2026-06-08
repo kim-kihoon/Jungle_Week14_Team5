@@ -45,6 +45,7 @@ public:
 	// --- 조회 ---
 	const TArray<FPrimitiveSceneProxy*>& GetAllProxies() const { return Proxies; }
 	const TArray<FPrimitiveSceneProxy*>& GetNeverCullProxies() const { return NeverCullProxies; }
+	const TArray<FPrimitiveSceneProxy*>& GetSelectedProxies() const { return SelectedProxies; }
 	uint32 GetProxyCount() const { return static_cast<uint32>(Proxies.size()); }
 
 	// ===== Per-frame ephemeral data (cleared each viewport render) =====

@@ -317,6 +317,10 @@ function GameManager:SetActiveAnomalyOutlineVisible(bVisible)
     end
 
     if self.OutlinedAnomalyTarget == target then
+        if not self:_SetAnomalyTargetOutline(target, true) then
+            print("[GameManager] Active anomaly target outline failed")
+            return false
+        end
         return true
     end
 
@@ -878,6 +882,10 @@ function GameManager:ReportAnomalyShot(actor, hit)
         self:StopLoop("AnomalyShot")
     end
     return bHitAnomaly
+end
+
+function GameManager:NotifyPhotoCaptureRequested()
+    return AnomalyManager:NotifyPhotoCaptureRequested()
 end
 
 function GameManager:GetActiveAnomalyTarget()

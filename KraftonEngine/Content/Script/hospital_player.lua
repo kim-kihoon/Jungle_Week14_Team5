@@ -28,14 +28,11 @@ local TITLE_MONKEY_START_FUNCTION = "PlayStartAnimation"
 local TITLE_FADE_OUT_SECONDS = 0.75
 local TITLE_BLACK_HOLD_SECONDS = 0.1
 local TITLE_FADE_IN_SECONDS = 0.75
-local GAME_OVER_PRESENTATION_SECONDS = 2.0
 
 local bTitleTransitioning = false
 local TitleTransitionCoroutine = nil
 local TitleTransitionWaitRemaining = 0.0
 local GameOverStateChangedHandle = nil
-local GameOverPresentationCoroutine = nil
-local GameOverPresentationWaitRemaining = 0.0
 local InitialPlayerLocation = nil
 local InitialPlayerRotation = nil
 local InitialPlayerControlRotation = nil
@@ -434,69 +431,21 @@ local function StopTitleTransitionCoroutine()
     bTitleTransitioning = false
 end
 
-local function StopGameOverPresentationCoroutine()
-    GameOverPresentationCoroutine = nil
-    GameOverPresentationWaitRemaining = 0.0
-end
-
 local function ClearGameOverPresentation()
-    StopGameOverPresentationCoroutine()
     GameOverMonkey:ClearPresentation()
     UIManager:DisposeGameOver()
-end
-
-local function WaitGameOverPresentation(seconds)
-    coroutine.yield(tonumber(seconds) or 0.0)
 end
 
 local function OpenGameOverMenu()
     UIManager:ShowGameOver()
 end
 
-local function ResumeGameOverPresentation(dt)
-    if GameOverPresentationCoroutine == nil then
-        return
-    end
-
-    if coroutine.status(GameOverPresentationCoroutine) == "dead" then
-        StopGameOverPresentationCoroutine()
-        return
-    end
-
-    GameOverPresentationWaitRemaining = GameOverPresentationWaitRemaining - (tonumber(dt) or 0.0)
-    if GameOverPresentationWaitRemaining > 0.0 then
-        return
-    end
-
-    local ok, waitSeconds = coroutine.resume(GameOverPresentationCoroutine)
-    if not ok then
-        StopGameOverPresentationCoroutine()
-        return
-    end
-
-    if coroutine.status(GameOverPresentationCoroutine) == "dead" then
-        StopGameOverPresentationCoroutine()
-        return
-    end
-
-    GameOverPresentationWaitRemaining = math.max(0.0, tonumber(waitSeconds) or 0.0)
-end
-
-local function StartGameOverPresentationCoroutine()
-    StopGameOverPresentationCoroutine()
+local function StartGameOverPresentation()
     UIManager:DisposeGameOver()
-
-    local bPresentationStarted = GameOverMonkey:PlayPresentationAnimation()
-
-    GameOverPresentationWaitRemaining = 0.0
-    GameOverPresentationCoroutine = coroutine.create(function()
-        if bPresentationStarted then
-            WaitGameOverPresentation(GAME_OVER_PRESENTATION_SECONDS)
-        end
+    local bPresentationStarted = GameOverMonkey:StartPresentation(OpenGameOverMenu)
+    if not bPresentationStarted then
         OpenGameOverMenu()
-    end)
-
-    ResumeGameOverPresentation(0.0)
+    end
     return bPresentationStarted
 end
 
@@ -504,7 +453,7 @@ local function HandleGameStateChanged(nextState)
     if GameManager ~= nil
         and GameManager.State ~= nil
         and nextState == GameManager.State.GameOver then
-        StartGameOverPresentationCoroutine()
+        StartGameOverPresentation()
         return
     end
 
@@ -595,7 +544,6 @@ end
 
 function BeginPlay()
     StopTitleTransitionCoroutine()
-    StopGameOverPresentationCoroutine()
     InitialPlayerLocation = nil
     InitialPlayerRotation = nil
     InitialPlayerControlRotation = nil
@@ -617,7 +565,6 @@ function EndPlay()
     StopTitleTransitionCoroutine()
     UnbindGameOverStateChanged()
     GameOverMonkey:Shutdown()
-    StopGameOverPresentationCoroutine()
     bCanWarp = true
     bLastLoopStopped = false
     DoorManager:Reset()
@@ -632,7 +579,7 @@ function Tick(dt)
         return
     end
 
-    ResumeGameOverPresentation(dt)
+    GameOverMonkey:Tick(dt)
 
     if bTitleTransitioning then
         ResumeTitleTransition(dt)

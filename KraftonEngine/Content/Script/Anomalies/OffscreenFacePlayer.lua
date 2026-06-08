@@ -181,11 +181,18 @@ function OffscreenFacePlayer:Tick(context)
     end
 
     local target = context.Target
+    return self:FaceTargetToPlayer(context, target)
+end
+
+function OffscreenFacePlayer:FaceTargetToPlayer(context, target)
+    target = target or context.Target
     local targetLocation = get_actor_location(target)
     local rotation = make_yaw_rotation_to_player(targetLocation)
-    if rotation ~= nil then
-        set_actor_rotation(target, rotation)
+    if rotation == nil then
+        return false
     end
+
+    return set_actor_rotation(target, rotation)
 end
 
 function OffscreenFacePlayer:Despawn(context)
