@@ -165,6 +165,7 @@ public:
     void TickClothSimulationForEditorPreview(float DeltaTime);
     void ResetClothSimulation();
     void SetClothPreviewWindOverride(bool bEnable, const FVector& WorldWindVelocity);
+    void BeginPlay() override;
 
     // Mesh 가 바뀌면 AnimInstance 도 새 SkeletalMesh 기준으로 재구성해야 하므로 override.
     UFUNCTION(Callable, Category="Mesh")

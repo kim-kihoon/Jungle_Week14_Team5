@@ -17,6 +17,8 @@
 #include "Render/Resource/RenderResources.h"
 #include "Render/Shader/ShaderManager.h"
 #include "Render/Types/FrameContext.h"
+#include "UI/CrosshairOverlay.h"
+#include "UI/PhotoOverlay.h"
 #include "UI/UserWidget.h"
 #include "WICTextureLoader.h"
 
@@ -141,6 +143,81 @@ namespace
 		}
 
 		return EUIRenderLayout::ScaledDesign;
+	}
+
+	constexpr float PhotoFlashSeconds = 0.2f;
+	constexpr int32 CrosshairSegments = 10;
+	constexpr float CrosshairRadius = 1.4f;
+	constexpr float Pi = 3.14159265358979323846f;
+
+	float Clamp01(float Value)
+	{
+		if (Value < 0.0f)
+		{
+			return 0.0f;
+		}
+		if (Value > 1.0f)
+		{
+			return 1.0f;
+		}
+		return Value;
+	}
+
+	uint8 AlphaByte(float Alpha)
+	{
+		return static_cast<uint8>(Clamp01(Alpha) * 255.0f);
+	}
+
+	Rml::Vertex MakeOverlayVertex(float X, float Y, uint8 R, uint8 G, uint8 B, uint8 A)
+	{
+		Rml::Vertex Vertex;
+		Vertex.position = Rml::Vector2f(X, Y);
+		Vertex.colour.red = R;
+		Vertex.colour.green = G;
+		Vertex.colour.blue = B;
+		Vertex.colour.alpha = A;
+		Vertex.tex_coord = Rml::Vector2f(0.0f, 0.0f);
+		return Vertex;
+	}
+
+	void AppendOverlayRect(TArray<Rml::Vertex>& Vertices, TArray<int>& Indices,
+		float Left, float Top, float Right, float Bottom, uint8 R, uint8 G, uint8 B, uint8 A)
+	{
+		const int BaseIndex = static_cast<int>(Vertices.size());
+		Vertices.push_back(MakeOverlayVertex(Left, Top, R, G, B, A));
+		Vertices.push_back(MakeOverlayVertex(Right, Top, R, G, B, A));
+		Vertices.push_back(MakeOverlayVertex(Right, Bottom, R, G, B, A));
+		Vertices.push_back(MakeOverlayVertex(Left, Bottom, R, G, B, A));
+
+		Indices.push_back(BaseIndex + 0);
+		Indices.push_back(BaseIndex + 1);
+		Indices.push_back(BaseIndex + 2);
+		Indices.push_back(BaseIndex + 0);
+		Indices.push_back(BaseIndex + 2);
+		Indices.push_back(BaseIndex + 3);
+	}
+
+	void AppendOverlayCircle(TArray<Rml::Vertex>& Vertices, TArray<int>& Indices,
+		float CenterX, float CenterY, float Radius, uint8 R, uint8 G, uint8 B, uint8 A)
+	{
+		const int CenterIndex = static_cast<int>(Vertices.size());
+		Vertices.push_back(MakeOverlayVertex(CenterX, CenterY, R, G, B, A));
+
+		for (int32 Segment = 0; Segment < CrosshairSegments; ++Segment)
+		{
+			const float Angle = (static_cast<float>(Segment) / static_cast<float>(CrosshairSegments)) * Pi * 2.0f;
+			Vertices.push_back(MakeOverlayVertex(
+				CenterX + std::cos(Angle) * Radius,
+				CenterY + std::sin(Angle) * Radius,
+				R, G, B, A));
+		}
+
+		for (int32 Segment = 0; Segment < CrosshairSegments; ++Segment)
+		{
+			Indices.push_back(CenterIndex);
+			Indices.push_back(CenterIndex + 1 + Segment);
+			Indices.push_back(CenterIndex + 1 + ((Segment + 1) % CrosshairSegments));
+		}
 	}
 
 	std::filesystem::path ToProjectPath(const FString& Path)
@@ -495,6 +572,26 @@ void FRmlRenderInterfaceD3D11::RenderGeometry(Rml::CompiledGeometryHandle Geomet
 	DC->IASetVertexBuffers(0, 1, &Geometry->VertexBuffer, &Stride, &Offset);
 	DC->IASetIndexBuffer(Geometry->IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 	DC->DrawIndexed(Geometry->IndexCount, 0, 0);
+}
+
+static void RenderImmediateOverlayGeometry(FRmlRenderInterfaceD3D11* RenderInterface,
+	const TArray<Rml::Vertex>& Vertices, const TArray<int>& Indices)
+{
+	if (!RenderInterface || Vertices.empty() || Indices.empty())
+	{
+		return;
+	}
+
+	const Rml::CompiledGeometryHandle Geometry = RenderInterface->CompileGeometry(
+		Rml::Span<const Rml::Vertex>(Vertices.data(), Vertices.size()),
+		Rml::Span<const int>(Indices.data(), Indices.size()));
+	if (!Geometry)
+	{
+		return;
+	}
+
+	RenderInterface->RenderGeometry(Geometry, Rml::Vector2f(0.0f, 0.0f), 0);
+	RenderInterface->ReleaseGeometry(Geometry);
 }
 
 void FRmlRenderInterfaceD3D11::ReleaseGeometry(Rml::CompiledGeometryHandle GeometryHandle)
@@ -1265,6 +1362,56 @@ void UUIManager::Render(const FPassContext& Ctx)
 
 	RestoreViewportDocumentVisibility();
 	RmlContext->Update();
+	RenderInterface->EndFrame();
+}
+
+bool UUIManager::HasRuntimeOverlays(const FFrameContext& Frame) const
+{
+	if (Frame.WorldType != EWorldType::Game)
+	{
+		return false;
+	}
+
+	return FCrosshairOverlay::IsVisible() || FPhotoOverlay::IsFlashVisible();
+}
+
+void UUIManager::RenderRuntimeOverlays(const FPassContext& Ctx)
+{
+	if (!RenderInterface || !HasRuntimeOverlays(Ctx.Frame) ||
+		Ctx.Frame.ViewportWidth <= 0.0f || Ctx.Frame.ViewportHeight <= 0.0f)
+	{
+		return;
+	}
+
+	TArray<Rml::Vertex> Vertices;
+	TArray<int> Indices;
+
+	if (FCrosshairOverlay::IsVisible())
+	{
+		AppendOverlayCircle(
+			Vertices,
+			Indices,
+			Ctx.Frame.ViewportWidth * 0.5f,
+			Ctx.Frame.ViewportHeight * 0.5f,
+			CrosshairRadius,
+			150, 150, 150, 255);
+	}
+
+	if (FPhotoOverlay::IsFlashVisible())
+	{
+		const float FlashAlpha = 1.0f - Clamp01(FPhotoOverlay::GetFlashTime() / PhotoFlashSeconds);
+		AppendOverlayRect(
+			Vertices,
+			Indices,
+			0.0f,
+			0.0f,
+			Ctx.Frame.ViewportWidth,
+			Ctx.Frame.ViewportHeight,
+			255, 255, 255, AlphaByte(FlashAlpha * 0.9f));
+	}
+
+	RenderInterface->BeginFrame(Ctx);
+	RenderImmediateOverlayGeometry(RenderInterface, Vertices, Indices);
 	RenderInterface->EndFrame();
 }
 
