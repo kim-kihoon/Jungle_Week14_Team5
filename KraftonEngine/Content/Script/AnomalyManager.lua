@@ -7,20 +7,23 @@ local OffscreenFacePlayer = require("Anomalies/OffscreenFacePlayer")
 local PhotoLookAtInvisible = require("Anomalies/PhotoLookAtInvisible")
 local PhotoLookAtBlackPhoto = require("Anomalies/PhotoLookAtBlackPhoto")
 local BlackPhoto = require("Anomalies/BlackPhoto")
+local PhotoBoneTwist = require("Anomalies/PhotoBoneTwist")
 local NearSilentCymbalMonkey = require("Anomalies/NearSilentCymbalMonkey")
 
 AnomalyManager.Tags = {
     Candidate = "AnomalyCandidate",
     ActiveTarget = "ActiveAnomalyTarget",
     PhotoInvisible = "PhotoInvisible",
-    PhotoBlackoutTarget = "PhotoBlackoutTarget"
+    PhotoBlackoutTarget = "PhotoBlackoutTarget",
+    PhotoBoneTwistTarget = "PhotoBoneTwistTarget"
 }
 
 AnomalyManager.Rules = {
     PhotoInvisible,
     PhotoLookAtInvisible,
     PhotoLookAtBlackPhoto,
-    BlackPhoto
+    BlackPhoto,
+    PhotoBoneTwist
 }
 
 AnomalyManager.AllRules = {
@@ -31,6 +34,7 @@ AnomalyManager.AllRules = {
     PhotoLookAtInvisible,
     PhotoLookAtBlackPhoto,
     BlackPhoto,
+    PhotoBoneTwist,
     NearSilentCymbalMonkey
 }
 

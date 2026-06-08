@@ -69,6 +69,7 @@ void FGameRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
 	FScene* Scene = &World->GetScene();
 
 	PrepareViewport(VP, Ctx);
+	FPhotoOverlay::PreparePendingCaptureWorldState(World);
 	BuildFrame(VP, POV, Scene, World);
 
 	FCollectOutput Output;
