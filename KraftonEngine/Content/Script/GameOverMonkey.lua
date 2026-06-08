@@ -13,6 +13,7 @@ local NOISE_AUDIO_VOLUME = 0.5
 local SCREAM_AUDIO_KEY = "GameOverMonkeyScream"
 local SCREAM_AUDIO_PATH = "CymbalMonkey/MonkeyScream.mp3"
 local SCREAM_AUDIO_VOLUME = 1.0
+local CYMBALS_MONKEY_RISE_TARGET_SCALE = 0.1
 
 local LOOK_AT_SECONDS = 0.1
 local REVEAL_DELAY_SECONDS = 0.3
@@ -60,6 +61,13 @@ GameOverMonkey.SqueezeElapsed = 0.0
 GameOverMonkey.OriginalScale = nil
 GameOverMonkey.OriginalLocalLocation = nil
 GameOverMonkey.StartLocalLocation = nil
+GameOverMonkey.CymbalsMonkeyActor = nil
+GameOverMonkey.CymbalsMonkeyOriginalLocation = nil
+GameOverMonkey.CymbalsMonkeyOriginalScale = nil
+GameOverMonkey.CymbalsMonkeyStartLocation = nil
+GameOverMonkey.CymbalsMonkeyTargetLocation = nil
+GameOverMonkey.CymbalsMonkeyStartScale = nil
+GameOverMonkey.CymbalsMonkeyTargetScale = nil
 GameOverMonkey.SavedPostProcessParameters = nil
 GameOverMonkey.bNoiseAudioLoaded = false
 GameOverMonkey.bNoiseAudioPlaying = false
@@ -174,6 +182,51 @@ local function get_player_pawn(playerActor)
         return pawn
     end
     return nil
+end
+
+local function get_actor_scale(actor)
+    if actor == nil then
+        return nil
+    end
+
+    local ok, scale = pcall(function()
+        return actor.Scale
+    end)
+    if ok then
+        return scale
+    end
+    return nil
+end
+
+local function set_actor_location(actor, location)
+    if actor == nil or location == nil then
+        return false
+    end
+
+    if actor.SetLocation ~= nil then
+        local ok = pcall(function()
+            actor:SetLocation(location)
+        end)
+        if ok then
+            return true
+        end
+    end
+
+    local ok = pcall(function()
+        actor.Location = location
+    end)
+    return ok == true
+end
+
+local function set_actor_scale(actor, scale)
+    if actor == nil or scale == nil then
+        return false
+    end
+
+    local ok = pcall(function()
+        actor.Scale = scale
+    end)
+    return ok == true
 end
 
 local function get_control_rotation(pawn)
@@ -575,6 +628,13 @@ function GameOverMonkey:ResetPresentationState()
     self.LookTargetControlRotation = nil
     self.SqueezeElapsed = 0.0
     self.StartLocalLocation = nil
+    self.CymbalsMonkeyActor = nil
+    self.CymbalsMonkeyOriginalLocation = nil
+    self.CymbalsMonkeyOriginalScale = nil
+    self.CymbalsMonkeyStartLocation = nil
+    self.CymbalsMonkeyTargetLocation = nil
+    self.CymbalsMonkeyStartScale = nil
+    self.CymbalsMonkeyTargetScale = nil
     self.SavedPostProcessParameters = nil
     self.bNoiseAudioPlaying = false
 end
@@ -882,7 +942,33 @@ function GameOverMonkey:StartRiseMonkey()
     )
     self:SetMeshLocalLocation(self.StartLocalLocation)
     self:SetVisible(true)
+    self:StartCymbalsMonkeyApproach()
     self:PlayScreamAudio()
+    return true
+end
+
+function GameOverMonkey:StartCymbalsMonkeyApproach()
+    local monkey = find_first_actor_by_tag(CYMBALS_MONKEY_TAG)
+    local playerLocation = get_location(self.PlayerPawn)
+        or get_location(self.PlayerActor)
+        or get_location(self.ActiveCamera)
+    local monkeyLocation = get_location(monkey)
+    local monkeyScale = get_actor_scale(monkey)
+    if monkey == nil or playerLocation == nil or monkeyLocation == nil or monkeyScale == nil then
+        return false
+    end
+
+    self.CymbalsMonkeyActor = monkey
+    self.CymbalsMonkeyOriginalLocation = copy_vec3(monkeyLocation)
+    self.CymbalsMonkeyOriginalScale = copy_vec3(monkeyScale)
+    self.CymbalsMonkeyStartLocation = copy_vec3(monkeyLocation)
+    self.CymbalsMonkeyTargetLocation = copy_vec3(playerLocation)
+    self.CymbalsMonkeyStartScale = copy_vec3(monkeyScale)
+    self.CymbalsMonkeyTargetScale = Vec3(
+        CYMBALS_MONKEY_RISE_TARGET_SCALE,
+        CYMBALS_MONKEY_RISE_TARGET_SCALE,
+        CYMBALS_MONKEY_RISE_TARGET_SCALE
+    )
     return true
 end
 
@@ -891,11 +977,49 @@ function GameOverMonkey:TickRiseMonkey(dt)
     local alpha = smooth_step(self.StateElapsed / RISE_SECONDS)
     local location = lerp_vec3(self.StartLocalLocation, self.OriginalLocalLocation, alpha)
     self:SetMeshLocalLocation(location)
+    self:TickCymbalsMonkeyApproach(clamp01(self.StateElapsed / RISE_SECONDS))
 
     if self.StateElapsed >= RISE_SECONDS then
         self:SetMeshLocalLocation(self.OriginalLocalLocation)
+        self:CompleteCymbalsMonkeyApproach()
         self:StartRedVignetteAndShake()
     end
+end
+
+function GameOverMonkey:TickCymbalsMonkeyApproach(alpha)
+    if self.CymbalsMonkeyActor == nil then
+        return false
+    end
+
+    local location = lerp_vec3(self.CymbalsMonkeyStartLocation, self.CymbalsMonkeyTargetLocation, alpha)
+    local scale = lerp_vec3(self.CymbalsMonkeyStartScale, self.CymbalsMonkeyTargetScale, alpha)
+    set_actor_location(self.CymbalsMonkeyActor, location)
+    set_actor_scale(self.CymbalsMonkeyActor, scale)
+    return true
+end
+
+function GameOverMonkey:CompleteCymbalsMonkeyApproach()
+    if self.CymbalsMonkeyActor == nil then
+        return false
+    end
+
+    set_actor_location(self.CymbalsMonkeyActor, self.CymbalsMonkeyTargetLocation)
+    set_actor_scale(self.CymbalsMonkeyActor, self.CymbalsMonkeyTargetScale)
+    return true
+end
+
+function GameOverMonkey:RestoreCymbalsMonkeyTransform()
+    if self.CymbalsMonkeyActor == nil then
+        return false
+    end
+
+    if self.CymbalsMonkeyOriginalLocation ~= nil then
+        set_actor_location(self.CymbalsMonkeyActor, self.CymbalsMonkeyOriginalLocation)
+    end
+    if self.CymbalsMonkeyOriginalScale ~= nil then
+        set_actor_scale(self.CymbalsMonkeyActor, self.CymbalsMonkeyOriginalScale)
+    end
+    return true
 end
 
 function GameOverMonkey:StartRedVignetteAndShake()
@@ -994,6 +1118,7 @@ function GameOverMonkey:ClearPresentation()
         self:SetMeshLocalLocation(self.OriginalLocalLocation)
     end
     self:SetVisible(false)
+    self:RestoreCymbalsMonkeyTransform()
     self:ClearPostProcess()
     self:StopNoiseAudio()
 
