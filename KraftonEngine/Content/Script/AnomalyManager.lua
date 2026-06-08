@@ -4,8 +4,8 @@ local PhotoInvisible = require("Anomalies/PhotoInvisible")
 local NoShadow = require("Anomalies/NoShadow")
 local OffscreenAnimation = require("Anomalies/OffscreenAnimation")
 local OffscreenFacePlayer = require("Anomalies/OffscreenFacePlayer")
-local OffscreenFacePlayerPhotoInvisible = require("Anomalies/OffscreenFacePlayerPhotoInvisible")
-local OffscreenFacePlayerBlackPhoto = require("Anomalies/OffscreenFacePlayerBlackPhoto")
+local PhotoLookAtInvisible = require("Anomalies/PhotoLookAtInvisible")
+local PhotoLookAtBlackPhoto = require("Anomalies/PhotoLookAtBlackPhoto")
 local BlackPhoto = require("Anomalies/BlackPhoto")
 local NearSilentCymbalMonkey = require("Anomalies/NearSilentCymbalMonkey")
 
@@ -19,8 +19,8 @@ AnomalyManager.Tags = {
 AnomalyManager.Rules = {
     PhotoInvisible,
     OffscreenAnimation,
-    OffscreenFacePlayerPhotoInvisible,
-    OffscreenFacePlayerBlackPhoto,
+    PhotoLookAtInvisible,
+    PhotoLookAtBlackPhoto,
     BlackPhoto
 }
 
@@ -29,18 +29,21 @@ AnomalyManager.AllRules = {
     NoShadow,
     OffscreenAnimation,
     OffscreenFacePlayer,
-    OffscreenFacePlayerPhotoInvisible,
-    OffscreenFacePlayerBlackPhoto,
+    PhotoLookAtInvisible,
+    PhotoLookAtBlackPhoto,
     BlackPhoto,
     NearSilentCymbalMonkey
 }
 
 AnomalyManager.Active = nil
 AnomalyManager.LastError = nil
+AnomalyManager.RandomState = nil
+AnomalyManager.RandomDrawCount = 0
 
-local seeded = false
 local COLLISION_NO_COLLISION = 0
 local SHOT_RAGDOLL_IMPULSE_STRENGTH = 0.35
+local RANDOM_MODULUS = 2147483647
+local RANDOM_MULTIPLIER = 48271
 
 local function make_seed(timeSeconds)
     local rawSeed = math.floor((tonumber(timeSeconds) or 0) * 1000000)
@@ -50,20 +53,13 @@ local function make_seed(timeSeconds)
     return (rawSeed % 2147483646) + 1
 end
 
-local function seed_random_once()
-    if seeded then
-        return
-    end
-
+local function make_real_time_seed()
     local seed = nil
     if World ~= nil and World.GetRealTimeSeconds ~= nil then
         seed = make_seed(World.GetRealTimeSeconds())
     end
 
-    if seed ~= nil then
-        math.randomseed(seed)
-        seeded = true
-    end
+    return seed
 end
 
 local function is_valid_actor(actor)
@@ -78,6 +74,87 @@ end
 
 local function get_rule_name(rule)
     return rule and rule.Name or "Unknown"
+end
+
+local function get_actor_name(actor)
+    if actor == nil then
+        return "nil"
+    end
+
+    if actor.GetName ~= nil then
+        local ok, name = pcall(function()
+            return actor:GetName()
+        end)
+        if ok and name ~= nil and tostring(name) ~= "" then
+            return tostring(name)
+        end
+    end
+
+    if actor.Name ~= nil then
+        return tostring(actor.Name)
+    end
+
+    return "UnknownActor"
+end
+
+local function get_actor_uuid(actor)
+    if actor == nil or actor.GetUUID == nil then
+        return "nil"
+    end
+
+    local ok, uuid = pcall(function()
+        return actor:GetUUID()
+    end)
+    if ok and uuid ~= nil then
+        return tostring(uuid)
+    end
+
+    return "nil"
+end
+
+local function log_setting(message)
+    print("[AnomalyManager] " .. tostring(message))
+end
+
+function AnomalyManager:_EnsureRandomState()
+    if self.RandomState ~= nil then
+        return self.RandomState
+    end
+
+    local seed = make_real_time_seed()
+    if seed == nil then
+        seed = 1
+    end
+
+    self.RandomState = seed
+    self.RandomDrawCount = 0
+    log_setting("Random seed=" .. tostring(seed))
+    return self.RandomState
+end
+
+function AnomalyManager:_RandomUnit()
+    local state = self:_EnsureRandomState()
+    state = (state * RANDOM_MULTIPLIER) % RANDOM_MODULUS
+    if state <= 0 then
+        state = 1
+    end
+
+    self.RandomState = state
+    self.RandomDrawCount = self.RandomDrawCount + 1
+    return state / RANDOM_MODULUS
+end
+
+function AnomalyManager:_RandomIndex(count)
+    count = tonumber(count) or 0
+    if count <= 0 then
+        return nil
+    end
+
+    local index = math.floor(self:_RandomUnit() * count) + 1
+    if index > count then
+        index = count
+    end
+    return index
 end
 
 local function get_skeletal_mesh(actor)
@@ -174,6 +251,9 @@ function AnomalyManager:_BuildContext(target, rule)
         Target = target,
         Rule = rule,
         Tags = self.Tags,
+        RandomIndex = function(count)
+            return self:_RandomIndex(count)
+        end,
         State = {}
     }
 end
@@ -213,12 +293,18 @@ function AnomalyManager:_FindRuleByName(ruleName)
     return nil
 end
 
-function AnomalyManager:_ActivateRule(target, rule)
+function AnomalyManager:_ActivateRule(target, rule, source)
+    source = source or "Unknown"
+    log_setting("Setup try source=" .. tostring(source) ..
+        " rule=" .. get_rule_name(rule) ..
+        " target=" .. get_actor_name(target) ..
+        " uuid=" .. get_actor_uuid(target))
+
     local context = self:_BuildContext(target, rule)
 
     local ok, message = safe_call(rule, "Spawn", context)
     if not ok then
-        self.LastError = "Spawn failed: " .. get_rule_name(rule) .. " target=" .. target.Name .. " reason=" .. tostring(message)
+        self.LastError = "Spawn failed: " .. get_rule_name(rule) .. " target=" .. get_actor_name(target) .. " reason=" .. tostring(message)
         return false
     end
 
@@ -235,7 +321,10 @@ function AnomalyManager:_ActivateRule(target, rule)
         bCleared = false
     }
 
-    print("[AnomalyManager] Active anomaly=" .. get_rule_name(rule) .. " target=" .. target.Name)
+    log_setting("Setup success source=" .. tostring(source) ..
+        " rule=" .. get_rule_name(rule) ..
+        " target=" .. get_actor_name(target) ..
+        " uuid=" .. get_actor_uuid(target))
     return true
 end
 
@@ -269,6 +358,11 @@ function AnomalyManager:DespawnCurrent(reason)
         return false
     end
 
+    log_setting("Despawn reason=" .. tostring(reason) ..
+        " rule=" .. get_rule_name(active.Rule) ..
+        " target=" .. get_actor_name(active.Target) ..
+        " uuid=" .. get_actor_uuid(active.Target))
+
     if is_valid_actor(active.Target) and active.AddedActiveTag then
         active.Target:RemoveTag(self.Tags.ActiveTarget)
     end
@@ -283,7 +377,6 @@ function AnomalyManager:DespawnCurrent(reason)
 end
 
 function AnomalyManager:SelectAndSpawn()
-    seed_random_once()
     self:DespawnCurrent("SelectAndSpawn")
     self.LastError = nil
 
@@ -300,9 +393,15 @@ function AnomalyManager:SelectAndSpawn()
         return false
     end
 
-    local target = candidates[math.random(1, #candidates)]
-    local rule = self.Rules[math.random(1, #self.Rules)]
-    if not self:_ActivateRule(target, rule) then
+    local targetIndex = self:_RandomIndex(#candidates)
+    local ruleIndex = self:_RandomIndex(#self.Rules)
+    local target = candidates[targetIndex]
+    local rule = self.Rules[ruleIndex]
+    log_setting("Setup begin source=Random candidates=" .. tostring(#candidates) .. " rules=" .. tostring(#self.Rules))
+    log_setting("Random selected targetIndex=" .. tostring(targetIndex) ..
+        " ruleIndex=" .. tostring(ruleIndex) ..
+        " drawCount=" .. tostring(self.RandomDrawCount))
+    if not self:_ActivateRule(target, rule, "Random") then
         print("[AnomalyManager] " .. self.LastError)
         return false
     end
@@ -311,7 +410,6 @@ function AnomalyManager:SelectAndSpawn()
 end
 
 function AnomalyManager:SelectAndSpawnRule(ruleName)
-    seed_random_once()
     self:DespawnCurrent("SelectAndSpawnRule")
     self.LastError = nil
 
@@ -329,10 +427,11 @@ function AnomalyManager:SelectAndSpawnRule(ruleName)
         return false
     end
 
-    local startIndex = math.random(1, #candidates)
+    local startIndex = self:_RandomIndex(#candidates)
+    log_setting("Setup begin source=Debug rule=" .. tostring(ruleName) .. " candidates=" .. tostring(#candidates))
     for offset = 0, #candidates - 1 do
         local index = ((startIndex + offset - 1) % #candidates) + 1
-        if self:_ActivateRule(candidates[index], rule) then
+        if self:_ActivateRule(candidates[index], rule, "Debug") then
             return true
         end
     end
@@ -406,6 +505,27 @@ function AnomalyManager:ReportShot(actor, hit)
 
     apply_shot_ragdoll(actor, hit)
     return self:OnClear(active, "Shot")
+end
+
+function AnomalyManager:NotifyPhotoCaptureRequested()
+    local active = self.Active
+    if active == nil or active.bCleared then
+        return false
+    end
+
+    if not is_valid_actor(active.Target) then
+        self:DespawnCurrent("TargetInvalid")
+        return false
+    end
+
+    local ok, message = safe_call(active.Rule, "OnPhotoCapture", active.Context)
+    if not ok then
+        self.LastError = "OnPhotoCapture failed: " .. get_rule_name(active.Rule) .. " reason=" .. tostring(message)
+        print("[AnomalyManager] " .. self.LastError)
+        return false
+    end
+
+    return true
 end
 
 function AnomalyManager:Reset()
