@@ -36,6 +36,7 @@ EndingManager.MONKEY_STRIKE_ANIMATION_PATH =
 EndingManager.MONKEY_ENTRY_TO_STRIKE_SECONDS = 5.0
 EndingManager.MONKEY_STRIKE_PLAY_RATE = 1.0
 EndingManager.MONKEY_AUDIO_VOLUME = 10.0
+EndingManager.MONKEY_STRIKE_BLACKOUT_HOLD_SECONDS = 2.0
 
 -- 엔딩 진입 후 카메라 연출 타이밍 (초)
 EndingManager.STAGGER_DELAY = 2.0
@@ -649,6 +650,39 @@ local function set_monkey_entry_play_rate_for_duration(mesh, duration)
     return playRate
 end
 
+local function stop_ending_camera_fade()
+    if CameraManager == nil then
+        return
+    end
+
+    if CameraManager.StopCameraFade ~= nil then
+        pcall(function()
+            CameraManager.StopCameraFade()
+        end)
+        return
+    end
+
+    if CameraManager.FadeIn ~= nil then
+        pcall(function()
+            CameraManager.FadeIn(0.01)
+        end)
+    end
+end
+
+local function play_ending_strike_blackout()
+    if CameraManager == nil or CameraManager.FadeOut == nil then
+        return
+    end
+
+    pcall(function()
+        CameraManager.FadeOut(0.0)
+    end)
+
+    if Wait ~= nil then
+        Wait(EndingManager.MONKEY_STRIKE_BLACKOUT_HOLD_SECONDS)
+    end
+end
+
 start_ending_monkey_cymbal_sequence = function()
     stop_ending_monkey_sequence_coroutine()
     configure_monkey_audio(EndingManager.MonkeyActor)
@@ -704,6 +738,10 @@ start_ending_monkey_cymbal_sequence = function()
             "[EndingManager] Ending monkey strike started (playRate=%.2f)",
             EndingManager.MONKEY_STRIKE_PLAY_RATE
         ))
+
+        if EndingManager:IsActive() then
+            play_ending_strike_blackout()
+        end
     end)
 end
 
@@ -797,6 +835,7 @@ end
 
 function EndingManager:Reset()
     stop_ending_sequence_coroutine()
+    stop_ending_camera_fade()
     stop_camera_shakes()
     self.bStaggerShakeActive = false
     reset_stagger_shake_state()

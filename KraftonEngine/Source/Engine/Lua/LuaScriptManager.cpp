@@ -2488,7 +2488,14 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
             APlayerCameraManager* Manager = PC ? PC->GetPlayerCameraManager() : nullptr;
             if (Manager)
             {
-                Manager->StartCameraFade(0.0f, 1.0f, Duration, FLinearColor::Black(), false, true);
+                if (Duration <= 0.0f)
+                {
+                    Manager->SetManualCameraFade(1.0f, FLinearColor::Black(), false);
+                }
+                else
+                {
+                    Manager->StartCameraFade(0.0f, 1.0f, Duration, FLinearColor::Black(), false, true);
+                }
             }
         }
     );
@@ -2502,6 +2509,19 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
             if (Manager)
             {
                 Manager->StartCameraFade(1.0f, 0.0f, Duration, FLinearColor::Black(), false, true);
+            }
+        }
+    );
+    CameraManager.set_function(
+        "StopCameraFade",
+        []()
+        {
+            if (!GEngine || !GEngine->GetWorld()) return;
+            APlayerController*    PC      = GEngine->GetWorld()->GetFirstPlayerController();
+            APlayerCameraManager* Manager = PC ? PC->GetPlayerCameraManager() : nullptr;
+            if (Manager)
+            {
+                Manager->StopCameraFade();
             }
         }
     );
