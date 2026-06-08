@@ -115,7 +115,9 @@ public:
 	void DestroyAllWidgets();
 
 	void Render(const FPassContext& Ctx);
+	void RenderRuntimeOverlays(const FPassContext& Ctx);
 	bool HasViewportWidgets() const { return !ViewportWidgets.empty(); }
+	bool HasRuntimeOverlays(const FFrameContext& Frame) const;
 	bool DispatchTaggedActorClick(const FString& TargetTag, const FString& FunctionName);
 	const char* GetReferencerName() const override { return "UUIManager"; }
 	void AddReferencedObjects(FReferenceCollector& Collector) override;

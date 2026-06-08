@@ -24,10 +24,12 @@ bool FUIPass::BeginPass(const FPassContext& Ctx)
 	if (FPhotoOverlay::ShouldSuppressViewportUIForCapture())
 		return false;
 
-	return Ctx.Frame.ViewportRTV && UUIManager::Get().HasViewportWidgets();
+	return Ctx.Frame.ViewportRTV &&
+		(UUIManager::Get().HasViewportWidgets() || UUIManager::Get().HasRuntimeOverlays(Ctx.Frame));
 }
 
 void FUIPass::Execute(const FPassContext& Ctx)
 {
 	UUIManager::Get().Render(Ctx);
+	UUIManager::Get().RenderRuntimeOverlays(Ctx);
 }
