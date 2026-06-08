@@ -24,6 +24,7 @@ local KEY_W = 0x57
 local KEY_A = 0x41
 local KEY_S = 0x53
 local KEY_D = 0x44
+local KEY_F10 = 0x79
 local TITLE_CAMERA_TAG = "TitleCamera"
 local TITLE_ACTOR_TAG = "Title"
 local TITLE_MONKEY_ACTOR_NAME = "TitleMonkey"
@@ -34,6 +35,7 @@ local TITLE_BLACK_HOLD_SECONDS = 0.1
 local TITLE_FADE_IN_SECONDS = 0.75
 
 local bTitleTransitioning = false
+local bPauseMenuActive = false
 local TitleTransitionCoroutine = nil
 local TitleTransitionWaitRemaining = 0.0
 local GameOverStateChangedHandle = nil
@@ -50,7 +52,7 @@ local function SyncCrosshairVisibility()
         return
     end
 
-    if bTitleMode then
+    if bTitleMode or bPauseMenuActive then
         Crosshair.set_visible(false)
         return
     end
@@ -529,6 +531,123 @@ local function StartGameOverPresentation()
     return bPresentationStarted
 end
 
+local function CanOpenInGamePauseMenu()
+    if bPauseMenuActive or bTitleMode or bTitleTransitioning then
+        return false
+    end
+    if StartupManager:IsActive() then
+        return false
+    end
+    if GameManager == nil or GameManager.GetState == nil or GameManager.State == nil then
+        return false
+    end
+    if GameManager:GetState() ~= GameManager.State.Playing then
+        return false
+    end
+    if EndingManager ~= nil and EndingManager.IsActive ~= nil and EndingManager:IsActive() then
+        return false
+    end
+    return true
+end
+
+local function CloseInGamePauseMenu()
+    if not bPauseMenuActive then
+        return
+    end
+
+    bPauseMenuActive = false
+    UIManager:HidePauseMenu()
+
+    if Engine ~= nil and Engine.ResumeGame ~= nil then
+        pcall(function()
+            Engine.ResumeGame()
+        end)
+    end
+
+    if GameManager ~= nil
+        and GameManager.GetState ~= nil
+        and GameManager.State ~= nil
+        and GameManager:GetState() == GameManager.State.Paused
+        and GameManager.ResumeGame ~= nil then
+        pcall(function()
+            GameManager:ResumeGame()
+        end)
+    end
+end
+
+local function OpenInGamePauseMenu()
+    if not CanOpenInGamePauseMenu() then
+        return false
+    end
+
+    bPauseMenuActive = true
+
+    if GameManager ~= nil and GameManager.PauseGame ~= nil then
+        pcall(function()
+            GameManager:PauseGame()
+        end)
+    end
+
+    if Engine ~= nil and Engine.PauseGame ~= nil then
+        pcall(function()
+            Engine.PauseGame()
+        end)
+    end
+
+    UIManager:ShowPauseMenu()
+    SyncCrosshairVisibility()
+    return true
+end
+
+local function BindEscapeMenuHandler()
+    if Engine == nil or Engine.SetOnEscape == nil then
+        return
+    end
+
+    Engine.SetOnEscape(function()
+        if bPauseMenuActive then
+            CloseInGamePauseMenu()
+        else
+            OpenInGamePauseMenu()
+        end
+    end)
+end
+
+local function UnbindEscapeMenuHandler()
+    if Engine == nil or Engine.SetOnEscape == nil then
+        return
+    end
+
+    Engine.SetOnEscape(function()
+    end)
+end
+
+local function WasPauseMenuKeyPressed()
+    if Input == nil then
+        return false
+    end
+
+    if Input.GetRawKeyDown ~= nil then
+        local ok, pressed = pcall(function()
+            return Input.GetRawKeyDown(KEY_F10)
+        end)
+        if ok and pressed == true then
+            return true
+        end
+    end
+
+    if Input.GetKeyDown ~= nil then
+        local ok, pressed = pcall(function()
+            return Input.GetKeyDown("F10")
+        end)
+        if ok and pressed == true then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function HandleGameStateChanged(nextState)
     if GameManager ~= nil
         and GameManager.State ~= nil
@@ -566,6 +685,7 @@ end
 local function BeginHospitalGameplaySession(options)
     options = options or {}
 
+    CloseInGamePauseMenu()
     bCanWarp = true
     bTitleMode = false
     if HospitalPlayer ~= nil then
@@ -679,6 +799,7 @@ end
 function BeginPlay()
     StopTitleTransitionCoroutine()
     StartupManager:Cancel()
+    bPauseMenuActive = false
     InitialPlayerLocation = nil
     InitialPlayerRotation = nil
     InitialPlayerControlRotation = nil
@@ -688,6 +809,7 @@ function BeginPlay()
     GameOverMonkey:Initialize(obj)
     EndingManager:Initialize()
     BindGameOverStateChanged()
+    BindEscapeMenuHandler()
     DoorManager:Reset()
     DoorManager:ResetSessionState()
     SoundManager:EnterTitleState()
@@ -707,7 +829,9 @@ end
 function EndPlay()
     StopTitleTransitionCoroutine()
     StartupManager:Cancel()
+    CloseInGamePauseMenu()
     UnbindGameOverStateChanged()
+    UnbindEscapeMenuHandler()
     GameOverMonkey:Shutdown()
     EndingManager:Reset()
     SoundManager:StopTitleMusic()
@@ -747,6 +871,14 @@ function Tick(dt)
         return
     end
 
+    if bPauseMenuActive then
+        if WasPauseMenuKeyPressed() then
+            CloseInGamePauseMenu()
+        end
+        SyncCrosshairVisibility()
+        return
+    end
+
     if GameManager ~= nil
         and GameManager.GetState ~= nil
         and GameManager:GetState() == GameManager.State.GameOver then
@@ -757,6 +889,10 @@ function Tick(dt)
     if EndingManager.ShouldProcessEndingTick ~= nil and EndingManager:ShouldProcessEndingTick() then
         EndingManager:Tick(dt)
         SyncCrosshairVisibility()
+        return
+    end
+
+    if WasPauseMenuKeyPressed() and OpenInGamePauseMenu() then
         return
     end
 
@@ -817,7 +953,13 @@ function StartGame()
     StartTitleTransitionCoroutine()
 end
 
+function ResumeGame()
+    CloseInGamePauseMenu()
+    SyncCrosshairVisibility()
+end
+
 function RestartGame()
+    CloseInGamePauseMenu()
     StopTitleTransitionCoroutine()
     ClearGameOverPresentation()
     BeginHospitalGameplaySession({
@@ -827,6 +969,7 @@ function RestartGame()
 end
 
 function ExitToTitle()
+    CloseInGamePauseMenu()
     StopTitleTransitionCoroutine()
     ClearGameOverPresentation()
     GameManager:Reset()

@@ -487,6 +487,7 @@ void InputSystem::EnsureDefaultInputMappings()
 	AddActionMapping("Interact", "Gamepad_FaceRight");
 	AddActionMapping("Aim", "RightMouseButton");
 	AddActionMapping("Aim", "Gamepad_LeftShoulder");
+	AddActionMapping("DebugAnomalyOutline", "L");
 	AddActionMapping("DebugAnomalyOutline", "Gamepad_LeftTrigger");
 	AddActionMapping("Fire", "LeftMouseButton");
 	AddActionMapping("Fire", "Gamepad_RightShoulder");
