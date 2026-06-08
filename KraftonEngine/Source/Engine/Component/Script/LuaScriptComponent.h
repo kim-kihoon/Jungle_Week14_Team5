@@ -79,6 +79,18 @@ private:
 
 	UPROPERTY(Edit, Save, Category="Script", DisplayName="ScriptFile", AssetType="Script")
 	FString ScriptFile;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare", DisplayName="Loop Animation", AssetType="UAnimSequence")
+	FString LoopAnimationPath;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare", DisplayName="Use Arrival Location")
+	bool bUseJumpScareArrivalLocation = false;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare", DisplayName="Arrival Location", Min=0.0f, Max=0.0f, Speed=0.1f)
+	FVector JumpScareArrivalLocation;
+
+	UPROPERTY(Edit, Save, Category="Script|JumpScare", DisplayName="Move Duration", Min=0.01f, Max=10.0f, Speed=0.01f)
+	float JumpScareMoveDuration = 0.5f;
 	
 	sol::environment Env;
 	sol::protected_function LuaBeginPlay;

@@ -1,7 +1,7 @@
 local TAG_ACTIVE = "JumpScareActive"
 local TAG_TRIGGERED = "JumpScareTriggered"
 
--- 트리거마다 다른 연출이 필요하면 이 값을 복사본 스크립트에서 바꾼다.
+-- 에디터 프로퍼티가 비어 있을 때만 사용하는 예비 애니메이션 경로다.
 local ANIMATION_PATH = ""
 local bShowMeshOnTrigger = true
 local bPlayAnimationOnTrigger = true
@@ -42,11 +42,18 @@ end
 
 local function is_player_actor(actor)
     local player = get_player_pawn()
-    if player == nil then
-        return false
+    if player ~= nil and actor == player then
+        return true
     end
 
-    return actor == player
+    if actor ~= nil and actor.HasTag ~= nil then
+        local ok, hasPlayerTag = pcall(function()
+            return actor:HasTag("Player")
+        end)
+        return ok and hasPlayerTag == true
+    end
+
+    return false
 end
 
 local function get_target_actor()
@@ -102,6 +109,20 @@ local function set_component_location(component, location)
     return ok == true
 end
 
+local function read_script_property(name)
+    if this == nil or this.GetProperty == nil then
+        return nil
+    end
+
+    local ok, value = pcall(function()
+        return this:GetProperty(name)
+    end)
+    if not ok then
+        return nil
+    end
+    return value
+end
+
 local function play_mesh_animation(mesh)
     if not bPlayAnimationOnTrigger then
         return false
@@ -109,14 +130,44 @@ local function play_mesh_animation(mesh)
     if mesh == nil or mesh.PlayAnimationByPath == nil then
         return false
     end
-    if type(ANIMATION_PATH) ~= "string" or ANIMATION_PATH == "" then
+
+    local animationPath = ANIMATION_PATH
+    local propertyPath = read_script_property("LoopAnimationPath")
+    if type(propertyPath) == "string" and propertyPath ~= "" and propertyPath ~= "None" then
+        animationPath = propertyPath
+    end
+
+    if type(animationPath) ~= "string" or animationPath == "" or animationPath == "None" then
         return false
     end
 
     local ok, result = pcall(function()
-        return mesh:PlayAnimationByPath(ANIMATION_PATH, false)
+        return mesh:PlayAnimationByPath(animationPath, true)
     end)
     return ok and result ~= false
+end
+
+local function get_move_duration()
+    local propertyDuration = tonumber(read_script_property("JumpScareMoveDuration"))
+    if propertyDuration ~= nil and propertyDuration > 0 then
+        return propertyDuration
+    end
+    return tonumber(MOVE_DURATION) or 0
+end
+
+local function get_target_location(startLocation)
+    local bUseArrivalLocation = read_script_property("bUseJumpScareArrivalLocation") == true
+    if bUseArrivalLocation then
+        local arrivalLocation = read_script_property("JumpScareArrivalLocation")
+        if arrivalLocation ~= nil then
+            return arrivalLocation
+        end
+    end
+
+    if startLocation == nil or MOVE_OFFSET == nil then
+        return nil
+    end
+    return startLocation + MOVE_OFFSET
 end
 
 local function start_mesh_movement(mesh)
@@ -125,14 +176,15 @@ local function start_mesh_movement(mesh)
         return false
     end
 
-    local duration = tonumber(MOVE_DURATION) or 0
+    local duration = get_move_duration()
     if duration <= 0 then
         MoveState = nil
         return false
     end
 
     local startLocation = OriginalMeshLocation or get_component_location(mesh)
-    if startLocation == nil or MOVE_OFFSET == nil then
+    local targetLocation = get_target_location(startLocation)
+    if startLocation == nil or targetLocation == nil then
         MoveState = nil
         return false
     end
@@ -141,7 +193,7 @@ local function start_mesh_movement(mesh)
     MoveState = {
         Mesh = mesh,
         StartLocation = startLocation,
-        TargetLocation = startLocation + MOVE_OFFSET,
+        TargetLocation = targetLocation,
         Elapsed = 0.0,
         Duration = duration
     }
@@ -227,6 +279,12 @@ function Tick(dt)
     local alpha = MoveState.Elapsed / MoveState.Duration
     if alpha >= 1.0 then
         set_component_location(mesh, MoveState.TargetLocation)
+        if mesh.StopAnimation ~= nil then
+            pcall(function()
+                mesh:StopAnimation()
+            end)
+        end
+        set_mesh_visible(mesh, false)
         MoveState = nil
         return
     end
