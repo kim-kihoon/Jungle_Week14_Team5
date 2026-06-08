@@ -5,6 +5,7 @@
 #include "Materials/Material.h"
 #include "Object/Reflection/ObjectFactory.h"
 #include "Render/Shader/ShaderManager.h"
+#include "UI/PhotoOverlay.h"
 
 #include <algorithm>
 
@@ -12,7 +13,6 @@ namespace
 {
 	constexpr float FrameAspect = 1672.0f / 941.0f;
 	constexpr float PhotoForwardOffset = -0.004f;
-	constexpr float PhotoDevelopSeconds = 1.0f;
 
 	struct FPhotoDevelopConstants
 	{
@@ -117,7 +117,7 @@ void FPhotoPolaroidSceneProxy::UpdateMaterial()
 	FrameMaterial->SetCachedSRV(EMaterialTextureSlot::Diffuse, Comp->GetFrameSRV());
 	PhotoMaterial->SetCachedSRV(EMaterialTextureSlot::Diffuse, Comp->GetPhotoSRV());
 	FPhotoDevelopConstants& DevelopConstants = PhotoMaterial->BindPerShaderCB<FPhotoDevelopConstants>(&PhotoDevelopCB, ECBSlot::PerShader0);
-	DevelopConstants.DevelopAlpha = Clamp01(Comp->GetDevelopTime() / PhotoDevelopSeconds);
+	DevelopConstants.DevelopAlpha = Clamp01(Comp->GetDevelopTime() / FPhotoOverlay::GetDevelopSeconds());
 
 	SectionDraws.clear();
 	if (FrameMaterial && PhotoMaterial)

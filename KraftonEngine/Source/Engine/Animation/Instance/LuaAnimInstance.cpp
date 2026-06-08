@@ -562,6 +562,11 @@ void ULuaAnimInstance::InstallBindings()
 			AActor* Owner = OwningComponent ? OwningComponent->GetOwner() : nullptr;
 			FPhotoOverlay::RequestCapture(Owner ? Owner->GetWorld() : nullptr, FName("PhotoInvisible"), bBlackout.value_or(false));
 		});
+	Anim.set_function("is_photo_capture_available",
+		[]() -> bool
+		{
+			return !FPhotoOverlay::IsCaptureInProgress();
+		});
 	Anim.set_function("play_pistol_fire_audio",
 		[]()
 		{
