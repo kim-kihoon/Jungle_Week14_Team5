@@ -1,10 +1,11 @@
-// Generated from C:/Users/jungle/Documents/Jungle_Week14_Team5/KraftonEngine/Content/Material/Custom/Title.uasset
-// Domain: Surface
+// Generated from C:/Users/jungle/Documents/Jungle_Week14_Team5/KraftonEngine/Content/Material/Custom/Helper3.uasset
+// Domain: Decal
 
 #include "Common/ConstantBuffers.hlsli"
 #include "Common/VertexLayouts.hlsli"
 #include "Common/Functions.hlsli"
 #include "Common/SystemSamplers.hlsli"
+#include "Common/ForwardLighting.hlsli"
 
 struct FMaterialPixelInput
 {
@@ -32,59 +33,68 @@ Texture2D Tex_Diffuse : register(t0);
 
 FMaterialResult EvaluateMaterial(FMaterialPixelInput Input)
 {
-    float4 n_15 = Tex_Diffuse.Sample(LinearWrapSampler, Input.UV0);
-    float n_3 = 1.000000f;
+    float4 n_17 = Tex_Diffuse.Sample(LinearWrapSampler, Input.UV0);
     FMaterialResult Result;
-    Result.BaseColor = (n_15).rgb;
+    Result.BaseColor = (n_17).rgb;
     Result.Normal = float3(0, 0, 1);
     Result.Roughness = 0.5f;
     Result.Metallic = 0.0f;
     Result.Emissive = float3(0, 0, 0);
-    Result.Opacity = n_3;
+    Result.Opacity = 1.0f;
     return Result;
 }
 
 
-struct MaterialSurfaceVSOutput
+cbuffer DecalBuffer : register(b2)
 {
-    float4 position : SV_POSITION;
-    float3 normal : NORMAL;
-    float4 color : COLOR0;
-    float2 texcoord : TEXCOORD0;
-    float3 worldPos : TEXCOORD1;
-};
+    float4x4 DecalWorldToLocal;
+    float4 DecalColor;
+}
 
-MaterialSurfaceVSOutput VS(VS_Input_PNCTT input)
+PS_Input_Decal VS(VS_Input_PNCT input)
 {
-    MaterialSurfaceVSOutput output;
+    PS_Input_Decal output;
     float4 worldPos = mul(float4(input.position, 1.0f), Model);
-    output.worldPos = worldPos.xyz;
     output.position = mul(mul(worldPos, View), Projection);
+    output.worldPos = worldPos.xyz;
     output.normal = normalize(mul(input.normal, (float3x3)NormalMatrix));
-    output.color = input.color;
-    output.texcoord = input.texcoord;
     return output;
 }
 
-
-float4 PS(MaterialSurfaceVSOutput input) : SV_TARGET
+float4 PS(PS_Input_Decal input) : SV_TARGET
 {
+    float3 decalLocalPos = mul(float4(input.worldPos, 1.0f), DecalWorldToLocal).xyz;
+
+    if (abs(decalLocalPos.x) > 0.5f || abs(decalLocalPos.y) > 0.5f || abs(decalLocalPos.z) > 0.5f)
+    {
+        discard;
+    }
+
+    float2 decalUV;
+    decalUV.x = decalLocalPos.y + 0.5f;
+    decalUV.y = 0.5f - decalLocalPos.z;
 
     FMaterialPixelInput MaterialInput;
-    MaterialInput.UV0           = input.texcoord;
+    MaterialInput.UV0           = decalUV;
     MaterialInput.UV1           = float2(0, 0);
     MaterialInput.UV2           = float2(0, 0);
     MaterialInput.ParticleColor = float4(1, 1, 1, 1);
-    MaterialInput.VertexColor   = input.color;
+    MaterialInput.VertexColor   = float4(1, 1, 1, 1);
     MaterialInput.Time          = Time;
     MaterialInput.SubImageIndex = 0.0f;
     MaterialInput.DynamicParam  = float4(0, 0, 0, 0);
 
     FMaterialResult Result = EvaluateMaterial(MaterialInput);
+    float OutOpacity = saturate(Result.Opacity);
+    clip(OutOpacity - 0.001f);
+
     float3 N = normalize(input.normal);
 
-    float3 finalRgb = Result.BaseColor + Result.Emissive;
-    float OutOpacity = saturate(Result.Opacity);
+    float3 V = normalize(CameraWorldPos - input.worldPos);
+    float3 diffuse = AccumulateDiffuse(input.worldPos, N, input.position);
+    float3 specular = float3(0, 0, 0);
 
-    return float4(finalRgb, OutOpacity);
+    float3 finalRgb = Result.BaseColor * diffuse + specular + Result.Emissive;
+
+    return float4(ApplyWireframe(finalRgb) * DecalColor.rgb, OutOpacity * DecalColor.a);
 }
