@@ -54,6 +54,18 @@ local function find_first_actor_by_tag(tag)
     return nil
 end
 
+local function get_player_pawn()
+    if World == nil or World.GetFirstPlayerController == nil then
+        return nil
+    end
+
+    local controller = World.GetFirstPlayerController()
+    if controller == nil or controller.GetPossessedPawn == nil then
+        return nil
+    end
+    return controller:GetPossessedPawn()
+end
+
 local function find_actors_by_class(className)
     if World == nil or World.FindActorsByClass == nil or className == nil then
         return {}
@@ -174,6 +186,9 @@ end
 function EndingManager:Enter(player, hit)
     if self.bActive then
         return false
+    end
+    if player == nil then
+        player = get_player_pawn()
     end
     if player == nil or player.SetLocation == nil then
         print("[EndingManager] Enter failed: player unavailable")

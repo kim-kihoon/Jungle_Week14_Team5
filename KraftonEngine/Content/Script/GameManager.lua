@@ -950,4 +950,42 @@ function GameManager:DebugSpawnAnomalyRule(ruleName)
     return AnomalyManager:SelectAndSpawnRule(ruleName)
 end
 
+function GameManager:DebugSetStage(stage)
+    if self.state ~= self.State.Playing and self.state ~= self.State.Ending then
+        print("[GameManager] DebugSetStage ignored: state=" .. tostring(self.state))
+        return false
+    end
+
+    local StageManager = require("StageManager")
+    stage = math.floor(tonumber(stage) or 1)
+    stage = math.max(1, math.min(stage, StageManager.MAX_STAGE))
+
+    if self.state == self.State.Ending then
+        require("EndingManager"):Reset()
+        self:_SetState(self.State.Playing, "DebugSetStage")
+    end
+
+    LoopManager.warpCount = stage - 1
+    self:_ResetPlayerBulletsForStage()
+    self:RestLoop("DebugSetStage")
+    self:_SetupAnomaly("DebugSetStage")
+    self:_RefreshPressureStage("DebugSetStage", true)
+
+    print(string.format(
+        "[GameManager] DebugSetStage -> stage %d (warpCount=%d)",
+        stage,
+        LoopManager.warpCount
+    ))
+    return true
+end
+
+function GameManager:DebugEnterEnding()
+    if self.state ~= self.State.Playing and self.state ~= self.State.Ending then
+        print("[GameManager] DebugEnterEnding ignored: state=" .. tostring(self.state))
+        return false
+    end
+
+    return require("EndingManager"):Enter(nil, nil)
+end
+
 return GameManager

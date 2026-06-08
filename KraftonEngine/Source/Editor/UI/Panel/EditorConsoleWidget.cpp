@@ -12,6 +12,7 @@
 #include "Engine/Platform/CrashDump.h"
 #include "GameFramework/World.h"
 #include "Render/Scene/FScene.h"
+#include "Lua/LuaScriptManager.h"
 
 #include <algorithm>
 #include <cctype>
@@ -43,6 +44,25 @@ namespace
 	bool StartsWith(const FString& Text, const FString& Prefix)
 	{
 		return Text.size() >= Prefix.size() && Text.compare(0, Prefix.size(), Prefix) == 0;
+	}
+
+	bool RunConsoleLua(const FString& Script, FString& OutError)
+	{
+		if (!FLuaScriptManager::IsInitialized())
+		{
+			OutError = "Lua is not initialized (start PIE first).";
+			return false;
+		}
+
+		sol::state& Lua = FLuaScriptManager::GetState();
+		sol::protected_function_result Result = Lua.safe_script(Script.c_str(), sol::script_pass_on_error, "ConsoleLua");
+		if (!Result.valid())
+		{
+			sol::error Err = Result;
+			OutError = Err.what();
+			return false;
+		}
+		return true;
 	}
 
 	bool CommandStartsWithInput(const FString& CommandName, const FString& Input)
@@ -218,6 +238,7 @@ void FEditorConsoleWidget::RegisterDefaultCommands()
 {
 	RegisterSystemCommands();
 	RegisterEditorCommands();
+	RegisterHospitalCommands();
 	RegisterDiagnosticsCommands();
 	RegisterRenderCommands();
 }
@@ -246,6 +267,14 @@ void FEditorConsoleWidget::RegisterEditorCommands()
 		"Editor", "cb refresh", "Refreshes the content browser.");
 	RegisterCommand("cb icon size", [this](const TArray<FString>& Args) { HandleContentBrowserIconSize(Args); },
 		"Editor", "cb icon size <20-100>", "Sets the content browser icon size.");
+}
+
+void FEditorConsoleWidget::RegisterHospitalCommands()
+{
+	RegisterCommand("hospital stage", [this](const TArray<FString>& Args) { HandleHospitalStage(Args); },
+		"Hospital", "hospital stage <1-6>", "Sets warp stage for PIE testing (stage = warpCount + 1).");
+	RegisterCommand("hospital ending", [this](const TArray<FString>& Args) { HandleHospitalEnding(Args); },
+		"Hospital", "hospital ending", "Force-enters the ending scene.");
 }
 
 void FEditorConsoleWidget::RegisterDiagnosticsCommands()
@@ -1468,6 +1497,47 @@ void FEditorConsoleWidget::HandleSkinningMode(const TArray<FString>& Args)
 	SkinningModeRuntime::Set(NewMode);
 
 	AddLog("Skinning mode set to %s.\n", NewMode == ESkinningMode::GPU ? "GPU" : "CPU");
+}
+
+void FEditorConsoleWidget::HandleHospitalStage(const TArray<FString>& Args)
+{
+	if (Args.empty())
+	{
+		AddLog("[ERROR] Usage: hospital stage <1-6>\n");
+		return;
+	}
+
+	const int32 Stage = std::atoi(Args[0].c_str());
+	if (Stage < 1 || Stage > 6)
+	{
+		AddLog("[ERROR] Stage must be between 1 and 6.\n");
+		return;
+	}
+
+	const FString Script = "require('GameManager'):DebugSetStage(" + std::to_string(Stage) + ")";
+	FString Error;
+	if (!RunConsoleLua(Script, Error))
+	{
+		AddLog("[ERROR] hospital stage: %s\n", Error.c_str());
+		return;
+	}
+
+	AddLog("[OK] Set stage to %d (warpCount=%d).\n", Stage, Stage - 1);
+}
+
+void FEditorConsoleWidget::HandleHospitalEnding(const TArray<FString>& Args)
+{
+	(void)Args;
+
+	const FString Script = "require('GameManager'):DebugEnterEnding()";
+	FString Error;
+	if (!RunConsoleLua(Script, Error))
+	{
+		AddLog("[ERROR] hospital ending: %s\n", Error.c_str());
+		return;
+	}
+
+	AddLog("[OK] Ending enter requested.\n");
 }
 
 void FEditorConsoleWidget::ApplyCompletionCandidate(ImGuiInputTextCallbackData* Data, int32 CandidateIndex)

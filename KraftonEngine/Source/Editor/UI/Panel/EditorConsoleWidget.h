@@ -90,6 +90,7 @@ private:
 	void RegisterEditorCommands();
 	void RegisterDiagnosticsCommands();
 	void RegisterRenderCommands();
+	void RegisterHospitalCommands();
 
 	void RenderCompletionCandidates();
 	void UpdateCompletionCandidates();
@@ -130,6 +131,8 @@ private:
 	void HandleShadowBias(const TArray<FString>& Args);
 	void HandleShadowFilter(const TArray<FString>& Args);
 	void HandleSkinningMode(const TArray<FString>& Args);
+	void HandleHospitalStage(const TArray<FString>& Args);
+	void HandleHospitalEnding(const TArray<FString>& Args);
 	void PrintCSMCascadeRanges();
 
 	static int32 TextEditCallback(ImGuiInputTextCallbackData* Data);

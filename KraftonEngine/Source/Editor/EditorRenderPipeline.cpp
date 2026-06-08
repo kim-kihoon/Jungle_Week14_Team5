@@ -11,6 +11,7 @@
 #include "Component/Camera/CineCameraComponent.h"
 #include "GameFramework/World.h"
 #include "GameFramework/GameMode/PlayerController.h"
+#include "GameFramework/Camera/PlayerCameraManager.h"
 #include "Profiling/Stats/Stats.h"
 #include "Profiling/GPUProfiler.h"
 #include "Engine/Render/Types/ForwardLightData.h"
@@ -36,6 +37,23 @@ namespace
 		}
 
 		POV.AspectRatio = (ViewportWidth / ViewportHeight) / VisibleHeightScale;
+	}
+
+	void SyncPIEGameCameraResize(UEditorEngine* InEditor, FViewport* VP)
+	{
+		if (!InEditor || !InEditor->IsPlayingInEditor() || !VP || VP->GetHeight() == 0)
+		{
+			return;
+		}
+
+		UWorld* World = InEditor->GetWorld();
+		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		APlayerCameraManager* CamManager = PC ? PC->GetPlayerCameraManager() : nullptr;
+		UCameraComponent* ActiveCamera = CamManager ? CamManager->GetActiveCamera() : nullptr;
+		if (ActiveCamera)
+		{
+			ActiveCamera->OnResize(static_cast<int32>(VP->GetWidth()), static_cast<int32>(VP->GetHeight()));
+		}
 	}
 }
 
@@ -179,6 +197,11 @@ void FEditorRenderPipeline::RenderViewport(FLevelEditorViewportClient* VC, FRend
 				CamManager->GetCameraCachePOV(POV);
 			}
 		}
+
+		if (VP->GetHeight() > 0)
+		{
+			POV.AspectRatio = static_cast<float>(VP->GetWidth()) / static_cast<float>(VP->GetHeight());
+		}
 	}
 
 	FGPUOcclusionCulling& GPUOcclusion = GetOcclusionForViewport(VC);
@@ -222,6 +245,7 @@ void FEditorRenderPipeline::PrepareViewport(FLevelEditorViewportClient* VC, FVie
 		// 컴포넌트 OnResize 는 viewport client 가 책임진다. 파이프라인은 컴포넌트를 모름.
 		VC->NotifyViewportResized(static_cast<int32>(VP->GetWidth()), static_cast<int32>(VP->GetHeight()));
 	}
+	SyncPIEGameCameraResize(Editor, VP);
 	VP->BeginRender(Ctx);
 }
 

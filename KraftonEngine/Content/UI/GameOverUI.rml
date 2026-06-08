@@ -26,7 +26,7 @@
 			font-size: 72px;
 			color: #FF4747;
 		}
-		.game-over-button {
+		.title-button {
 			position: absolute;
 			display: block;
 			font-family: OCRAStd;
@@ -36,17 +36,17 @@
 			color: #FFFFFF;
 			background-color: rgba(0, 0, 0, 0);
 		}
-		.game-over-button:hover {
+		.title-button:hover {
 			color: rgb(71, 255, 105);
 			background-color: rgba(255, 255, 255, 0.12);
 		}
 	</style>
 </head>
-<body data-rml-ui-document="1" data-canvas-width="1920" data-canvas-height="1080" data-preview-scale="1">
+<body data-rml-ui-document="1" data-ui-layout="scaled" data-canvas-width="1920" data-canvas-height="1080" data-preview-scale="1">
 	<div id="ui_canvas">
 		<div id="game_over_title">Game Over</div>
-		<div id="restart_button" class="game-over-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="480.000000" data-width="360.000000" data-height="64.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Restart" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="RestartGame" style="position: absolute; left: 120.00px; top: 480.00px; width: 360.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Restart</div>
-		<div id="exit_button" class="game-over-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="560.000000" data-width="240.000000" data-height="64.000000" data-z="1" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Exit" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ExitGame" style="position: absolute; left: 120.00px; top: 560.00px; width: 240.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left; color: #FFFFFF;">Exit</div>
+		<div id="restart_button" class="title-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="480.000000" data-width="360.000000" data-height="64.000000" data-z="0" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Restart" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="RestartGame" style="position: absolute; left: 120.00px; top: 480.00px; width: 360.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left;">Restart</div>
+		<div id="exit_to_title_button" class="title-button" data-rml-editor="1" data-type="Button" data-x="120.000000" data-y="560.000000" data-width="520.000000" data-height="64.000000" data-z="1" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="Exit to Title" data-text-color="#FFFFFFFF" data-font-size="48.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ExitToTitle" style="position: absolute; left: 120.00px; top: 560.00px; width: 520.00px; height: 64.00px; font-size: 48.00px; font-weight: normal; text-align: left;">Exit to Title</div>
 	</div>
 </body>
 </rml>

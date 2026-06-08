@@ -8,6 +8,7 @@
 			height: 100%;
 			font-family: OCRAStd;
 			color: #FFFFFF;
+			background-color: #000000;
 		}
 		#overlay {
 			position: absolute;
@@ -61,10 +62,9 @@
 		}
 	</style>
 </head>
-<body data-rml-ui-document="1" data-canvas-width="1920" data-canvas-height="1080" data-preview-scale="1">
+<body data-rml-ui-document="1" data-ui-layout="scaled" data-canvas-width="1920" data-canvas-height="1080" data-preview-scale="1">
 	<div id="overlay">
 		<div id="panel_title">Ranking</div>
-		<div id="leaderboard_close_button" class="text-button" data-rml-editor="1" data-type="Button" data-x="1180.000000" data-y="150.000000" data-width="80.000000" data-height="56.000000" data-z="1" data-visible="true" data-locked="false" data-opacity="1.000000" data-bg="#00000000" data-text="X" data-text-color="#FFFFFFFF" data-font-size="40.000000" data-font-family="OCRAStd" data-bold="false" data-image="" data-target-tag="Player" data-on-click="ClosePopup" style="position: absolute; left: 1180.00px; top: 150.00px; width: 80.00px; height: 56.00px; font-size: 40.00px; font-weight: normal; text-align: center; color: #FFFFFF;">X</div>
 		<div id="leaderboard_header">RANK   TIME       NAME</div>
 		<div id="leaderboard_empty">No clear records yet.</div>
 		<div id="leaderboard_row_1" class="leaderboard-row" style="top: 310px;"></div>

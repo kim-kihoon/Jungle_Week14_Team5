@@ -367,6 +367,69 @@ local function DeactivateComponent(component)
     end)
 end
 
+local function ActivateComponent(component)
+    if component == nil then
+        return
+    end
+
+    pcall(function()
+        component:SetVisibility(true)
+    end)
+    pcall(function()
+        component:SetVisible(true)
+    end)
+    pcall(function()
+        component:SetActive(true)
+    end)
+    pcall(function()
+        component:Activate()
+    end)
+end
+
+local function ActivateTitleActor(actor)
+    if actor == nil then
+        return
+    end
+
+    pcall(function()
+        actor:SetVisible(true)
+    end)
+
+    local okComponents, components = pcall(function()
+        return actor:GetComponents()
+    end)
+    if okComponents and components ~= nil then
+        for _, component in ipairs(components) do
+            ActivateComponent(component)
+        end
+        return
+    end
+
+    local okRoot, root = pcall(function()
+        return actor:GetRootPrimitiveComponent()
+    end)
+    if okRoot then
+        ActivateComponent(root)
+    end
+end
+
+local function ActivateTitleActors()
+    if World == nil or World.FindActorsByTag == nil then
+        return
+    end
+
+    local ok, actors = pcall(function()
+        return World.FindActorsByTag(TITLE_ACTOR_TAG)
+    end)
+    if not ok or actors == nil then
+        return
+    end
+
+    for _, actor in ipairs(actors) do
+        ActivateTitleActor(actor)
+    end
+end
+
 local function DeactivateTitleActor(actor)
     if actor == nil then
         return
@@ -692,6 +755,9 @@ function RestartGame()
     RestoreInitialPlayerTransform()
     bCanWarp = true
     bTitleMode = false
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = false
+    end
     EndingManager:Reset()
     DoorManager:Reset()
     DoorManager:ClearToyProjectiles()
@@ -701,6 +767,29 @@ function RestartGame()
     CapturePlayerCamera()
     GameManager:RestartGame()
     bLastLoopStopped = IsLoopStopped()
+end
+
+function ExitToTitle()
+    StopTitleTransitionCoroutine()
+    ClearGameOverPresentation()
+    GameManager:Reset()
+    RestoreInitialPlayerTransform()
+    bCanWarp = true
+    bTitleMode = true
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = true
+    end
+    bLastLoopStopped = IsLoopStopped()
+    EndingManager:Reset()
+    DoorManager:Reset()
+    DoorManager:ResetSessionState()
+    DoorManager:ClearToyProjectiles()
+    SoundManager:EnterTitleState()
+    ToolManager:Reset()
+    ActivateTitleActors()
+    UIManager:ResetHospital()
+    EnterTitleScreen()
+    SyncCrosshairVisibility()
 end
 
 function ShowSetting()

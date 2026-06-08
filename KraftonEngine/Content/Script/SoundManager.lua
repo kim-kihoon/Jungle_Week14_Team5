@@ -58,6 +58,34 @@ local function is_audio_component(component)
     return ok and result == true
 end
 
+local TITLE_AUDIO_EXEMPT_TAG = "Title"
+
+local function actor_has_tag(actor, tag)
+    if actor == nil or actor.HasTag == nil or tag == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return actor:HasTag(tag)
+    end)
+    return ok and result == true
+end
+
+local function is_title_actor_audio_component(component)
+    if component == nil or component.GetOwner == nil then
+        return false
+    end
+
+    local ok, owner = pcall(function()
+        return component:GetOwner()
+    end)
+    if not ok or owner == nil then
+        return false
+    end
+
+    return actor_has_tag(owner, TITLE_AUDIO_EXEMPT_TAG)
+end
+
 local function class_exists(className)
     if Class == nil or Class.Exists == nil then
         return true
@@ -189,6 +217,19 @@ local function restore_audio_component_startup_mute(component)
     end
 
     return false
+end
+
+local function ensure_title_actor_audio_audible(component)
+    if not is_audio_component(component) then
+        return
+    end
+
+    restore_audio_component_startup_mute(component)
+
+    local okVolume, volume = get_audio_component_volume(component)
+    if okVolume and volume ~= nil and volume <= 0.001 then
+        set_audio_component_volume(component, 1.0)
+    end
 end
 
 function SoundManager:Play(key, volume)
@@ -366,12 +407,16 @@ function SoundManager:MuteTitleWorldAudio()
             if okComponents and components ~= nil then
                 for _, component in ipairs(components) do
                     if is_audio_component(component) then
-                        local okVolume, volume = get_audio_component_volume(component)
-                        if okVolume and (mute_audio_component_for_startup(component) or set_audio_component_volume(component, 0.0)) then
-                            table.insert(self.TitleMutedAudioComponents, {
-                                Component = component,
-                                Volume = volume
-                            })
+                        if is_title_actor_audio_component(component) then
+                            ensure_title_actor_audio_audible(component)
+                        else
+                            local okVolume, volume = get_audio_component_volume(component)
+                            if okVolume and (mute_audio_component_for_startup(component) or set_audio_component_volume(component, 0.0)) then
+                                table.insert(self.TitleMutedAudioComponents, {
+                                    Component = component,
+                                    Volume = volume
+                                })
+                            end
                         end
                     end
                 end

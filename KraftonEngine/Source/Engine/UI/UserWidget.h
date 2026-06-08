@@ -21,6 +21,12 @@ class FWidgetClickEventListener;
 class FWidgetEventListener;
 namespace Rml { class ElementDocument; }
 
+enum class EUIRenderLayout : uint8_t
+{
+	ScaledDesign = 0,
+	ScreenHud = 1,
+};
+
 class FWidgetClickEventListener final : public Rml::EventListener
 {
 public:
@@ -89,6 +95,8 @@ public:
 	bool IsInViewport() const { return bInViewport; }
 	UFUNCTION(Pure, Category="UI")
 	bool IsDocumentLoaded() const { return bDocumentLoaded; }
+	EUIRenderLayout GetLayoutMode() const { return LayoutMode; }
+	void SetLayoutMode(EUIRenderLayout InLayoutMode) { LayoutMode = InLayoutMode; }
 	Rml::ElementDocument* GetDocument() const { return Document; }
 
 	// 메뉴/대화창처럼 사용자가 클릭/포인팅을 해야 하는 widget 은 true 로 설정.
@@ -148,6 +156,7 @@ private:
 	TArray<FWidgetEventBinding> PendingEventBindings;
 	TArray<FWidgetEventListener*> EventListeners;
 	int32 ZOrder = 0;
+	EUIRenderLayout LayoutMode = EUIRenderLayout::ScaledDesign;
 	bool bInViewport = false;
 	bool bDocumentLoaded = false;
 	bool bWantsMouse = false;
