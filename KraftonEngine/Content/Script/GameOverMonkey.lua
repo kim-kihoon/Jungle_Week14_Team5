@@ -9,10 +9,10 @@ local ANIMATION_PLAY_RATE = 1.5
 local NOISE_AUDIO_KEY = "GameOverNoise"
 local NOISE_AUDIO_LOOP_NAME = "GameOverNoiseLoop"
 local NOISE_AUDIO_PATH = "SFX/Noise.mp3"
-local NOISE_AUDIO_VOLUME = 0.5
+local NOISE_AUDIO_VOLUME = 0.1
 local SCREAM_AUDIO_KEY = "GameOverMonkeyScream"
 local SCREAM_AUDIO_PATH = "CymbalMonkey/MonkeyScream.mp3"
-local SCREAM_AUDIO_VOLUME = 1.0
+local SCREAM_AUDIO_VOLUME = 0.3
 local CYMBALS_MONKEY_RISE_TARGET_SCALE = 0.1
 
 local LOOK_AT_SECONDS = 0.1
