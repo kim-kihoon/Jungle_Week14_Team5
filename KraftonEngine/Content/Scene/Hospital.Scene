@@ -7320,7 +7320,7 @@
                       "AnimationMode" : 0,
                       "AttachSocketName" : "Name_None",
                       "BackStandUpAnimationPath" : "None",
-                      "CachedEditRotator" : [0.000016, -90.000023, -14.082169],
+                      "CachedEditRotator" : [-0.000009, -90.000038, 14.868431],
                       "CenterOfMassOffset" : [0.000000, 0.000000, 0.000000],
                       "CollisionEnabled" : 0,
                       "DirectHitFullBodyThreshold" : 0.850000,
@@ -7346,7 +7346,7 @@
                       "RagdollRecoveryBlendOutTime" : 0.300000,
                       "RecoveryFullBodyThreshold" : 0.900000,
                       "RecoveryImpulseThreshold" : 0.550000,
-                      "RelativeTransform.Location" : [0.259066, -0.000000, -0.167439],
+                      "RelativeTransform.Location" : [0.274234, 0.000000, -0.256000],
                       "RelativeTransform.Scale" : [1.000000, 1.000000, 1.000000],
                       "ResponseContainer" : {
                         "Responses[0]" : 2,
