@@ -352,11 +352,8 @@ function SoundManager:Tick(dt)
 end
 
 function SoundManager:LoadTitleMusic()
-    if self.bTitleMusicLoaded then
-        return true
-    end
-
     if Audio == nil or Audio.Load == nil then
+        self.bTitleMusicLoaded = false
         return false
     end
 
@@ -368,15 +365,13 @@ function SoundManager:LoadTitleMusic()
 end
 
 function SoundManager:PlayTitleMusic()
-    if self.bTitleMusicPlaying then
-        return true
-    end
-
     if Audio == nil or Audio.PlayBGM == nil then
+        self.bTitleMusicPlaying = false
         return false
     end
 
     if not self:LoadTitleMusic() then
+        self.bTitleMusicPlaying = false
         return false
     end
 
@@ -399,6 +394,7 @@ end
 
 function SoundManager:ResetTitleSounds()
     self:StopTitleMusic()
+    self.bTitleMusicLoaded = false
     self:RestoreTitleWorldAudio()
 end
 
@@ -424,7 +420,7 @@ function SoundManager:EnterTitleState()
     self.CurrentState = self.State.Title
     self:ResetGameplaySounds()
     self:MuteTitleWorldAudio()
-    return self:PlayTitleMusic()
+    return true
 end
 
 function SoundManager:ExitTitleState()

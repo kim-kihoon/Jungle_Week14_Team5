@@ -1,5 +1,6 @@
 local GameManager = require("GameManager")
 local StageManager = require("StageManager")
+local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
 
 local EndingManager = {}
@@ -63,6 +64,7 @@ EndingManager.MonkeyActor = nil
 EndingManager.SpawnFacingYaw = EndingManager.ENDING_SPAWN_YAW
 EndingManager.SequenceCoroutine = nil
 EndingManager.MonkeySequenceCoroutine = nil
+EndingManager.bEndingCreditsMusicActive = false
 EndingManager.bStaggerShakeActive = false
 EndingManager.StaggerElapsed = 0.0
 EndingManager.StaggerPhase = 0.0
@@ -669,6 +671,55 @@ local function stop_ending_camera_fade()
     end
 end
 
+local function play_ending_credits_music()
+    if SoundManager == nil or SoundManager.PlayTitleMusic == nil then
+        EndingManager.bEndingCreditsMusicActive = false
+        return false
+    end
+
+    local bStarted = SoundManager:PlayTitleMusic() == true
+    EndingManager.bEndingCreditsMusicActive = bStarted
+    return bStarted
+end
+
+local function stop_ending_credits_music()
+    if not EndingManager.bEndingCreditsMusicActive then
+        return
+    end
+
+    EndingManager.bEndingCreditsMusicActive = false
+    if SoundManager == nil or SoundManager.StopTitleMusic == nil then
+        return
+    end
+
+    SoundManager:StopTitleMusic()
+end
+
+local function show_ending_credits()
+    if UIManager == nil or UIManager.ShowEndingCredits == nil then
+        return false
+    end
+
+    local bShown = UIManager:ShowEndingCredits() == true
+    if bShown then
+        play_ending_credits_music()
+    end
+    return bShown
+end
+
+local function hide_ending_credits()
+    if UIManager == nil or UIManager.HideEndingCredits == nil then
+        return
+    end
+
+    UIManager:HideEndingCredits()
+end
+
+local function hide_ending_credits_and_music()
+    hide_ending_credits()
+    stop_ending_credits_music()
+end
+
 local function play_ending_strike_blackout()
     if CameraManager == nil or CameraManager.FadeOut == nil then
         return
@@ -680,6 +731,10 @@ local function play_ending_strike_blackout()
 
     if Wait ~= nil then
         Wait(EndingManager.MONKEY_STRIKE_BLACKOUT_HOLD_SECONDS)
+    end
+
+    if EndingManager:IsActive() then
+        show_ending_credits()
     end
 end
 
@@ -836,6 +891,7 @@ end
 function EndingManager:Reset()
     stop_ending_sequence_coroutine()
     stop_ending_camera_fade()
+    hide_ending_credits_and_music()
     stop_camera_shakes()
     self.bStaggerShakeActive = false
     reset_stagger_shake_state()

@@ -13,6 +13,7 @@ UIManager.TimerPromptElementId = "timer_display"
 UIManager.TitleDocumentPath = "Content/UI/TitleUI.rml"
 UIManager.TitleSettingDocumentPath = "Content/UI/SettingUI.rml"
 UIManager.TitleCreditDocumentPath = "Content/UI/CreditUI.rml"
+UIManager.EndingCreditDocumentPath = "Content/UI/EndingCreditUI.rml"
 UIManager.TitleLeaderboardDocumentPath = "Content/UI/LeaderboardUI.rml"
 UIManager.GameOverDocumentPath = "Content/UI/GameOverUI.rml"
 UIManager.TimerColorNormal = "rgb(71, 255, 105)"
@@ -39,6 +40,7 @@ UIManager.LeaderboardMaxRows = 20
 UIManager.GameOverWidget = nil
 UIManager.CutsceneBlockerWidget = nil
 UIManager.CutsceneBlockerDocumentPath = UIManager.DoorPromptDocumentPath
+UIManager.EndingCreditWidget = nil
 
 local unpack_args = table.unpack or unpack
 
@@ -219,8 +221,28 @@ function UIManager:ExitCutsceneMode()
     self.CutsceneBlockerWidget = nil
 end
 
+function UIManager:HideEndingCredits()
+    self:RemoveWidget(self.EndingCreditWidget)
+    self.EndingCreditWidget = nil
+end
+
+function UIManager:ShowEndingCredits()
+    self:HideEndingCredits()
+    self.EndingCreditWidget = self:CreateWidget(self.EndingCreditDocumentPath)
+    if self.EndingCreditWidget == nil then
+        return false
+    end
+
+    return self:AddWidgetToViewport(self.EndingCreditWidget, 200, {
+        BlocksGameInput = true,
+        BlocksGameKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+end
+
 function UIManager:ResetHospital()
     self:ExitCutsceneMode()
+    self:HideEndingCredits()
     self:RemoveWidget(self.DoorPromptWidget)
     self:RemoveWidget(self.ControlPromptWidget)
     self:RemoveWidget(self.TimerPromptWidget)

@@ -621,10 +621,24 @@ local function StartTitleTransitionCoroutine()
     ResumeTitleTransition(0.0)
 end
 
+local function ScheduleTitleMusic()
+    if StartCoroutine == nil or Wait == nil then
+        SoundManager:PlayTitleMusic()
+        return
+    end
+
+    StartCoroutine(function()
+        Wait(0.0)
+        if bTitleMode and not bTitleTransitioning then
+            SoundManager:PlayTitleMusic()
+        end
+    end)
+end
+
 local function EnterTitleScreen()
     UIManager:ShowTitle()
     CaptureTitleCamera()
-    SoundManager:PlayTitleMusic()
+    ScheduleTitleMusic()
     PlayTitleMonkeyReadyAnimation()
 end
 
@@ -655,6 +669,8 @@ function EndPlay()
     StopTitleTransitionCoroutine()
     UnbindGameOverStateChanged()
     GameOverMonkey:Shutdown()
+    EndingManager:Reset()
+    SoundManager:StopTitleMusic()
     bCanWarp = true
     bLastLoopStopped = false
     DoorManager:Reset()
