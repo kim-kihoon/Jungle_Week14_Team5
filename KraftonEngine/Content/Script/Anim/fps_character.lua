@@ -733,6 +733,7 @@ function update(self, dt)
                 if handledHit then
                     start_pistol_fire_action(self)
                 else
+                    start_pistol_fire_action(self)
                     report_pistol_shot_failure()
                     play_party_blower_audio()
                     spawn_projectile_from_muzzle()

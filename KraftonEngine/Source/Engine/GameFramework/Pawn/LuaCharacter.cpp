@@ -4,6 +4,7 @@
 #include "Component/Shape/CapsuleComponent.h"
 #include "Component/Script/LuaScriptComponent.h"
 #include "Component/Camera/SpringArmComponent.h"
+#include "Component/Light/PointLightComponent.h"
 #include "Component/Light/SpotLightComponent.h"
 #include "Component/Particle/ParticleSystemComponent.h"
 #include "Component/Primitive/SkeletalMeshComponent.h"
@@ -14,44 +15,6 @@
 
 namespace
 {
-	const FName MuzzleSocketName("Muzzle");
-	constexpr float PistolMuzzleFlashAttenuationRadius = 8.0f;
-	constexpr float PistolMuzzleFlashIntensity = 8.0f;
-	constexpr float PistolMuzzleFlashInnerConeHalfAngleDegrees = 89.0f;
-	constexpr float PistolMuzzleFlashOuterConeHalfAngleDegrees = 89.0f;
-
-	void ConfigurePistolMuzzleFlashLight(ALuaCharacter* Character, USpotLightComponent* Light)
-	{
-		if (!Character || !Light)
-		{
-			return;
-		}
-
-		UCameraComponent* CameraComponent = Character->GetCamera();
-		if (CameraComponent)
-		{
-			Light->AttachToComponent(CameraComponent);
-		}
-		else if (USpringArmComponent* SpringArmComponent = Character->GetSpringArm())
-		{
-			Light->AttachToComponent(SpringArmComponent);
-		}
-		else if (USkeletalMeshComponent* MeshComponent = Character->GetMesh())
-		{
-			Light->AttachToComponent(MeshComponent, MuzzleSocketName);   
-		}
-
-		Light->SetRelativeLocation(FVector::ZeroVector);
-		Light->SetRelativeRotation(FVector::ZeroVector);
-
-		Light->SetIntensity(PistolMuzzleFlashIntensity);  
-		Light->SetLightColor(FVector4(1.0f, 0.90f, 0.72f, 1.0f));
-		Light->SetAttenuationRadius(PistolMuzzleFlashAttenuationRadius);  
-		Light->SetInnerConeAngle(PistolMuzzleFlashInnerConeHalfAngleDegrees);
-		Light->SetOuterConeAngle(PistolMuzzleFlashOuterConeHalfAngleDegrees);
-		Light->SetCastShadows(false);
-	}
-
 	bool IsNearlyZero(float Value)
 	{
 		return std::abs(Value) <= 1.0e-4f;
@@ -127,7 +90,7 @@ void ALuaCharacter::ConfigureFirstPersonViewRig()
 	for (UActorComponent* Component : GetComponents())
 	{
 		USpotLightComponent* SpotLight = Cast<USpotLightComponent>(Component);
-		if (!SpotLight || SpotLight == PistolMuzzleFlashLight.Get())
+		if (!SpotLight)
 		{
 			continue;
 		}
@@ -210,7 +173,6 @@ void ALuaCharacter::RefreshLuaCharacterComponentReferences()
 	LuaScriptComponent = GetComponentByClass<ULuaScriptComponent>();
 	SpringArm          = GetComponentByClass<USpringArmComponent>();
 	Camera             = GetComponentByClass<UCameraComponent>();
-	PistolMuzzleFlashLight = nullptr;
 }
 
 void ALuaCharacter::BeginPlay()
@@ -248,10 +210,6 @@ void ALuaCharacter::Tick(float DeltaTime)
 void ALuaCharacter::PlayPistolFireEffect()
 {
 	EnsurePistolMuzzleFlashLight();
-	if (USpotLightComponent* Light = PistolMuzzleFlashLight.Get())
-	{
-		ConfigurePistolMuzzleFlashLight(this, Light);
-	}
 	if (PistolMuzzleFlashParticle)
 	{
 		PistolMuzzleFlashParticle->SetCastShadow(false);
@@ -263,26 +221,26 @@ void ALuaCharacter::PlayPistolFireEffect()
 
 void ALuaCharacter::EnsurePistolMuzzleFlashLight()
 {
-	if (PistolMuzzleFlashLight.IsValid())
+	if (!PistolMuzzleFlashLight)
 	{
 		return;
 	}
 
-	USpotLightComponent* NewLight = AddComponent<USpotLightComponent>();
-	if (!NewLight)
+	if (!bPistolMuzzleFlashLightInitialized)
 	{
-		return;
+		PistolMuzzleFlashConfiguredIntensity = PistolMuzzleFlashLight->GetIntensity();
+		PistolMuzzleFlashLight->SetCastShadows(false);
+		PistolMuzzleFlashLight->SetVisible(true);
+		bPistolMuzzleFlashLightInitialized = true;
 	}
 
-	PistolMuzzleFlashLight = NewLight;
-	ConfigurePistolMuzzleFlashLight(this, NewLight);
-	NewLight->SetVisible(false);
+	PistolMuzzleFlashLight->SetIntensity(0.0f);
 }
 
 void ALuaCharacter::SetPistolMuzzleFlashVisible(bool bVisible)
 {
-	if (USpotLightComponent* Light = PistolMuzzleFlashLight.Get())
+	if (PistolMuzzleFlashLight)
 	{
-		Light->SetVisible(bVisible);
+		PistolMuzzleFlashLight->SetIntensity(bVisible ? PistolMuzzleFlashConfiguredIntensity : 0.0f);
 	}
 }

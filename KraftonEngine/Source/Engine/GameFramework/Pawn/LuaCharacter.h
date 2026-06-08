@@ -7,7 +7,7 @@
 class ULuaScriptComponent;
 class USpringArmComponent;
 class UCameraComponent;
-class USpotLightComponent;
+class UPointLightComponent;
 class UParticleSystemComponent;
 
 // ACharacter + ULuaScriptComponent — Pawn-level 게임 로직 (BeginPlay/Tick/EndPlay) 을 lua 로 작성.
@@ -62,7 +62,13 @@ protected:
 	UPROPERTY(Edit, Save, Category="Effects|Pistol", DisplayName="Muzzle Flash Particle", Type=ObjectRef, AllowedClass=UParticleSystemComponent)
 	TObjectPtr<UParticleSystemComponent> PistolMuzzleFlashParticle = nullptr;
 
-	TWeakObjectPtr<USpotLightComponent> PistolMuzzleFlashLight = nullptr;
+	UPROPERTY(Edit, Save, Category="Effects|Pistol", DisplayName="Muzzle Flash Point Light", Type=ObjectRef, AllowedClass=UPointLightComponent)
+	TObjectPtr<UPointLightComponent> PistolMuzzleFlashLight = nullptr;
+
+	UPROPERTY(Edit, Save, Category="Effects|Pistol", DisplayName="Muzzle Flash Duration", Min=0.0f, Max=1.0f, Speed=0.01f)
 	float PistolMuzzleFlashDuration = 0.09f;
+
 	float PistolMuzzleFlashRemaining = 0.0f;
+	float PistolMuzzleFlashConfiguredIntensity = 0.0f;
+	bool bPistolMuzzleFlashLightInitialized = false;
 };
