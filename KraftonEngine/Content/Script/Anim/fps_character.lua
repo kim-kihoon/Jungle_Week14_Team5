@@ -31,22 +31,6 @@ local function sync_tool_state(tool)
     ToolManager:SetCurrentTool(tool)
 end
 
-local function is_title_mode()
-    return HospitalPlayer ~= nil and HospitalPlayer.title_mode == true
-end
-
-local function sync_crosshair_visibility(self)
-    if is_title_mode() then
-        Anim.set_crosshair_visible(false)
-        return
-    end
-
-    local bPistolReady = self ~= nil
-        and self.CurrentTool == TOOL_PISTOL
-        and self.SwitchPhase == SWITCH_NONE
-    Anim.set_crosshair_visible(bPistolReady)
-end
-
 local SWITCH_NONE = 0
 local SWITCH_TO_CAMERA = 1
 local SWITCH_TO_PISTOL = 2
@@ -549,7 +533,6 @@ end
 
 local function show_pistol(self)
     sync_tool_state(TOOL_PISTOL)
-    sync_crosshair_visibility(self)
     Anim.set_owner_mesh_pitch(ARMS_READY_PITCH)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -559,7 +542,6 @@ end
 
 local function show_camera(self)
     sync_tool_state(TOOL_CAMERA)
-    sync_crosshair_visibility(self)
     Anim.set_owner_mesh_pitch(ARMS_DOWN_PITCH)
     Anim.set_owner_mesh_visibility(false)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, false)
@@ -568,7 +550,6 @@ local function show_camera(self)
 end
 
 local function update_switch_to_camera(self, alpha)
-    sync_crosshair_visibility(self)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -616,7 +597,6 @@ local function update_footsteps(self)
 end
 
 local function update_switch_to_pistol(self, alpha)
-    sync_crosshair_visibility(self)
     alpha = smooth_step(alpha)
     Anim.set_owner_mesh_visibility(true)
     Anim.set_socket_child_visibility(PISTOL_SOCKET, true)
@@ -719,7 +699,6 @@ function init(self)
 end
 
 function update(self, dt)
-    sync_crosshair_visibility(self)
     self.Speed = Anim.get_owner_speed()
 
     if self.ActionPhase == ACTION_PISTOL_FIRE then

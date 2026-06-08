@@ -222,7 +222,6 @@ void ULuaAnimInstance::ReloadScript()
 
 void ULuaAnimInstance::ClearGraph()
 {
-	FCrosshairOverlay::SetVisible(false);
 	CachedViewCamera.Reset();
 
 	// 이전 graph 에 걸려 있던 transition 람다가 새 Lua runtime 을 보지 않도록 세대를 먼저 넘긴다.

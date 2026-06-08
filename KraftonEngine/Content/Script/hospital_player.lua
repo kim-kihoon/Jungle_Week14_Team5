@@ -44,6 +44,23 @@ local function IsInTriggerZone(location)
     return location.Y > TRIGGER_Y_MIN and location.X < TRIGGER_X_MAX
 end
 
+local function SyncCrosshairVisibility()
+    if Crosshair == nil or Crosshair.set_visible == nil then
+        return
+    end
+
+    if bTitleMode then
+        Crosshair.set_visible(false)
+        return
+    end
+
+    if ToolManager:IsPistol() then
+        Crosshair.set_visible(true)
+    else
+        Crosshair.set_visible(false)
+    end
+end
+
 local function CopyVec3(value)
     if value == nil then
         return nil
@@ -521,9 +538,6 @@ local function ApplyGameplayStart()
     bTitleMode = false
     bLastLoopStopped = IsLoopStopped()
     SoundManager:EnterPlayingState()
-    if HospitalPlayer ~= nil then
-        HospitalPlayer.title_mode = false
-    end
     UIManager:DisposeTitle()
     CapturePlayerCamera()
     CaptureInitialPlayerTransform()
@@ -595,9 +609,6 @@ function BeginPlay()
     SoundManager:EnterTitleState()
     ToolManager:Reset()
     UIManager:ResetHospital()
-    if HospitalPlayer ~= nil then
-        HospitalPlayer.title_mode = true
-    end
     UIManager:ShowTitle()
     CaptureTitleCamera()
 end
@@ -614,9 +625,6 @@ function EndPlay()
     ToolManager:Reset()
     UIManager:ResetHospital()
     bTitleMode = true
-    if HospitalPlayer ~= nil then
-        HospitalPlayer.title_mode = true
-    end
 end
 
 function Tick(dt)
@@ -631,17 +639,19 @@ function Tick(dt)
         if bTitleMode then
             CaptureTitleCamera()
         end
-        return
+    elseif bTitleMode then
+        CaptureTitleCamera()
     end
 
-    if bTitleMode then
-        CaptureTitleCamera()
+    if bTitleTransitioning or bTitleMode then
+        SyncCrosshairVisibility()
         return
     end
 
     if GameManager ~= nil
         and GameManager.GetState ~= nil
         and GameManager:GetState() == GameManager.State.GameOver then
+        SyncCrosshairVisibility()
         return
     end
 
@@ -682,6 +692,8 @@ function Tick(dt)
         DoorManager:ToggleDoor(targetedDoor)
         UIManager:UpdateDoorPrompt(targetedDoor)
     end
+
+    SyncCrosshairVisibility()
 end
 
 function OnOverlap(OtherActor)
@@ -708,9 +720,6 @@ function RestartGame()
     SoundManager:EnterPlayingState()
     ToolManager:Reset()
     UIManager:ResetHospital()
-    if HospitalPlayer ~= nil then
-        HospitalPlayer.title_mode = false
-    end
     CapturePlayerCamera()
     GameManager:RestartGame()
     bLastLoopStopped = IsLoopStopped()
