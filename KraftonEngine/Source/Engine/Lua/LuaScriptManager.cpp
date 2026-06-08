@@ -119,6 +119,7 @@
 #include "Platform/WindowsWindow.h"
 #include "Profiling/Time/Timer.h"
 #include "Runtime/Engine.h"
+#include "Runtime/GameEngine.h"
 #include "Render/Types/MinimalViewInfo.h"
 #include "Texture/Texture2D.h"
 #include "UI/UIManager.h"
@@ -2430,6 +2431,37 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
             FLuaScriptManager::SetOnEscapePressed(std::move(Callback));
         }
     );
+    Engine.set_function(
+        "SetGammaCorrectionEnabled",
+        [](bool bEnabled)
+        {
+            if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
+            {
+                GameEngine->SetGammaCorrectionEnabled(bEnabled);
+            }
+        }
+    );
+    Engine.set_function(
+        "SetGamma",
+        [](float Gamma)
+        {
+            if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
+            {
+                GameEngine->SetGamma(Gamma);
+            }
+        }
+    );
+    Engine.set_function(
+        "GetGamma",
+        []() -> float
+        {
+            if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
+            {
+                return GameEngine->GetGamma();
+            }
+            return 2.4f;
+        }
+    );
 
     sol::table Key = Lua.create_named_table("Key");
     for (const FString& KeyName : GetKnownInputKeyNames())
@@ -4576,6 +4608,14 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
         ),
         "Jump",
         &ACharacter::Jump,
+        "SetMouseSensitivity",
+        &ACharacter::SetMouseSensitivity,
+        "GetMouseSensitivity",
+        &ACharacter::GetMouseSensitivity,
+        "SetInvertMouseY",
+        &ACharacter::SetInvertMouseY,
+        "IsInvertMouseY",
+        &ACharacter::IsInvertMouseY,
         "GetCapsuleComponent",
         &ACharacter::GetCapsuleComponent,
         "GetMesh",
@@ -5696,6 +5736,40 @@ void FLuaScriptManager::RegisterActorBindings(sol::state& Lua)
             {
                 Character->AddMovementInput(Direction, Scale.value_or(1.0f));
             }
+        },
+        "SetMouseSensitivity",
+        [](AActor& Actor, float Sensitivity)
+        {
+            if (ACharacter* Character = Cast<ACharacter>(&Actor))
+            {
+                Character->SetMouseSensitivity(Sensitivity);
+            }
+        },
+        "GetMouseSensitivity",
+        [](AActor& Actor) -> float
+        {
+            if (ACharacter* Character = Cast<ACharacter>(&Actor))
+            {
+                return Character->GetMouseSensitivity();
+            }
+            return 0.0f;
+        },
+        "SetInvertMouseY",
+        [](AActor& Actor, bool bInvert)
+        {
+            if (ACharacter* Character = Cast<ACharacter>(&Actor))
+            {
+                Character->SetInvertMouseY(bInvert);
+            }
+        },
+        "IsInvertMouseY",
+        [](AActor& Actor) -> bool
+        {
+            if (ACharacter* Character = Cast<ACharacter>(&Actor))
+            {
+                return Character->IsInvertMouseY();
+            }
+            return false;
         },
 
         "GetCharacterMovement",

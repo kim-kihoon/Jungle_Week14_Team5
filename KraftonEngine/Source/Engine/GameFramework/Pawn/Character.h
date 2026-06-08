@@ -83,6 +83,10 @@ public:
 	// CharacterMovement->Jump 의 액터 레벨 wrapper. Walking 중에만 effective.
 	UFUNCTION(Callable, Exec, Category="Character|Movement")
 	void Jump();
+	void SetMouseSensitivity(float InSensitivity);
+	float GetMouseSensitivity() const { return MouseSensitivity; }
+	void SetInvertMouseY(bool bInvert);
+	bool IsInvertMouseY() const { return bInvertMouseY; }
 
 	UFUNCTION(Callable, Category="Character|Physics")
 	bool EnterRagdoll();
@@ -133,6 +137,7 @@ public:
 	// capsule 자체 회전은 안 함 — SpringArm 의 bUsePawnControlRotation 가 ControlRotation 사용해
 	// 카메라만 회전. WASD 도 ControlRotation.Yaw 기준 forward/right 로 이동.
 	bool  bAutoInputMouseLook = true;
+	bool  bInvertMouseY       = false;
 	float MouseSensitivity    = 0.2f;   // deg / pixel — yaw/pitch 공통
 	float MinCameraPitch      = -80.0f; // 위 한도 (마이너스 = 위)
 	float MaxCameraPitch      =  60.0f; // 아래 한도

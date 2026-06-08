@@ -18,6 +18,8 @@
 #include "UI/PhotoOverlay.h"
 #include "Input/InputSystem.h"
 
+#include <utility>
+
 void UGameEngine::Init(FWindowsWindow* InWindow)
 {
 	UEngine::Init(InWindow);
@@ -45,11 +47,15 @@ void UGameEngine::Init(FWindowsWindow* InWindow)
 
 	LoadStartLevel();
 
-	SetRenderPipeline(std::make_unique<FGameRenderPipeline>(this, Renderer));
+	auto Pipeline = std::make_unique<FGameRenderPipeline>(this, Renderer);
+	GameRenderPipeline = Pipeline.get();
+	SetRenderPipeline(std::move(Pipeline));
 }
 
 void UGameEngine::Shutdown()
 {
+	GameRenderPipeline = nullptr;
+
 	// 게임 세션 종료 — 커서 캡처/clip / raw mouse / GameInputSnapshot 정리.
 	// 이거 안 부르면 종료 후에도 시스템 커서가 숨김 상태로 남거나 클립 영역이 잔존해
 	// 다른 앱 사용 시 마우스가 안 보이는 증상이 생긴다.
@@ -65,6 +71,32 @@ void UGameEngine::Shutdown()
 	}
 
 	UEngine::Shutdown();
+}
+
+void UGameEngine::SetGammaCorrectionEnabled(bool bEnabled)
+{
+	if (GameRenderPipeline)
+	{
+		GameRenderPipeline->SetGammaCorrectionEnabled(bEnabled);
+	}
+}
+
+bool UGameEngine::IsGammaCorrectionEnabled() const
+{
+	return GameRenderPipeline ? GameRenderPipeline->IsGammaCorrectionEnabled() : false;
+}
+
+void UGameEngine::SetGamma(float InGamma)
+{
+	if (GameRenderPipeline)
+	{
+		GameRenderPipeline->SetGamma(InGamma);
+	}
+}
+
+float UGameEngine::GetGamma() const
+{
+	return GameRenderPipeline ? GameRenderPipeline->GetGamma() : 2.4f;
 }
 
 void UGameEngine::Tick(float DeltaTime)

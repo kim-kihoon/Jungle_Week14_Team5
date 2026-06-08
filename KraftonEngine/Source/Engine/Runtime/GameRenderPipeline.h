@@ -1,6 +1,7 @@
 #pragma once
 #include "Render/Pipeline/IRenderPipeline.h"
 #include "Render/Pipeline/RenderCollector.h"
+#include "Render/Types/ViewTypes.h"
 
 class UGameEngine;
 class UWorld;
@@ -14,6 +15,11 @@ public:
 
 	void Execute(float DeltaTime, FRenderer& Renderer) override;
 
+	void SetGammaCorrectionEnabled(bool bEnabled);
+	bool IsGammaCorrectionEnabled() const;
+	void SetGamma(float InGamma);
+	float GetGamma() const;
+
 private:
 	// EditorRenderPipeline 과 동일 패턴 — POV 통화 시그니처. 컴포넌트 의존은 PrepareViewport
 	// 의 OnResize 한 곳에 격리 (PC->PlayerCameraManager->ActiveCamera 직접 가져옴).
@@ -26,4 +32,5 @@ private:
 	UGameEngine* Game = nullptr;
 	FRenderCollector Collector;
 	FFrameContext Frame;
+	FViewportRenderOptions RuntimeRenderOptions;
 };

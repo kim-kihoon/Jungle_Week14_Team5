@@ -5,6 +5,7 @@ local CAMERA_MESH_PATH = "Content/Data/camera/camera_StaticMesh.uasset"
 local GameManager = require("GameManager")
 local SoundManager = require("SoundManager")
 local ToolManager = require("ToolManager")
+local SettingManager = require("SettingManager")
 
 local FPS_SPEED_THRESHOLD = 0.5
 local FPS_IDLE_TO_WALK_BLEND = 0.15
@@ -216,6 +217,13 @@ end
 
 local function update_head_bob(self, dt)
     if Anim.apply_head_bob == nil then
+        return
+    end
+
+    if not SettingManager:IsHeadBobEnabled() then
+        if self.HeadBobRoll ~= 0.0 or self.HeadBobPitch ~= 0.0 or self.HeadBobOffsetZ ~= 0.0 then
+            reset_head_bob(self)
+        end
         return
     end
 

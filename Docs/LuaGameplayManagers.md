@@ -30,7 +30,7 @@ hospital_player.lua
   - Start 버튼에서 TitleMonkey 타이틀 연출을 호출
   - GameOverMonkey 모듈에 게임오버 연출 생명주기를 위임
   - title mode 해제 시 현재 loop stopped 상태를 기준값으로 동기화
-  - DoorManager, SoundManager, UIManager, ToolManager 호출
+  - DoorManager, SoundManager, UIManager, ToolManager, SettingManager 호출
 
 TitleMonkey.lua
   - TitleMonkey 액터에 붙는 타이틀 전용 연출 스크립트
@@ -45,7 +45,7 @@ GameOverMonkey.lua
 fps_character.lua
   - FPS 팔/무기/카메라 애니메이션 상태
   - 발사, 촬영, 장비 전환, 화면 흔들림, 발소리 처리
-  - GameManager, SoundManager, ToolManager 상태를 소비
+  - GameManager, SoundManager, ToolManager, SettingManager 상태를 소비
 
 GameManager.lua
   - 게임 진행 상태의 단일 진실
@@ -74,6 +74,11 @@ UIManager.lua
 ToolManager.lua
   - 플레이어 장비 선택 상태
   - Pistol, Camera 전환 상태를 fps_character.lua와 UIManager.lua가 공유
+
+SettingManager.lua
+  - 타이틀 설정 메뉴의 사용자 선택 상태
+  - 감마, 마스터 볼륨, 마우스 감도, Y축 반전, 헤드밥, 조작 프롬프트 표시 여부를 소유
+  - BeginPlay와 설정 변경 시 엔진, 오디오, 플레이어 입력에 현재 값을 적용
 ```
 
 ## 진입점 스크립트 책임
@@ -198,6 +203,19 @@ UI 문서의 생성, 표시, 텍스트 갱신, 제거를 담당한다.
 
 장비의 애니메이션, mesh 표시, 발사/촬영 동작은 `fps_character.lua`가 처리한다. UI 문구는 `UIManager`가 `ToolManager`를 읽어 만든다.
 
+### SettingManager
+
+타이틀 설정 메뉴의 사용자 선택 상태를 소유한다.
+
+- 감마 프리셋
+- 마스터 볼륨 프리셋
+- 마우스 감도 프리셋
+- Y축 반전
+- 헤드밥 사용 여부
+- 조작 프롬프트 표시 여부
+
+설정 값은 `SettingManager:ApplyAll(player)`로 엔진 렌더 옵션, 오디오 볼륨, 플레이어 입력 값에 반영한다. `UIManager`는 설정 팝업 표시와 텍스트 갱신만 담당하고, `hospital_player.lua`는 버튼 클릭 라우팅과 플레이어 적용을 연결한다.
+
 ## 시작과 종료 순서
 
 Hospital.Scene 시작 흐름은 다음 순서를 유지한다.
@@ -212,9 +230,10 @@ hospital_player.lua BeginPlay
      - bMuteUntilStart AudioComponent 추적
      - 이미 살아 있는 기존 AudioComponent fallback 음소거
   4. ToolManager:Reset()
-  5. UIManager:ResetHospital()
-  6. title_mode 설정
-  7. EnterTitleScreen()
+  5. SettingManager:ApplyAll(obj)
+  6. UIManager:ResetHospital()
+  7. title_mode 설정
+  8. EnterTitleScreen()
      - UIManager:ShowTitle()
      - 타이틀 카메라 점유
      - TitleMonkey:Ready()
@@ -269,11 +288,13 @@ Input.GetAction("Aim")
    - 사운드면 `SoundManager`
    - UI면 `UIManager`
    - 장비 선택이면 `ToolManager`
+   - 사용자 설정이면 `SettingManager`
    - FPS 애니메이션 표현이면 `fps_character.lua`
 
 2. Manager가 다른 Manager를 호출할 때 순환 의존을 늘리지 않는다.
    - 현재 `DoorManager -> SoundManager`, `DoorManager -> GameManager`는 문 이벤트 연결 때문에 허용된 구조다.
    - `UIManager -> ToolManager`는 표시 문구 생성을 위한 읽기 의존이다.
+   - `UIManager -> SettingManager`는 설정 팝업 텍스트와 조작 프롬프트 표시 여부를 읽기 위한 의존이다.
    - 가능하면 `hospital_player.lua`가 여러 Manager를 조합하고, Manager끼리는 최소한으로 연결한다.
 
 3. `require()` 모듈 상태는 월드 전환 뒤에도 남을 수 있다.
