@@ -1,5 +1,25 @@
 # Anomaly System
 
+## 인게임 Anomaly 타겟 Outline 디버그
+
+현재 활성 Anomaly 타겟을 에디터 선택처럼 외곽선으로 표시하는 인게임 디버그 기능을 제공한다. 이 기능은 에디터 `SelectionManager`와 분리되어 있으며 Outliner, Details, Gizmo 선택 상태를 변경하지 않는다.
+
+- 키보드/마우스 입력: `Q`를 누르고 있는 동안 표시
+- 플스 패드 입력: `L2` (`Gamepad_LeftTrigger`)를 누르고 있는 동안 표시
+- 처리 흐름: `DebugManager` 입력 유지 상태 감지 -> `GameManager:SetActiveAnomalyOutlineVisible(bool)` -> 활성 Anomaly 타겟 `Actor:SetGameplayOutline(bool)`
+- 새 Anomaly 로드, `Reset`, `GameOver`, `ClearGame` 시 기존 outline은 자동 해제된다.
+- 활성 Anomaly 타겟이 없으면 outline을 표시하지 않는다.
+
+## 랜덤 Anomaly 풀 정책
+
+랜덤 루프에서 사용하는 `AnomalyManager.Rules`와 디버그 강제 적용에서 사용하는 `AnomalyManager.AllRules`는 분리되어 있다.
+
+- 랜덤 풀 포함: `PhotoInvisible`, `OffscreenAnimation`, `OffscreenFacePlayerPhotoInvisible`, `OffscreenFacePlayerBlackPhoto`, `BlackPhoto`
+- 랜덤 풀 제외: `NoShadow`, `NearSilentCymbalMonkey`
+- 디버그 전용 유지: `2 -> NoShadow`, `6 -> NearSilentCymbalMonkey`
+
+`NoShadow`와 `NearSilentCymbalMonkey`는 랜덤으로는 등장하지 않지만, 디버그 키로는 기존처럼 강제 적용할 수 있다.
+
 ## 목적
 
 - 게임 시작 또는 플레이어 워프 시 새로운 이상현상을 하나 활성화한다.

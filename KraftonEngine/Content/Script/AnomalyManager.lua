@@ -18,12 +18,10 @@ AnomalyManager.Tags = {
 
 AnomalyManager.Rules = {
     PhotoInvisible,
-    NoShadow,
     OffscreenAnimation,
     OffscreenFacePlayerPhotoInvisible,
     OffscreenFacePlayerBlackPhoto,
-    BlackPhoto,
-    NearSilentCymbalMonkey
+    BlackPhoto
 }
 
 AnomalyManager.AllRules = {

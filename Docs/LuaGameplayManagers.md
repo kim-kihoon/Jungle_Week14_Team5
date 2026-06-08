@@ -1,5 +1,15 @@
 # Lua Gameplay Managers
 
+## Anomaly outline 디버그 입력
+
+현재 활성 Anomaly 타겟을 인게임에서 외곽선으로 표시하는 디버그 입력은 다음 규칙을 사용한다.
+
+- 키보드/마우스: `Q`
+- 플스 패드: `L2` (`DebugAnomalyOutline` 액션, `Gamepad_LeftTrigger`)
+- 기존 조준 입력: `Aim`은 `RightMouseButton`과 `Gamepad_LeftShoulder(L1)`를 유지한다.
+
+`DebugAnomalyOutline`은 게임플레이 정답 판정이나 에디터 선택 상태를 바꾸지 않고, 입력을 누르고 있는 동안만 현재 활성 Anomaly 타겟의 렌더 outline을 표시한다.
+
 ## 목적
 
 Hospital 계열 Lua 스크립트는 씬 액터에 붙은 진입점 스크립트와 전역 상태 모듈이 섞이면 책임 경계가 흐려지기 쉽다. 이 문서는 현재 Manager 분리 구조와 유지보수 규칙을 정리한다.
