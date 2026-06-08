@@ -21,6 +21,12 @@ class FWidgetClickEventListener;
 class FWidgetEventListener;
 namespace Rml { class ElementDocument; }
 
+enum class EUIRenderLayout : uint8_t
+{
+	ScaledDesign = 0,
+	ScreenHud = 1,
+};
+
 class FWidgetClickEventListener final : public Rml::EventListener
 {
 public:
@@ -77,6 +83,7 @@ public:
 	bool ActivateNavigationSelection();
 	bool ActivateCloseNavigationTarget();
 	void ClearNavigationSelection();
+	void SetGamepadNavigationHighlightEnabled(bool bEnabled);
 	UFUNCTION(Callable, Category="UI")
 	void SetText(const FString& ElementId, const FString& Text);
 	UFUNCTION(Callable, Category="UI")
@@ -94,6 +101,8 @@ public:
 	bool IsInViewport() const { return bInViewport; }
 	UFUNCTION(Pure, Category="UI")
 	bool IsDocumentLoaded() const { return bDocumentLoaded; }
+	EUIRenderLayout GetLayoutMode() const { return LayoutMode; }
+	void SetLayoutMode(EUIRenderLayout InLayoutMode) { LayoutMode = InLayoutMode; }
 	Rml::ElementDocument* GetDocument() const { return Document; }
 
 	// 메뉴/대화창처럼 사용자가 클릭/포인팅을 해야 하는 widget 은 true 로 설정.
@@ -170,7 +179,9 @@ private:
 	TArray<FWidgetEventListener*> EventListeners;
 	TArray<FNavigationButton> NavigationButtons;
 	int32 ZOrder = 0;
+	EUIRenderLayout LayoutMode = EUIRenderLayout::ScaledDesign;
 	int32 NavigationSelectionIndex = -1;
+	bool bGamepadNavigationHighlightEnabled = false;
 	bool bInViewport = false;
 	bool bDocumentLoaded = false;
 	bool bWantsMouse = false;

@@ -16,10 +16,10 @@ SoundManager.DoorCloseSoundDelay = 1.0
 SoundManager.PartyBlowerSoundKey = "PartyBlower"
 SoundManager.PartyBlowerSoundVolume = 0.25
 SoundManager.EmptyGunShotSoundKey = "EmptyGunShot"
-SoundManager.EmptyGunShotSoundVolume = 0.8
+SoundManager.EmptyGunShotSoundVolume = 0.2
 SoundManager.TitleMusicKey = "HospitalTitleMusic"
 SoundManager.TitleMusicPath = "Music/A1 - It's just a burning memory.mp3"
-SoundManager.TitleMusicVolume = 1.0
+SoundManager.TitleMusicVolume = 0.1
 SoundManager.bTitleMusicLoaded = false
 SoundManager.bTitleMusicPlaying = false
 SoundManager.PendingDoorCloseSounds = {}
@@ -61,6 +61,34 @@ local function is_audio_component(component)
         return component:IsA("UAudioComponent")
     end)
     return ok and result == true
+end
+
+local TITLE_AUDIO_EXEMPT_TAG = "Title"
+
+local function actor_has_tag(actor, tag)
+    if actor == nil or actor.HasTag == nil or tag == nil then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return actor:HasTag(tag)
+    end)
+    return ok and result == true
+end
+
+local function is_title_actor_audio_component(component)
+    if component == nil or component.GetOwner == nil then
+        return false
+    end
+
+    local ok, owner = pcall(function()
+        return component:GetOwner()
+    end)
+    if not ok or owner == nil then
+        return false
+    end
+
+    return actor_has_tag(owner, TITLE_AUDIO_EXEMPT_TAG)
 end
 
 local function class_exists(className)
@@ -194,6 +222,19 @@ local function restore_audio_component_startup_mute(component)
     end
 
     return false
+end
+
+local function ensure_title_actor_audio_audible(component)
+    if not is_audio_component(component) then
+        return
+    end
+
+    restore_audio_component_startup_mute(component)
+
+    local okVolume, volume = get_audio_component_volume(component)
+    if okVolume and volume ~= nil and volume <= 0.001 then
+        set_audio_component_volume(component, 1.0)
+    end
 end
 
 function SoundManager:Play(key, volume)
@@ -421,12 +462,16 @@ function SoundManager:MuteTitleWorldAudio()
             if okComponents and components ~= nil then
                 for _, component in ipairs(components) do
                     if is_audio_component(component) then
-                        local okVolume, volume = get_audio_component_volume(component)
-                        if okVolume and (mute_audio_component_for_startup(component) or set_audio_component_volume(component, 0.0)) then
-                            table.insert(self.TitleMutedAudioComponents, {
-                                Component = component,
-                                Volume = volume
-                            })
+                        if is_title_actor_audio_component(component) then
+                            ensure_title_actor_audio_audible(component)
+                        else
+                            local okVolume, volume = get_audio_component_volume(component)
+                            if okVolume and (mute_audio_component_for_startup(component) or set_audio_component_volume(component, 0.0)) then
+                                table.insert(self.TitleMutedAudioComponents, {
+                                    Component = component,
+                                    Volume = volume
+                                })
+                            end
                         end
                     end
                 end

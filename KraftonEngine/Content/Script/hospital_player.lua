@@ -6,6 +6,8 @@ local SoundManager = require("SoundManager")
 local UIManager = require("UIManager")
 local ToolManager = require("ToolManager")
 local GameOverMonkey = require("GameOverMonkey")
+local StageManager = require("StageManager")
+local EndingManager = require("EndingManager")
 
 local TRIGGER_Y_MIN = 27.132
 local TRIGGER_X_MAX = -3.0
@@ -365,6 +367,69 @@ local function DeactivateComponent(component)
     end)
 end
 
+local function ActivateComponent(component)
+    if component == nil then
+        return
+    end
+
+    pcall(function()
+        component:SetVisibility(true)
+    end)
+    pcall(function()
+        component:SetVisible(true)
+    end)
+    pcall(function()
+        component:SetActive(true)
+    end)
+    pcall(function()
+        component:Activate()
+    end)
+end
+
+local function ActivateTitleActor(actor)
+    if actor == nil then
+        return
+    end
+
+    pcall(function()
+        actor:SetVisible(true)
+    end)
+
+    local okComponents, components = pcall(function()
+        return actor:GetComponents()
+    end)
+    if okComponents and components ~= nil then
+        for _, component in ipairs(components) do
+            ActivateComponent(component)
+        end
+        return
+    end
+
+    local okRoot, root = pcall(function()
+        return actor:GetRootPrimitiveComponent()
+    end)
+    if okRoot then
+        ActivateComponent(root)
+    end
+end
+
+local function ActivateTitleActors()
+    if World == nil or World.FindActorsByTag == nil then
+        return
+    end
+
+    local ok, actors = pcall(function()
+        return World.FindActorsByTag(TITLE_ACTOR_TAG)
+    end)
+    if not ok or actors == nil then
+        return
+    end
+
+    for _, actor in ipairs(actors) do
+        ActivateTitleActor(actor)
+    end
+end
+
 local function DeactivateTitleActor(actor)
     if actor == nil then
         return
@@ -567,6 +632,7 @@ function BeginPlay()
     bLastLoopStopped = IsLoopStopped()
     bTitleMode = true
     GameOverMonkey:Initialize(obj)
+    EndingManager:Initialize()
     BindGameOverStateChanged()
     DoorManager:Reset()
     DoorManager:ResetSessionState()
@@ -621,6 +687,13 @@ function Tick(dt)
         return
     end
 
+    if EndingManager:IsActive() then
+        AddPlayerMovement()
+        UIManager:UpdateAmmoPrompt(GameManager)
+        SyncCrosshairVisibility()
+        return
+    end
+
     DoorManager:InitDoors()
 
     local location = obj:GetLocation()
@@ -635,7 +708,7 @@ function Tick(dt)
     end
     bLastLoopStopped = bLoopStopped
 
-    if bInZone and bCanWarp then
+    if bInZone and bCanWarp and StageManager:CanZoneWarp() then
         obj:AddWorldOffset(Vec3(WARP_DELTA_X, WARP_DELTA_Y, WARP_DELTA_Z))
         GameManager:OnWarp("PlayerWarp")
         bLastLoopStopped = IsLoopStopped()
@@ -684,6 +757,10 @@ function RestartGame()
     RestoreInitialPlayerTransform()
     bCanWarp = true
     bTitleMode = false
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = false
+    end
+    EndingManager:Reset()
     DoorManager:Reset()
     DoorManager:ClearToyProjectiles()
     SoundManager:EnterPlayingState()
@@ -692,6 +769,29 @@ function RestartGame()
     CapturePlayerCamera()
     GameManager:RestartGame()
     bLastLoopStopped = IsLoopStopped()
+end
+
+function ExitToTitle()
+    StopTitleTransitionCoroutine()
+    ClearGameOverPresentation()
+    GameManager:Reset()
+    RestoreInitialPlayerTransform()
+    bCanWarp = true
+    bTitleMode = true
+    if HospitalPlayer ~= nil then
+        HospitalPlayer.title_mode = true
+    end
+    bLastLoopStopped = IsLoopStopped()
+    EndingManager:Reset()
+    DoorManager:Reset()
+    DoorManager:ResetSessionState()
+    DoorManager:ClearToyProjectiles()
+    SoundManager:EnterTitleState()
+    ToolManager:Reset()
+    ActivateTitleActors()
+    UIManager:ResetHospital()
+    EnterTitleScreen()
+    SyncCrosshairVisibility()
 end
 
 function ShowSetting()

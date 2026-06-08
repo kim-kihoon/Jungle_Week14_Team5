@@ -408,13 +408,19 @@ function UIManager:ShowTitle()
     })
 end
 
+function UIManager:SetTitleMenuVisible(bVisible)
+    set_widget_display(self.TitleWidget, "ui_canvas", bVisible == true)
+end
+
 function UIManager:CloseTitlePopup()
     self:RemoveWidget(self.TitlePopupWidget)
     self.TitlePopupWidget = nil
+    self:SetTitleMenuVisible(true)
 end
 
 function UIManager:ShowTitlePopup(documentPath)
     self:CloseTitlePopup()
+    self:SetTitleMenuVisible(false)
     self.TitlePopupWidget = self:CreateWidget(documentPath)
     return self:AddWidgetToViewport(self.TitlePopupWidget, 110, {
         WantsMouse = true,

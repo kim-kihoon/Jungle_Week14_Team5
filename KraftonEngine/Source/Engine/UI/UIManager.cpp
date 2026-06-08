@@ -77,6 +77,74 @@ namespace
 	constexpr float NavigationStickThreshold = 0.5f;
 	constexpr double NavigationInitialRepeatDelay = 0.32;
 	constexpr double NavigationRepeatDelay = 0.12;
+	constexpr float UIDesignWidth = 1920.0f;
+	constexpr float UIDesignHeight = 1080.0f;
+
+	void UpdateUILayoutMetrics(float ViewportWidth, float ViewportHeight, float& OutScale, float& OutOffsetX, float& OutOffsetY)
+	{
+		if (ViewportWidth <= 0.0f || ViewportHeight <= 0.0f)
+		{
+			OutScale = 1.0f;
+			OutOffsetX = 0.0f;
+			OutOffsetY = 0.0f;
+			return;
+		}
+
+		OutScale = std::min(ViewportWidth / UIDesignWidth, ViewportHeight / UIDesignHeight);
+		const float ScaledWidth = UIDesignWidth * OutScale;
+		const float ScaledHeight = UIDesignHeight * OutScale;
+		OutOffsetX = (ViewportWidth - ScaledWidth) * 0.5f;
+		OutOffsetY = (ViewportHeight - ScaledHeight) * 0.5f;
+	}
+
+	Rml::Matrix4f BuildUILayoutTransform(float Scale, float OffsetX, float OffsetY)
+	{
+		return Rml::Matrix4f::Translate(OffsetX, OffsetY, 0.0f) * Rml::Matrix4f::Scale(Scale, Scale, 1.0f);
+	}
+
+	int32 MapViewportMouseToDesign(float MouseCoord, float Offset, float Scale)
+	{
+		if (Scale <= 0.0f)
+		{
+			return static_cast<int32>(MouseCoord);
+		}
+		return static_cast<int32>((MouseCoord - Offset) / Scale);
+	}
+
+	constexpr float HudRootFontPxAt1080p = 16.0f;
+
+	EUIRenderLayout ResolveLayoutMode(const FString& DocumentPath, Rml::ElementDocument* Document)
+	{
+		if (Document)
+		{
+			const Rml::String LayoutAttr = Document->GetAttribute<Rml::String>("data-ui-layout", "scaled");
+			if (LayoutAttr == "hud" || LayoutAttr == "screen")
+			{
+				return EUIRenderLayout::ScreenHud;
+			}
+			if (LayoutAttr == "scaled" || LayoutAttr == "menu")
+			{
+				return EUIRenderLayout::ScaledDesign;
+			}
+		}
+
+		const FString LowerPath = [&DocumentPath]()
+		{
+			FString Lower = DocumentPath;
+			std::transform(Lower.begin(), Lower.end(), Lower.begin(),
+				[](unsigned char Ch) { return static_cast<char>(std::tolower(Ch)); });
+			return Lower;
+		}();
+
+		if (LowerPath.find("hospital") != FString::npos
+			|| LowerPath.find("doorprompt") != FString::npos)
+		{
+			return EUIRenderLayout::ScreenHud;
+		}
+
+		return EUIRenderLayout::ScaledDesign;
+	}
+
 	constexpr float PhotoFlashSeconds = 0.2f;
 	constexpr int32 CrosshairSegments = 10;
 	constexpr float CrosshairRadius = 1.4f;
@@ -1092,6 +1160,7 @@ bool UUIManager::LoadDocument(UUserWidget* Widget)
 	}
 
 	Document->Show();
+	Widget->SetLayoutMode(ResolveLayoutMode(Widget->GetDocumentPath(), Document));
 	Widget->MarkDocumentLoaded(Document);
 	Widget->RegisterEventListeners();
 	return true;
@@ -1143,6 +1212,91 @@ bool UUIManager::DispatchTaggedActorClick(const FString& TargetTag, const FStrin
 	return true;
 }
 
+void UUIManager::SetViewportLayerVisibility(EUIRenderLayout TargetLayout)
+{
+	for (UUserWidget* Widget : ViewportWidgets)
+	{
+		if (!IsAliveObject(Widget) || !Widget->IsDocumentLoaded() || Widget->GetDocument() == nullptr)
+		{
+			continue;
+		}
+
+		if (Widget->GetLayoutMode() == TargetLayout)
+		{
+			Widget->GetDocument()->Show();
+		}
+		else
+		{
+			Widget->GetDocument()->Hide();
+		}
+	}
+}
+
+void UUIManager::RestoreViewportDocumentVisibility()
+{
+	for (UUserWidget* Widget : ViewportWidgets)
+	{
+		if (!IsAliveObject(Widget) || !Widget->IsDocumentLoaded() || Widget->GetDocument() == nullptr)
+		{
+			continue;
+		}
+
+		Widget->GetDocument()->Show();
+	}
+}
+
+void UUIManager::ApplyHudDocumentRootScale(float ViewportHeight)
+{
+	if (ViewportHeight <= 0.0f)
+	{
+		return;
+	}
+
+	const float RootFontPx = HudRootFontPxAt1080p * (ViewportHeight / UIDesignHeight);
+	const Rml::String RootFontValue = std::to_string(RootFontPx) + "px";
+
+	for (UUserWidget* Widget : ViewportWidgets)
+	{
+		if (!IsAliveObject(Widget)
+			|| Widget->GetLayoutMode() != EUIRenderLayout::ScreenHud
+			|| !Widget->IsDocumentLoaded()
+			|| Widget->GetDocument() == nullptr)
+		{
+			continue;
+		}
+
+		Widget->GetDocument()->SetProperty("font-size", RootFontValue);
+	}
+}
+
+bool UUIManager::AnyScaledWidgetWantsMouse() const
+{
+	for (UUserWidget* Widget : ViewportWidgets)
+	{
+		if (!IsAliveObject(Widget) || !Widget->IsInViewport())
+		{
+			continue;
+		}
+
+		if (Widget->GetLayoutMode() == EUIRenderLayout::ScaledDesign && Widget->WantsMouse())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UUIManager::IsMouseInsideScaledCanvas(float MouseX, float MouseY) const
+{
+	const float DesignX = (MouseX - UILayoutOffsetX) / UILayoutScale;
+	const float DesignY = (MouseY - UILayoutOffsetY) / UILayoutScale;
+	return DesignX >= 0.0f
+		&& DesignX <= UIDesignWidth
+		&& DesignY >= 0.0f
+		&& DesignY <= UIDesignHeight;
+}
+
 void UUIManager::Render(const FPassContext& Ctx)
 {
 	CompactInvalidWidgets();
@@ -1151,10 +1305,27 @@ void UUIManager::Render(const FPassContext& Ctx)
 		return;
 	}
 
-	RmlContext->SetDimensions({
-		static_cast<int>(Ctx.Frame.ViewportWidth),
-		static_cast<int>(Ctx.Frame.ViewportHeight)
-	});
+	UpdateUILayoutMetrics(
+		Ctx.Frame.ViewportWidth,
+		Ctx.Frame.ViewportHeight,
+		UILayoutScale,
+		UILayoutOffsetX,
+		UILayoutOffsetY);
+
+	if (AnyScaledWidgetWantsMouse())
+	{
+		RmlContext->SetDimensions({
+			static_cast<int>(UIDesignWidth),
+			static_cast<int>(UIDesignHeight)
+		});
+	}
+	else
+	{
+		RmlContext->SetDimensions({
+			static_cast<int>(Ctx.Frame.ViewportWidth),
+			static_cast<int>(Ctx.Frame.ViewportHeight)
+		});
+	}
 
 	UWorld* PreviousDispatchWorld = DispatchWorld;
 	DispatchWorld = Ctx.World;
@@ -1167,9 +1338,30 @@ void UUIManager::Render(const FPassContext& Ctx)
 		return;
 	}
 
-	RmlContext->Update();
 	RenderInterface->BeginFrame(Ctx);
+
+	SetViewportLayerVisibility(EUIRenderLayout::ScaledDesign);
+	RmlContext->SetDimensions({
+		static_cast<int>(UIDesignWidth),
+		static_cast<int>(UIDesignHeight)
+	});
+	RmlContext->Update();
+	const Rml::Matrix4f ScaledTransform = BuildUILayoutTransform(UILayoutScale, UILayoutOffsetX, UILayoutOffsetY);
+	RenderInterface->SetTransform(&ScaledTransform);
 	RmlContext->Render();
+	RenderInterface->SetTransform(nullptr);
+
+	SetViewportLayerVisibility(EUIRenderLayout::ScreenHud);
+	ApplyHudDocumentRootScale(Ctx.Frame.ViewportHeight);
+	RmlContext->SetDimensions({
+		static_cast<int>(Ctx.Frame.ViewportWidth),
+		static_cast<int>(Ctx.Frame.ViewportHeight)
+	});
+	RmlContext->Update();
+	RmlContext->Render();
+
+	RestoreViewportDocumentVisibility();
+	RmlContext->Update();
 	RenderInterface->EndFrame();
 }
 
@@ -1247,6 +1439,14 @@ void UUIManager::ProcessInput(const FFrameContext& Frame)
 		MouseY = MousePos.y;
 	}
 
+	const bool bRouteScaledInput = AnyScaledWidgetWantsMouse()
+		&& IsMouseInsideScaledCanvas(static_cast<float>(MouseX), static_cast<float>(MouseY));
+	if (bRouteScaledInput)
+	{
+		MouseX = MapViewportMouseToDesign(static_cast<float>(MouseX), UILayoutOffsetX, UILayoutScale);
+		MouseY = MapViewportMouseToDesign(static_cast<float>(MouseY), UILayoutOffsetY, UILayoutScale);
+	}
+
 	bDispatchingRmlEvents = true;
 	RmlContext->ProcessMouseMove(MouseX, MouseY, KeyModifierState);
 	if (Input.GetKeyDown(VK_LBUTTON))
@@ -1295,10 +1495,22 @@ void UUIManager::ProcessNavigationInput()
 
 	InputSystem& Input = InputSystem::Get();
 	const FInputDeviceSnapshot& Gamepad = Input.GetGamepadSnapshot();
+	const bool bUseGamepadNavigation =
+		Input.GetPrimaryInputDevice() == EInputDeviceClass::Gamepad &&
+		Gamepad.Info.bConnected;
+
+	Widget->SetGamepadNavigationHighlightEnabled(bUseGamepadNavigation);
+	if (!bUseGamepadNavigation)
+	{
+		Widget->ClearNavigationSelection();
+		HeldNavigationX = 0;
+		HeldNavigationY = 0;
+		NextNavigationRepeatTime = 0.0;
+	}
 
 	if (Input.GetKeyDown(VK_RETURN) ||
 		Input.GetKeyDown(VK_SPACE) ||
-		WasGamepadButtonPressed(Gamepad, EGamepadButton::FaceDown))
+		(bUseGamepadNavigation && WasGamepadButtonPressed(Gamepad, EGamepadButton::FaceDown)))
 	{
 		Widget->ActivateNavigationSelection();
 	}
@@ -1311,22 +1523,27 @@ void UUIManager::ProcessNavigationInput()
 		Widget->ActivateCloseNavigationTarget();
 	}
 
+	if (!bUseGamepadNavigation)
+	{
+		return;
+	}
+
 	int32 DirectionX = 0;
 	int32 DirectionY = 0;
-	if (Input.GetKeyDown(VK_LEFT) || Input.GetKeyDown('A') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadLeft))
+	if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadLeft))
 	{
 		DirectionX = -1;
 	}
-	else if (Input.GetKeyDown(VK_RIGHT) || Input.GetKeyDown('D') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadRight))
+	else if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadRight))
 	{
 		DirectionX = 1;
 	}
 
-	if (Input.GetKeyDown(VK_UP) || Input.GetKeyDown('W') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadUp))
+	if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadUp))
 	{
 		DirectionY = -1;
 	}
-	else if (Input.GetKeyDown(VK_DOWN) || Input.GetKeyDown('S') || WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadDown))
+	else if (WasGamepadButtonPressed(Gamepad, EGamepadButton::DPadDown))
 	{
 		DirectionY = 1;
 	}

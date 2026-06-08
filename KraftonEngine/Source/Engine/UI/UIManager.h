@@ -17,7 +17,8 @@
 
 class APlayerController;
 class UWorld;
-class UUserWidget;
+
+#include "UI/UserWidget.h"
 struct FFrameContext;
 struct FPassContext;
 struct ID3D11Buffer;
@@ -138,6 +139,11 @@ private:
 	UUserWidget* GetTopNavigationWidget() const;
 	void RemoveFromViewportImmediate(UUserWidget* Widget);
 	void FlushDeferredViewportRemovals();
+	void SetViewportLayerVisibility(EUIRenderLayout TargetLayout);
+	void RestoreViewportDocumentVisibility();
+	void ApplyHudDocumentRootScale(float ViewportHeight);
+	bool AnyScaledWidgetWantsMouse() const;
+	bool IsMouseInsideScaledCanvas(float MouseX, float MouseY) const;
 
 private:
 	TArray<UUserWidget*> ViewportWidgets;
@@ -152,6 +158,11 @@ private:
 	bool bRmlInitialized = false;
 	bool bDispatchingRmlEvents = false;
 	UWorld* DispatchWorld = nullptr;
+
+	// UI design canvas is 1920x1080. Scale uniformly to fit the viewport and letterbox the rest.
+	float UILayoutScale = 1.0f;
+	float UILayoutOffsetX = 0.0f;
+	float UILayoutOffsetY = 0.0f;
 	double NextNavigationRepeatTime = 0.0;
 	int32 HeldNavigationX = 0;
 	int32 HeldNavigationY = 0;

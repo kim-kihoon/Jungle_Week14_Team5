@@ -20,7 +20,6 @@ local MUZZLE_SOCKET = "Muzzle"
 local PROJECTILE_TEMPLATE_PATH = "Content/Blueprint/AStaticMeshActor_8.ActorTemplate"
 local PROJECTILE_SPAWN_OFFSET = 0.0
 local CAMERA_TRACE_DISTANCE = 1000.0
-local FAKE_TARGET_TAG = "Fake"
 local PHOTO_BLACKOUT_TARGET_TAG = "PhotoBlackoutTarget"
 local TOY_PROJECTILE_TAG = "ToyProjectile"
 
@@ -334,11 +333,15 @@ local function play_pistol_fire_effect(owner)
     end
 end
 
-local function start_pistol_fire_action(self)
+local function start_pistol_fire_action(self, bPlayGunAudio)
     self.ActionTime = 0.0
     self.ActionPhase = ACTION_PISTOL_FIRE
-    local owner = Anim.get_owner_actor()
 
+    if bPlayGunAudio ~= true then
+        return
+    end
+
+    local owner = Anim.get_owner_actor()
     play_pistol_fire_effect(owner)
 
     if Anim.play_pistol_fire_audio ~= nil then
@@ -468,22 +471,20 @@ local function should_blackout_photo_capture()
     return is_trace_clear_to_actor_from_camera(owner:GetCamera(), target, owner)
 end
 
-local function should_play_pistol_fire_from_camera()
+local function resolve_pistol_shot()
     local hit = get_camera_trace_hit()
     if hit == nil or hit.Actor == nil then
-        return false
+        return "miss", hit
     end
 
     local hitActor = hit.Actor
-    if GameManager ~= nil and GameManager.ReportAnomalyShot ~= nil and GameManager:ReportAnomalyShot(hitActor, hit) then
-        return true
+    if GameManager ~= nil
+        and GameManager.ReportAnomalyShot ~= nil
+        and GameManager:ReportAnomalyShot(hitActor, hit) then
+        return "anomaly", hit
     end
 
-    if hitActor.HasTag ~= nil and hitActor:HasTag(FAKE_TARGET_TAG) then
-        return true
-    end
-
-    return false
+    return "miss", hit
 end
 
 local function consume_pistol_bullet()
@@ -501,10 +502,13 @@ local function report_pistol_shot_failure()
 end
 
 local function can_fire_pistol()
-    if GameManager ~= nil
-        and GameManager.IsLoopStopped ~= nil
-        and GameManager:IsLoopStopped() then
-        return false
+    if GameManager ~= nil then
+        if GameManager.IsEnding ~= nil and GameManager:IsEnding() then
+            return false
+        end
+        if GameManager.IsLoopStopped ~= nil and GameManager:IsLoopStopped() then
+            return false
+        end
     end
 
     return true
@@ -729,11 +733,11 @@ function update(self, dt)
             end
         elseif self.CurrentTool == TOOL_PISTOL and (is_action_pressed("Fire") or Anim.is_left_mouse_pressed()) then
             if try_consume_pistol_bullet_for_fire() then
-                local handledHit = should_play_pistol_fire_from_camera()
-                if handledHit then
-                    start_pistol_fire_action(self)
+                local shotKind = resolve_pistol_shot()
+                if shotKind == "anomaly" then
+                    start_pistol_fire_action(self, true)
                 else
-                    start_pistol_fire_action(self)
+                    start_pistol_fire_action(self, false)
                     report_pistol_shot_failure()
                     play_party_blower_audio()
                     spawn_projectile_from_muzzle()
