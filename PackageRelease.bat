@@ -8,7 +8,7 @@ set RELEASE_DIR=%SOLUTION_DIR%ReleaseBuild
 set RELEASE_BIN=%RELEASE_DIR%\Bin
 set BUILD_INFO_FILE=%PROJECT_DIR%\Source\Engine\Platform\BuildInfo.h
 set VERSION_NAME=%~1
-set PRODUCT_NAME=KraftonEngine_Team7
+set PRODUCT_NAME=Welcome to Monkey Hospital
 set SYMBOL_PATH=srv*C:\SymbolCache*\\SYMBOL-SERVER\Symbols\Team7
 set BUILD_INFO_SYMBOL_PATH=srv*C:\\SymbolCache*\\\\SYMBOL-SERVER\\Symbols\\Team7
 
