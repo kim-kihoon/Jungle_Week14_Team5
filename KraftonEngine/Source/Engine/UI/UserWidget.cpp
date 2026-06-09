@@ -418,6 +418,22 @@ void UUserWidget::ClearNavigationSelection()
 	NavigationSelectionIndex = -1;
 }
 
+void UUserWidget::ClearAllNavigationHighlightStates()
+{
+	if (!Document)
+	{
+		NavigationSelectionIndex = -1;
+		return;
+	}
+
+	RefreshNavigationButtons();
+	for (const FNavigationButton& Button : NavigationButtons)
+	{
+		RestoreNavigationButtonStyle(Button.ElementId);
+	}
+	NavigationSelectionIndex = -1;
+}
+
 void UUserWidget::RefreshNavigationButtons()
 {
 	if (!Document)

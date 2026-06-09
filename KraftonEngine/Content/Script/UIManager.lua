@@ -686,12 +686,18 @@ function UIManager:ShowPauseMenu()
     self.bTimerPromptVisible = false
 
     self.PauseMenuWidget = self:CreateWidget(self.PauseMenuDocumentPath)
-    return self:AddWidgetToViewport(self.PauseMenuWidget, 125, {
+    local ok = self:AddWidgetToViewport(self.PauseMenuWidget, 125, {
         WantsMouse = true,
         BlocksGameInput = true,
         BlocksGameKeyboard = true,
         BlocksGameMouseLook = true
     })
+    if ok and UI ~= nil and UI.PrepareOpenedMenuWithoutInitialHover ~= nil then
+        pcall(function()
+            UI.PrepareOpenedMenuWithoutInitialHover(self.PauseMenuWidget)
+        end)
+    end
+    return ok
 end
 
 function UIManager:HidePauseMenu()

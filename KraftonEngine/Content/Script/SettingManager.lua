@@ -18,9 +18,15 @@ SettingManager.MouseSensitivityOptions = {
     { Label = "High", Value = 0.35 },
 }
 
+SettingManager.DisplayModeOptions = {
+    { Label = "Windowed", bFullscreen = false },
+    { Label = "Fullscreen", bFullscreen = true },
+}
+
 SettingManager.GammaIndex = 2
 SettingManager.MasterVolumeIndex = 3
 SettingManager.MouseSensitivityIndex = 2
+SettingManager.DisplayModeIndex = 2
 SettingManager.bInvertY = false
 SettingManager.bHeadBob = true
 SettingManager.bControlPrompt = true
@@ -29,6 +35,7 @@ SettingManager.bLoaded = false
 local SAVE_KEY_GAMMA = "GammaIndex"
 local SAVE_KEY_MASTER_VOLUME = "MasterVolumeIndex"
 local SAVE_KEY_MOUSE_SENSITIVITY = "MouseSensitivityIndex"
+local SAVE_KEY_DISPLAY_MODE = "DisplayModeIndex"
 local SAVE_KEY_INVERT_Y = "InvertY"
 local SAVE_KEY_HEAD_BOB = "HeadBob"
 local SAVE_KEY_CONTROL_PROMPT = "ControlPrompt"
@@ -76,6 +83,10 @@ function SettingManager:GetMouseSensitivityOption()
     return self.MouseSensitivityOptions[self.MouseSensitivityIndex] or self.MouseSensitivityOptions[2]
 end
 
+function SettingManager:GetDisplayModeOption()
+    return self.DisplayModeOptions[self.DisplayModeIndex] or self.DisplayModeOptions[2]
+end
+
 function SettingManager:IsHeadBobEnabled()
     return self.bHeadBob == true
 end
@@ -98,6 +109,7 @@ function SettingManager:Load()
         self.GammaIndex = clamp_index(UserSettings.LoadInt(SAVE_KEY_GAMMA, self.GammaIndex), #self.GammaOptions, 2)
         self.MasterVolumeIndex = clamp_index(UserSettings.LoadInt(SAVE_KEY_MASTER_VOLUME, self.MasterVolumeIndex), #self.MasterVolumeOptions, 3)
         self.MouseSensitivityIndex = clamp_index(UserSettings.LoadInt(SAVE_KEY_MOUSE_SENSITIVITY, self.MouseSensitivityIndex), #self.MouseSensitivityOptions, 2)
+        self.DisplayModeIndex = clamp_index(UserSettings.LoadInt(SAVE_KEY_DISPLAY_MODE, self.DisplayModeIndex), #self.DisplayModeOptions, 2)
     end
 
     if UserSettings.LoadBool ~= nil then
@@ -117,6 +129,7 @@ function SettingManager:Save()
         bSaved = UserSettings.SaveInt(SAVE_KEY_GAMMA, self.GammaIndex) or bSaved
         bSaved = UserSettings.SaveInt(SAVE_KEY_MASTER_VOLUME, self.MasterVolumeIndex) or bSaved
         bSaved = UserSettings.SaveInt(SAVE_KEY_MOUSE_SENSITIVITY, self.MouseSensitivityIndex) or bSaved
+        bSaved = UserSettings.SaveInt(SAVE_KEY_DISPLAY_MODE, self.DisplayModeIndex) or bSaved
     end
 
     if UserSettings.SaveBool ~= nil then
@@ -127,8 +140,22 @@ function SettingManager:Save()
     return bSaved
 end
 
+function SettingManager:ApplyDisplayMode()
+    self:Load()
+
+    if Engine == nil or Engine.SetFullscreen == nil then
+        return
+    end
+
+    local option = self:GetDisplayModeOption()
+    pcall(function()
+        Engine.SetFullscreen(option.bFullscreen == true)
+    end)
+end
+
 function SettingManager:Apply()
     self:Load()
+    self:ApplyDisplayMode()
 
     local gamma = self:GetGammaOption().Value
     if Engine ~= nil then
@@ -187,6 +214,7 @@ function SettingManager:RefreshWidget(widget)
     set_widget_text(widget, "setting_invert_button", "Invert Y: " .. format_toggle(self.bInvertY))
     set_widget_text(widget, "setting_headbob_button", "Head Bob: " .. format_toggle(self.bHeadBob))
     set_widget_text(widget, "setting_control_prompt_button", "Control Prompt: " .. format_toggle(self.bControlPrompt))
+    set_widget_text(widget, "setting_display_mode_button", "Display Mode: " .. self:GetDisplayModeOption().Label)
 end
 
 function SettingManager:CycleGamma()
@@ -226,6 +254,13 @@ end
 function SettingManager:ToggleControlPrompt()
     self:Load()
     self.bControlPrompt = not self.bControlPrompt
+    self:Save()
+end
+
+function SettingManager:CycleDisplayMode()
+    self:Load()
+    self.DisplayModeIndex = cycle_index(self.DisplayModeIndex, #self.DisplayModeOptions)
+    self:ApplyDisplayMode()
     self:Save()
 end
 

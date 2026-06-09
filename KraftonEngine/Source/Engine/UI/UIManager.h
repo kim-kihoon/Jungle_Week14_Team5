@@ -126,6 +126,8 @@ public:
 		// viewport 에 올라온 widget들의 입력 요구/게임 입력 차단 정책을 합산한다.
 		FUIInputCaptureState GetViewportInputCaptureState() const;
 		bool AnyViewportWidgetWantsMouse() const;
+		// Pause 메뉴 오픈 직후 첫 클릭 전까지 hover/선택/버튼 입력을 막는다.
+		void PrepareOpenedMenuWithoutInitialHover(UUserWidget* Widget);
 
 private:
 	UUIManager() = default;
@@ -166,4 +168,9 @@ private:
 	double NextNavigationRepeatTime = 0.0;
 	int32 HeldNavigationX = 0;
 	int32 HeldNavigationY = 0;
+
+	bool bPauseMenuAwaitingArmClick = false;
+	bool bPauseMenuArmClickInProgress = false;
+	bool bPauseMenuIgnoreMouseUntilRelease = false;
+	UUserWidget* PauseMenuArmWidget = nullptr;
 };

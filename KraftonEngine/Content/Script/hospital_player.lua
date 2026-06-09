@@ -1077,6 +1077,11 @@ function ToggleSettingControlPrompt()
     UIManager:RefreshTitleSetting()
 end
 
+function CycleSettingDisplayMode()
+    SettingManager:CycleDisplayMode()
+    UIManager:RefreshTitleSetting()
+end
+
 function ShowRanking()
     if not bTitleMode or bTitleTransitioning then
         return false

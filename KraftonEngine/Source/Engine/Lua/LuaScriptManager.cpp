@@ -2577,6 +2577,44 @@ void FLuaScriptManager::RegisterCoreBindings(sol::state& Lua)
             return 2.4f;
         }
     );
+    Engine.set_function(
+        "SetFullscreen",
+        [](bool bFullscreen)
+        {
+            if (!GEngine || !Cast<UGameEngine>(GEngine))
+            {
+                return;
+            }
+
+            FWindowsWindow* Window = GEngine->GetWindow();
+            if (!Window)
+            {
+                return;
+            }
+
+            Window->SetFullscreen(bFullscreen);
+            GEngine->OnWindowResized(
+                static_cast<uint32>(Window->GetWidth()),
+                static_cast<uint32>(Window->GetHeight()));
+        }
+    );
+    Engine.set_function(
+        "IsFullscreen",
+        []() -> bool
+        {
+            if (!GEngine)
+            {
+                return false;
+            }
+
+            if (const FWindowsWindow* Window = GEngine->GetWindow())
+            {
+                return Window->IsFullscreen();
+            }
+
+            return false;
+        }
+    );
 
     sol::table UserSettings = Lua.create_named_table("UserSettings");
     UserSettings.set_function(
@@ -7024,7 +7062,13 @@ void FLuaScriptManager::RegisterUIBindings(sol::state& Lua)
         "SetBlocksGameMouseLook",
         &UUserWidget::SetBlocksGameMouseLook,
         "BlocksGameMouseLook",
-        &UUserWidget::BlocksGameMouseLook
+        &UUserWidget::BlocksGameMouseLook,
+        "ClearNavigationSelection",
+        &UUserWidget::ClearNavigationSelection,
+        "ClearAllNavigationHighlightStates",
+        &UUserWidget::ClearAllNavigationHighlightStates,
+        "SetGamepadNavigationHighlightEnabled",
+        &UUserWidget::SetGamepadNavigationHighlightEnabled
     );
 
     sol::table UI = Lua.create_named_table("UI");
@@ -7033,6 +7077,13 @@ void FLuaScriptManager::RegisterUIBindings(sol::state& Lua)
         [](const FString& DocumentPath)
         {
             return UUIManager::Get().CreateWidget(nullptr, DocumentPath);
+        }
+    );
+    UI.set_function(
+        "PrepareOpenedMenuWithoutInitialHover",
+        [](UUserWidget* Widget)
+        {
+            UUIManager::Get().PrepareOpenedMenuWithoutInitialHover(Widget);
         }
     );
 }

@@ -86,6 +86,7 @@ public:
 	bool ActivateNavigationSelection();
 	bool ActivateCloseNavigationTarget();
 	void ClearNavigationSelection();
+	void ClearAllNavigationHighlightStates();
 	void SetGamepadNavigationHighlightEnabled(bool bEnabled);
 	UFUNCTION(Callable, Category="UI")
 	void SetText(const FString& ElementId, const FString& Text);
