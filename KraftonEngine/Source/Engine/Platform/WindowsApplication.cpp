@@ -104,7 +104,7 @@ bool FWindowsApplication::Init(HINSTANCE InHInstance)
 	HInstance = InHInstance;
 
 	WCHAR WindowClass[] = L"JungleWindowClass";
-	WCHAR Title[] = L"Game Tech Lab";
+	WCHAR Title[] = L"Welcome to Monkey Hospital";
 	WNDCLASSEXW WndClass = {};
 	WndClass.cbSize = sizeof(WNDCLASSEXW);
 	WndClass.lpfnWndProc = StaticWndProc;
