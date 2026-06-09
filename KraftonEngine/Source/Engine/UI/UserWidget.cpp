@@ -42,12 +42,14 @@ float SquaredDistance(float X, float Y)
 
 FWidgetClickEventListener::FWidgetClickEventListener(FString InElementId, sol::protected_function InCallback)
 	: ElementId(std::move(InElementId))
+	, EventName("click")
 	, Callback(std::move(InCallback))
 {
 }
 
-FWidgetClickEventListener::FWidgetClickEventListener(FString InElementId, FString InTargetTag, FString InFunctionName)
+FWidgetClickEventListener::FWidgetClickEventListener(FString InElementId, FString InTargetTag, FString InFunctionName, FString InEventName)
 	: ElementId(std::move(InElementId))
+	, EventName(std::move(InEventName))
 	, TargetTag(std::move(InTargetTag))
 	, FunctionName(std::move(InFunctionName))
 {
@@ -202,7 +204,7 @@ void UUserWidget::RegisterEventListeners()
 		}
 
 		auto* Listener = new FWidgetClickEventListener(Binding.first, Binding.second);
-		Element->AddEventListener("click", Listener);
+		Element->AddEventListener(Listener->GetEventName().c_str(), Listener);
 		ClickListeners.push_back(Listener);
 	}
 
@@ -236,8 +238,8 @@ void UUserWidget::RegisterDeclarativeEventListeners(Rml::Element* Root)
 	const Rml::String ElementId = Root->GetId();
 	if (!FunctionName.empty() && !TargetTag.empty() && !ElementId.empty())
 	{
-		auto* Listener = new FWidgetClickEventListener(ElementId, TargetTag, FunctionName);
-		Root->AddEventListener("click", Listener);
+		auto* Listener = new FWidgetClickEventListener(ElementId, TargetTag, FunctionName, "mousedown");
+		Root->AddEventListener(Listener->GetEventName().c_str(), Listener);
 		ClickListeners.push_back(Listener);
 	}
 
@@ -276,7 +278,7 @@ void UUserWidget::ClearEventListeners()
 			Rml::Element* Element = Document->GetElementById(Listener->GetElementId());
 			if (Element)
 			{
-				Element->RemoveEventListener("click", Listener);
+				Element->RemoveEventListener(Listener->GetEventName().c_str(), Listener);
 			}
 		}
 	}
@@ -412,6 +414,22 @@ void UUserWidget::ClearNavigationSelection()
 	if (NavigationSelectionIndex >= 0 && NavigationSelectionIndex < static_cast<int32>(NavigationButtons.size()))
 	{
 		RestoreNavigationButtonStyle(NavigationButtons[NavigationSelectionIndex].ElementId);
+	}
+	NavigationSelectionIndex = -1;
+}
+
+void UUserWidget::ClearAllNavigationHighlightStates()
+{
+	if (!Document)
+	{
+		NavigationSelectionIndex = -1;
+		return;
+	}
+
+	RefreshNavigationButtons();
+	for (const FNavigationButton& Button : NavigationButtons)
+	{
+		RestoreNavigationButtonStyle(Button.ElementId);
 	}
 	NavigationSelectionIndex = -1;
 }

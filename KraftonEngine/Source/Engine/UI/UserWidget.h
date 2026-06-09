@@ -31,15 +31,17 @@ class FWidgetClickEventListener final : public Rml::EventListener
 {
 public:
 	FWidgetClickEventListener(FString InElementId, sol::protected_function InCallback);
-	FWidgetClickEventListener(FString InElementId, FString InTargetTag, FString InFunctionName);
+	FWidgetClickEventListener(FString InElementId, FString InTargetTag, FString InFunctionName, FString InEventName = "click");
 
 	void ProcessEvent(Rml::Event& Event) override;
 	void Execute();
 
 	const FString& GetElementId() const { return ElementId; }
+	const FString& GetEventName() const { return EventName; }
 
 private:
 	FString ElementId;
+	FString EventName;
 	sol::protected_function Callback;
 	FString TargetTag;
 	FString FunctionName;
@@ -84,6 +86,7 @@ public:
 	bool ActivateNavigationSelection();
 	bool ActivateCloseNavigationTarget();
 	void ClearNavigationSelection();
+	void ClearAllNavigationHighlightStates();
 	void SetGamepadNavigationHighlightEnabled(bool bEnabled);
 	UFUNCTION(Callable, Category="UI")
 	void SetText(const FString& ElementId, const FString& Text);

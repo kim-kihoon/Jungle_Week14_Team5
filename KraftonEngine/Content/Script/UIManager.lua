@@ -19,6 +19,7 @@ UIManager.EndingNameInputDocumentPath = "Content/UI/EndingNameInputUI.rml"
 UIManager.StartupIntroDocumentPath = "Content/UI/StartupIntroUI.rml"
 UIManager.TitleLeaderboardDocumentPath = "Content/UI/LeaderboardUI.rml"
 UIManager.GameOverDocumentPath = "Content/UI/GameOverUI.rml"
+UIManager.PauseMenuDocumentPath = "Content/UI/PauseMenuUI.rml"
 UIManager.TimerColorNormal = "rgb(71, 255, 105)"
 UIManager.TimerColorWarning = "rgb(255, 71, 71)"
 UIManager.TimerWarningSeconds = 30
@@ -41,6 +42,7 @@ UIManager.TitleWidget = nil
 UIManager.TitlePopupWidget = nil
 UIManager.LeaderboardMaxRows = 20
 UIManager.GameOverWidget = nil
+UIManager.PauseMenuWidget = nil
 UIManager.CutsceneBlockerWidget = nil
 UIManager.CutsceneBlockerDocumentPath = UIManager.DoorPromptDocumentPath
 UIManager.EndingCreditWidget = nil
@@ -193,6 +195,7 @@ function UIManager:HideGameplayHud()
         self:RemoveWidget(self.TimerPromptWidget)
     end
     self:DisposeGameOver()
+    self:HidePauseMenu()
 
     self.DoorPromptWidget = nil
     self.bDoorPromptVisible = false
@@ -315,6 +318,7 @@ function UIManager:ResetHospital()
     self:RemoveWidget(self.TimerPromptWidget)
     self:DisposeTitle()
     self:DisposeGameOver()
+    self:HidePauseMenu()
 
     self.DoorPromptWidget = nil
     self.bDoorPromptVisible = false
@@ -659,6 +663,46 @@ end
 function UIManager:DisposeGameOver()
     self:RemoveWidget(self.GameOverWidget)
     self.GameOverWidget = nil
+end
+
+function UIManager:ShowPauseMenu()
+    if self.PauseMenuWidget ~= nil and self.PauseMenuWidget.IsInViewport ~= nil then
+        local ok, bInViewport = pcall(function()
+            return self.PauseMenuWidget:IsInViewport()
+        end)
+        if ok and bInViewport then
+            return true
+        end
+    end
+
+    self:RemoveWidget(self.DoorPromptWidget)
+    self:RemoveWidget(self.ControlPromptWidget)
+    self:RemoveWidget(self.TimerPromptWidget)
+    self.DoorPromptWidget = nil
+    self.ControlPromptWidget = nil
+    self.TimerPromptWidget = nil
+    self.bDoorPromptVisible = false
+    self.bControlPromptVisible = false
+    self.bTimerPromptVisible = false
+
+    self.PauseMenuWidget = self:CreateWidget(self.PauseMenuDocumentPath)
+    local ok = self:AddWidgetToViewport(self.PauseMenuWidget, 125, {
+        WantsMouse = true,
+        BlocksGameInput = true,
+        BlocksGameKeyboard = true,
+        BlocksGameMouseLook = true
+    })
+    if ok and UI ~= nil and UI.PrepareOpenedMenuWithoutInitialHover ~= nil then
+        pcall(function()
+            UI.PrepareOpenedMenuWithoutInitialHover(self.PauseMenuWidget)
+        end)
+    end
+    return ok
+end
+
+function UIManager:HidePauseMenu()
+    self:RemoveWidget(self.PauseMenuWidget)
+    self.PauseMenuWidget = nil
 end
 
 return UIManager

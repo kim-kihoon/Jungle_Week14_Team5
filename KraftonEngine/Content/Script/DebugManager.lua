@@ -1,7 +1,7 @@
 local DebugManager = {}
 
 DebugManager.bEnabled = true
-DebugManager.OutlineKey = "Q"
+DebugManager.OutlineKey = "L"
 DebugManager.OutlineActionName = "DebugAnomalyOutline"
 DebugManager.ClearKey = "C"
 

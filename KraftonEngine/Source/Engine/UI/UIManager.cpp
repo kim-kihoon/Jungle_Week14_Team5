@@ -976,6 +976,31 @@ bool UUIManager::AnyViewportWidgetWantsMouse() const
 	return GetViewportInputCaptureState().bWantsMouse;
 }
 
+void UUIManager::PrepareOpenedMenuWithoutInitialHover(UUserWidget* Widget)
+{
+	if (!IsValid(Widget))
+	{
+		bPauseMenuAwaitingArmClick = false;
+		bPauseMenuArmClickInProgress = false;
+		bPauseMenuIgnoreMouseUntilRelease = false;
+		PauseMenuArmWidget = nullptr;
+		return;
+	}
+
+	Widget->ClearAllNavigationHighlightStates();
+	Widget->SetGamepadNavigationHighlightEnabled(false);
+
+	if (RmlContext)
+	{
+		RmlContext->ProcessMouseLeave();
+	}
+
+	bPauseMenuAwaitingArmClick = true;
+	bPauseMenuArmClickInProgress = false;
+	bPauseMenuIgnoreMouseUntilRelease = InputSystem::Get().GetKey(VK_LBUTTON);
+	PauseMenuArmWidget = Widget;
+}
+
 void UUIManager::AddToViewport(UUserWidget* Widget, int32 /*ZOrder*/)
 {
 	CompactInvalidWidgets();
@@ -1000,6 +1025,11 @@ void UUIManager::AddToViewport(UUserWidget* Widget, int32 /*ZOrder*/)
 		{
 			return A->GetZOrder() < B->GetZOrder();
 		});
+
+	if (Widget->GetDocumentPath().find("PauseMenuUI") != FString::npos)
+	{
+		PrepareOpenedMenuWithoutInitialHover(Widget);
+	}
 }
 
 void UUIManager::RemoveFromViewport(UUserWidget* Widget)
@@ -1026,6 +1056,13 @@ void UUIManager::RemoveFromViewport(UUserWidget* Widget)
 void UUIManager::RemoveFromViewportImmediate(UUserWidget* Widget)
 {
 	ViewportWidgets.erase(std::remove(ViewportWidgets.begin(), ViewportWidgets.end(), Widget), ViewportWidgets.end());
+	if (Widget == PauseMenuArmWidget)
+	{
+		bPauseMenuAwaitingArmClick = false;
+		bPauseMenuArmClickInProgress = false;
+		bPauseMenuIgnoreMouseUntilRelease = false;
+		PauseMenuArmWidget = nullptr;
+	}
 	CloseDocument(Widget);
 	if (IsAliveObject(Widget))
 	{
@@ -1448,36 +1485,77 @@ void UUIManager::ProcessInput(const FFrameContext& Frame)
 		MouseY = MapViewportMouseToDesign(static_cast<float>(MouseY), UILayoutOffsetY, UILayoutScale);
 	}
 
+	const bool bPauseMenuArmGateActive = bPauseMenuAwaitingArmClick
+		&& IsValid(PauseMenuArmWidget)
+		&& std::find(ViewportWidgets.begin(), ViewportWidgets.end(), PauseMenuArmWidget) != ViewportWidgets.end();
+
+	bool bBlockPauseMenuRmlMouse = false;
+	if (bPauseMenuArmGateActive)
+	{
+		PauseMenuArmWidget->ClearAllNavigationHighlightStates();
+		PauseMenuArmWidget->SetGamepadNavigationHighlightEnabled(false);
+		RmlContext->ProcessMouseLeave();
+		bBlockPauseMenuRmlMouse = true;
+
+		if (bPauseMenuIgnoreMouseUntilRelease)
+		{
+			if (Input.GetKeyUp(VK_LBUTTON))
+			{
+				bPauseMenuIgnoreMouseUntilRelease = false;
+			}
+		}
+		else
+		{
+			if (Input.GetKeyDown(VK_LBUTTON))
+			{
+				bPauseMenuArmClickInProgress = true;
+			}
+
+			if (bPauseMenuArmClickInProgress && Input.GetKeyUp(VK_LBUTTON))
+			{
+				bPauseMenuAwaitingArmClick = false;
+				bPauseMenuArmClickInProgress = false;
+				PauseMenuArmWidget = nullptr;
+			}
+		}
+	}
+
 	bDispatchingRmlEvents = true;
-	RmlContext->ProcessMouseMove(MouseX, MouseY, KeyModifierState);
-	if (Input.GetKeyDown(VK_LBUTTON))
+	if (!bBlockPauseMenuRmlMouse)
 	{
-		RmlContext->ProcessMouseButtonDown(0, KeyModifierState);
+		RmlContext->ProcessMouseMove(MouseX, MouseY, KeyModifierState);
 	}
-	if (Input.GetKeyUp(VK_LBUTTON))
+	if (!bBlockPauseMenuRmlMouse)
 	{
-		RmlContext->ProcessMouseButtonUp(0, KeyModifierState);
-	}
-	if (Input.GetKeyDown(VK_RBUTTON))
-	{
-		RmlContext->ProcessMouseButtonDown(1, KeyModifierState);
-	}
-	if (Input.GetKeyUp(VK_RBUTTON))
-	{
-		RmlContext->ProcessMouseButtonUp(1, KeyModifierState);
-	}
-	if (Input.GetKeyDown(VK_MBUTTON))
-	{
-		RmlContext->ProcessMouseButtonDown(2, KeyModifierState);
-	}
-	if (Input.GetKeyUp(VK_MBUTTON))
-	{
-		RmlContext->ProcessMouseButtonUp(2, KeyModifierState);
-	}
-	const float WheelDelta = Input.GetScrollNotches();
-	if (WheelDelta != 0.0f)
-	{
-		RmlContext->ProcessMouseWheel(WheelDelta, KeyModifierState);
+		if (Input.GetKeyDown(VK_LBUTTON))
+		{
+			RmlContext->ProcessMouseButtonDown(0, KeyModifierState);
+		}
+		if (Input.GetKeyUp(VK_LBUTTON))
+		{
+			RmlContext->ProcessMouseButtonUp(0, KeyModifierState);
+		}
+		if (Input.GetKeyDown(VK_RBUTTON))
+		{
+			RmlContext->ProcessMouseButtonDown(1, KeyModifierState);
+		}
+		if (Input.GetKeyUp(VK_RBUTTON))
+		{
+			RmlContext->ProcessMouseButtonUp(1, KeyModifierState);
+		}
+		if (Input.GetKeyDown(VK_MBUTTON))
+		{
+			RmlContext->ProcessMouseButtonDown(2, KeyModifierState);
+		}
+		if (Input.GetKeyUp(VK_MBUTTON))
+		{
+			RmlContext->ProcessMouseButtonUp(2, KeyModifierState);
+		}
+		const float WheelDelta = Input.GetScrollNotches();
+		if (WheelDelta != 0.0f)
+		{
+			RmlContext->ProcessMouseWheel(WheelDelta, KeyModifierState);
+		}
 	}
 	ProcessNavigationInput();
 	bDispatchingRmlEvents = false;

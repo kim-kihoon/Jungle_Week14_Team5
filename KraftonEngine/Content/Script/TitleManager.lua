@@ -229,6 +229,11 @@ function ToggleSettingControlPrompt()
     TitleManager:RefreshSetting()
 end
 
+function CycleSettingDisplayMode()
+    SettingManager:CycleDisplayMode()
+    TitleManager:RefreshSetting()
+end
+
 function ShowRanking()
     TitleManager:ShowRanking()
 end
